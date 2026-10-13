@@ -57,6 +57,24 @@ The manual lives in the [wiki](https://github.com/hugelton/Felucca/wiki/Home):
 
 See [Troubleshooting](https://github.com/hugelton/Felucca/wiki/Troubleshooting).
 
+## A note on forks and contributions
+
+Felucca is GPLv3. You're free to fork, modify, and even sell it under the license terms. I fully respect that freedom.
+
+But honestly, I think things are moving a little too fast.
+
+Before spending $100 on AI tools to create yet another CFW, please consider:
+
+- Something truly original? Release it!
+- Mostly Felucca with new engines or a different UI? Consider submitting a PR instead.
+- Found a bug or want a feature? Start a [Discussion](https://github.com/hugelton/Felucca/discussions). I'll prioritize requests based on community interest and available time.
+
+I use AI myself, and I'm not against it. But do we really need so many similar forks?
+
+Think about the time, money, and maintenance involved. The GPUs are burning too.
+
+This isn't a restriction, just a personal request to think before creating yet another fork.
+
 ## Support
 
 If Felucca is useful to you, [sponsoring on GitHub](https://github.com/sponsors/hugelton) or a donation
