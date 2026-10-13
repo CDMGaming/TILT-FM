@@ -77,9 +77,6 @@ This isn't a restriction, just a personal request to think before creating yet a
 
 ## Support
 
-If Felucca is useful to you, [sponsoring on GitHub](https://github.com/sponsors/hugelton) or a donation
-on [itch.io](https://hugelton.itch.io/felucca) helps keep its development going.
-
 Issues are for reproducible bugs (one per issue). Ideas and requests go to
 [Discussions](https://github.com/hugelton/Felucca/discussions), and feature requests posted as issues will be
 moved there. Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
