@@ -974,7 +974,7 @@ const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textCont
 const say = (txt) => { lastKey = null; $("status").textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; };
 let image = null, pkgBytes = null, flashSize = 0;
-const meta = {"version": "1.6", "product": "FM-1_916", "pkg": "../../firmware/felucca-1.6.fwsc", "size": 610086, "sha256": "b2c1317b89d8d701c832627ae7e916785660e32a88422d57417293c8ec8679f8"};
+const meta = {"version": "1.6.1", "product": "FM-1_916", "pkg": "../../firmware/felucca-1.6.1.fwsc", "size": 610090, "sha256": "dff3a38f7e5b9833e15aba322558c9485e9e422e3ff813c616c91b3584a2d909"};
 /* the served package as make_site pinned it (size, SHA-256): checked when it loads and again before the write */
 const pinned = async (b) => (meta.size == null || b.length === meta.size) && (!meta.sha256 || await sha256hex(b) === meta.sha256);
 /* the update loader's requests for flash.bin: one read per 512 bytes, from 1.1 two (it checks the package before it

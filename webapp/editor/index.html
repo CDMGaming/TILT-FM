@@ -8,7 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Felucca Editor</title>
 <link rel="icon" href="data:,">
-<meta name="felucca-release" content="1.6">
+<meta name="felucca-release" content="1.6.1">
   <meta name="felucca-try" content="1">
 <style>
 /* SPDX-License-Identifier: GPL-3.0-only
@@ -586,6 +586,11 @@ const __m0 = (() => {
 //   26..29 T1..T4 CHANNEL (1..16 OMNI OFF, values 0..17; the project's as MIDI IN, rc 0; MIDI), appended (INFO 4E 01 30)
 // - 1.5.5 (#209): a step's condition (INFO 4B 01 0B, a byte after the nudge; opt.noCond: not)
 // - 1.5.5 (#208): MENU item 30 AUTO SELECT (OFF, ON: MIDI IN notes select their track; a setting; MIDI) (INFO 4E 01 31)
+// - 1.5.5 (#104): PHASE's E7 FOLD (0..127 PCT, a sine wavefolder; 0 = as before)
+// - 1.5.5: MENU item 31 SCREEN WAKE (+MIDI, PANEL: what wakes SCREEN OFF and keeps the screen on; +MIDI a MIDI IN
+//   note-on too, the default; PANEL the panel only, as before; a setting; MIDI) (INFO 4E 01 32)
+// - 1.6.1 (Discussion #141): MENU item 32 2ND CORE (OFF, ON (BETA): the second core renders some of the parts, from the
+//   next power-on; a setting; SYSTEM) (INFO 4E 01 33)
 // - 1.2: ARP MODE (P_AMODE) gained DNUP UP+8 CONV DIVG PINKY THUMB WALK CHORD (values 7..14, appended)
 // - 1.2 (FUN10): P_COUNT 103, P_E0 95: LFO 2 SYNC TRIG POL (91..93) and QUANTIZE (94, the track's) before the engine
 //   values; MOTION holds 128 records (ops 1..7 reply as before: max 64, at most 64 listed; op 8 lists all, count / max
@@ -2141,6 +2146,12 @@ const MENU = [
   ...[0, 1, 2, 3].map((k) => ({ id: 26 + k, name: `T${k + 1} CHANNEL`, names: MENU_TCH, def: k, tab: 3, proj: true })),
   /* 1.5.5 (#208): MIDI IN notes into a track that is not selected select it (held off while the selected one plays) */
   { id: 30, name: "AUTO SELECT", names: ["OFF", "ON"], def: 0, tab: 3 },
+  /* 1.5.5: SCREEN OFF's wake: +MIDI (the default) a MIDI IN note-on wakes the screen and keeps it on, as the panel does
+     (the note plays); PANEL only the panel, as up to 1.5.1 */
+  { id: 31, name: "SCREEN WAKE", names: ["+MIDI", "PANEL"], def: 0, tab: 3 },
+  /* 1.6.1 (Discussion #141): ON, the second core renders some of the parts (a beta), from the next power-on; OFF (the
+     default) one core, as 1.6 */
+  { id: 32, name: "2ND CORE", names: ["OFF", "ON (BETA)"], def: 0, tab: 4 },
 ];
 /* the MENU settings the device offers, in its menu's order (firmware without them: []); rq as the other readers */
 async function readDeviceMenu(rq, info) {
@@ -2205,7 +2216,7 @@ function makeMockDevice(opt = {}) {
       presets: [] },
     { name: "PHASE", titles: ["PHS", "LINE"], edit: [E("WAVE", ["SAW", "SQR", "PLS", "DSIN", "SPLS", "RSAW", "RTRI", "RTRP"], 0),
         E("WAVE2", ["-", "SAW", "SQR", "PLS", "DSIN", "SPLS", "RSAW", "RTRI", "RTRP"], 0), D("DCW", F.PCT, 0, 127, 60), D("ENV", F.PCT, 0, 127, 64),
-        D("DTN", F.INT, 0, 127, 0, null, "ct"), E("LINE", ["MIX", "RING"], 0), D("SUB", F.PCT, 0, 127, 0), NONE],
+        D("DTN", F.INT, 0, 127, 0, null, "ct"), E("LINE", ["MIX", "RING"], 0), D("SUB", F.PCT, 0, 127, 0), D("FOLD", F.PCT, 0, 127, 0)],
       presets: [P("BRASS", [0, 0, 30, 90, 0, 0, 0, 0], [8, 70, 90, 40], 0, 6), P("ORGAN", [3, 0, 40, 0, 0, 0, 0, 0], [0, 127, 127, 30], 0, 6),
         P("STRING", [0, 4, 50, 40, 12, 0, 0, 0], [40, 90, 100, 70], 0, 5), P("RESO", [5, 0, 60, 60, 0, 0, 0, 0], [0, 70, 30, 60], 0, 1),
         P("BELL", [6, 0, 80, 50, 0, 0, 0, 0], [0, 95, 0, 90], 0, 7), P("WIRE", [4, 7, 70, 40, 7, 0, 0, 0], [10, 80, 80, 60], 0, 4)] },
@@ -4761,7 +4772,7 @@ const TEXT = {
     condSkipQ: "This firmware can't open a project that uses conditional steps: {0} would show as empty here until saved over. Restore the rest and skip those projects?", clearAll: "Clear all",
     bankQ: "Send the bank {0} to the FM-1? It is not part of the backup: keep the .syx file.", bankSent: "The FM-1 holds the bank {0}: SLOT B1..B32",
     bankKept: "The FM-1 keeps its previous bank", bankRc1: "refused", bankRc2: "a checksum error: send it again", bankRc3: "stop the playback, then send it again",
-    bankRc4: "a flash error", bankRc5: "the transfer was ended: send it again", tryIt: "Try in browser", tryNext: "Try the next version", usbQ: "Switch USB SERIAL? USB drops for a moment.", usb: "USB is switching; connecting again",
+    bankRc4: "a flash error", bankRc5: "the transfer was ended: send it again", tryIt: "Try in browser", tryNext: "Try the next version", usbQ: "Switch USB SERIAL? USB drops for a moment.", afterRestart: "Takes effect after restart", usb: "USB is switching; connecting again",
     didLoad: "Loaded {0}", didKeep: "Kept {0}", didSave: "Saved to {0}", didRestore: "Restored {0}", isEmpty: "{0} empty",
     didSend: "Sent to {0}", didImport: "Imported {0}", skippedN: "{0} skipped",
   },
@@ -4797,7 +4808,7 @@ const TEXT = {
     condSkipQ: "このファームウェアは条件つきステップを使うプロジェクトを開けません: {0} は、ここで保存し直すまで空として表示されます。それらのプロジェクトを飛ばして、残りを復元しますか？", clearAll: "すべて消去",
     bankQ: "バンク {0} を FM-1 に送りますか？ バックアップには入らないので、.syx ファイルを残しておいてください。", bankSent: "FM-1 にバンク {0} が入りました: SLOT B1..B32",
     bankKept: "FM-1 は前のバンクのままです", bankRc1: "受け付けられませんでした", bankRc2: "チェックサムが合いません。もう一度送ってください", bankRc3: "再生を止めてから、もう一度送ってください",
-    bankRc4: "フラッシュの書き込みエラー", bankRc5: "転送が終わってしまいました。もう一度送ってください", tryIt: "ブラウザで試す", tryNext: "次の版を試す", usbQ: "USB SERIAL を切り替えますか？ USB が一度切れます。", usb: "USB を切り替え中、つなぎ直します",
+    bankRc4: "フラッシュの書き込みエラー", bankRc5: "転送が終わってしまいました。もう一度送ってください", tryIt: "ブラウザで試す", tryNext: "次の版を試す", usbQ: "USB SERIAL を切り替えますか？ USB が一度切れます。", afterRestart: "再起動後に有効になります", usb: "USB を切り替え中、つなぎ直します",
     didLoad: "{0} を読み込みました", didKeep: "{0} をライブラリに追加", didSave: "{0} に保存しました", didRestore: "{0} から復元しました", isEmpty: "{0} は空",
     didSend: "{0} へ送りました", didImport: "{0} 件取り込み", skippedN: "{0} 件スキップ",
   },
@@ -7185,7 +7196,10 @@ function settingsScreen(root, ui) {
       : { fmt: 0, min: m.min, max: m.max, def: m.min, label: m.name, unit: m.unit, names: [] };
     const r = paramRow(d, m.value, async (v) => {
       if (m.name === "USB SERIAL" && v !== m.value && !(await ui.confirm(t("usbQ")))) { r.update(m.value, false); return; }
-      ui.prefResult(await dev.menuSet(m.id, v));
+      const rc = await dev.menuSet(m.id, v);
+      ui.prefResult(rc);
+      /* (1.6.1: 2ND CORE takes effect from the next power-on, as the device says: told once it is set) */
+      if (m.name === "2ND CORE" && rc === 0) ui.say(() => t("afterRestart"));
     }, { icon: MENU_ICON[m.name] || null });   /* (no icon: the device's rows have none from 1.0.5) */
     /* (1.5.5: T1..T4 CHANNEL route only with MIDI IN = TRACK: dim otherwise, as the device draws them) */
     if (m.id >= 26 && m.id <= 29) r.el.classList.toggle("dim", !trackRoute());
