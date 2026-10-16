@@ -114,6 +114,22 @@ static uint32_t leds_step(uint32_t m, int32_t s)
 }
 
 static void palette_apply(void);               /* (ui.c: the palette in use, CUSTOM or a built-in one) */
+/* TILT-FM: settings that were not there (a first power-on, a cleared flash): AMBER, the TILT look, and (main.c
+ * felucca_init, where MENU's flags are) SCALE LEDS ON. Saved settings stay as they were: a palette or SCALE LEDS the
+ * user chose, on Felucca too, is theirs */
+static uint8_t settings_fresh;
+static uint32_t palette_named(const char *n)           /* (the generated table's order may change: by its name; */
+{                                                      /* no libc.c here: tests/settings_test.c builds this alone) */
+    uint32_t i, j;
+    for (i = 0; i < NPALETTES; i++) {
+        const char *a = UI_PALETTES[i].name;
+        for (j = 0; a[j] && a[j] == n[j]; j++)
+            ;
+        if (a[j] == n[j])
+            return i;
+    }
+    return UI_GREY_INDEX;
+}
 static void settings_init(void)
 {
     if (settings.magic == SETTINGS_MAGIC_OLD && settings.palette < 20u) {
@@ -122,7 +138,8 @@ static void settings_init(void)
     }
     if (settings.magic != SETTINGS_MAGIC || settings.palette >= NPALETTES) {
         settings.magic = SETTINGS_MAGIC;
-        settings.palette = UI_GREY_INDEX;      /* GREY (default; named MONO before 1.0.2) */
+        settings.palette = palette_named("AMBER");   /* TILT-FM: AMBER (Felucca's default: GREY, named MONO before 1.0.2) */
+        settings_fresh = 1;
         settings.lowcut = 0;
         settings.zoom = 0;                     /* (retired: the LEDS setting, settings_persist.c) */
     }

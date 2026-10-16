@@ -121,6 +121,8 @@ static void felucca_init(void)
         pat_last[i] = TRK_DEF[i][2];
     }
     undo_depth--;
+    if (settings_fresh)                       /* TILT-FM: fresh settings: SCALE LEDS ON, the scale on the keys (panel.c; */
+        ui_rec_prefs |= (uint8_t)(PREF_SCALE_LEDS >> 8);   /* its bit is ui_rec_prefs', ui.c) */
     song.sel = 0;
     song.master_q12 = 2048;                   /* (the pot's level replaces it before the audio starts: master_boot) */
     ui.home = 1;

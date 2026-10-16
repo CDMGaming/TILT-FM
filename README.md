@@ -1,3 +1,13 @@
+# TILT-FM
+
+**TILT-FM is a modified version of Felucca** (by Leo Kuroshita, Hügelton Instruments), made by CDM Gaming in 2026.
+It adds TILT's quick-start ideas inside Felucca's UI: the TILT layer (hold ENV), NEW SONG (key, scale, tempo and four
+role-aware sounds, HOLD and NUDGE, START), STUCK (RANDOM or COOK on the current track), a TIMER with a TIME ending and
+a timed take, and the amber TILT look. Like Felucca it is GPL-3.0-only; everything below is Felucca's own README,
+unchanged. Changes: `git log` from `86655d0` on the `tilt` branch; flashing: [docs/tilt/FLASHING-CHECKLIST.md](docs/tilt/FLASHING-CHECKLIST.md).
+
+---
+
 # Felucca
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
