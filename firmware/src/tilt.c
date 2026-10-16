@@ -237,12 +237,19 @@ static void ns_knob(int32_t s)
 }
 
 static void te_input(uint32_t pressed, uint32_t notes, uint32_t oct);
+static void st_input(uint32_t pressed, uint32_t notes, uint32_t oct);
+static uint32_t st_leds(void);
+static void st_draw(void);
 static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct)
 {
     uint32_t k, p;
     int32_t s;
     if (tilt_ns_open == TILT_TIME) {
         te_input(pressed, notes, oct);
+        return;
+    }
+    if (tilt_ns_open == TILT_START) {
+        st_input(pressed, notes, oct);
         return;
     }
     song.grid = 2;                                      /* (silent keys: keys_mode, as NAME's) */
@@ -269,6 +276,8 @@ static uint32_t tilt_ns_leds(void)                       /* the held rows' keys 
     uint32_t k, m = 0;
     if (tilt_ns_open == TILT_TIME)
         return 0x55u;                                   /* (F3 G3 A3 B3: keys 0 2 4 6) */
+    if (tilt_ns_open == TILT_START)
+        return st_leds();
     for (k = 0; k < 27u; k++)
         if (!key_black(k) && key_place(k) < NS_ROWS && ((ns.hold >> key_place(k)) & 1u))
             m |= 1u << k;
@@ -343,6 +352,10 @@ static void tilt_ns_draw(void)
     uint32_t r, sig;
     if (tilt_ns_open == TILT_TIME) {
         te_draw();
+        return;
+    }
+    if (tilt_ns_open == TILT_START) {
+        st_draw();
         return;
     }
     for (r = 0; r < NTRK; r++) {
@@ -737,4 +750,134 @@ static void layer_tilt(void)
     fill = lc_box(6, 100, 228, 18, lc_fill(st, &ink));
     GFX_HOOK_ALIGN(6, 100, 234, 118, AL_HV, "tilt layer stuck line centred");
     cv_text_in(6, 100 + CAP_IN(S, 18), 228, &AF_S, b, ink, fill);
+}
+
+/* -------------------------------------------------------- START SCREEN --- */
+/* MENU > SYSTEM > START SCREEN ON (the default; ui.c PREF_START_OFF): after the splash, before the music, a choice
+ * (main.c: tilt_start_boot in place of autosave_boot). Nothing is loaded until one is made, and the autosave's
+ * baseline is the music as it stands (project.c autosave_peek / autosave_rebase): nothing is written until it changes.
+ *   F3 CONTINUE  the autosave, as RESTORE LAST loads it (autosave_boot: its baseline the loaded session, so continuing
+ *                without an edit writes nothing). Shown only when there is one that loads (RESTORE LAST ON) and the
+ *                last boot did not crash, hang or fail (as autosave_boot's `allowed`); after a crash with one there:
+ *                "LAST SESSION SKIPPED - CRASH" in its place. The selection starts on it; else on BLANK
+ *   G3 BLANK     the power-on set as it is (Felucca's: ANALOG ACID, FM6 PAD, LOFI PULSE LD, DRUM KIT; empty patterns,
+ *                120 BPM): what RESTORE LAST OFF gives
+ * KNOB 1, SELECT or PRESETS move the selection, OCT+ takes it; a white key takes its own at once. Nothing else does
+ * anything here: the keys are silent (name_on), no layer, no REC, no MENU (ui_input.c), the knobs only select */
+enum { SO_CONT, SO_BLANK, SO_N };
+static const char *const SO_NAME[SO_N] = {"CONTINUE", "BLANK"};
+static const char *const SO_HINT[SO_N] = {"THE LAST SESSION", "EMPTY TRACKS"};
+static struct {
+    uint8_t has, crash, pick;                           /* an autosave to continue; skipped after a crash; the selection */
+    uint32_t sig;
+} st;
+
+static int so_shown(uint32_t o) { return o == SO_CONT ? st.has && !st.crash : o < SO_N; }
+static void tilt_start_boot(int clean)
+{
+    st.has = (uint8_t)autosave_peek();
+    st.crash = (uint8_t)(!clean && st.has);
+    st.pick = so_shown(SO_CONT) ? SO_CONT : SO_BLANK;
+    tilt_ns_open = TILT_START;
+    ui.force = 1;
+}
+static void st_do(uint32_t o)
+{
+    if (!so_shown(o))
+        return;
+    tilt_ns_open = 0;
+    go_home();
+    ui.force = 1;
+    if (o == SO_CONT) {
+        if (!autosave_boot(1))                          /* (it said RESTORED; its baseline: the session loaded) */
+            ui_message("NOTHING TO CONTINUE");
+    } else {
+        autosave_rebase();                              /* (the power-on set: nothing written until a change) */
+        ui_message("BLANK");
+    }
+}
+static void st_move(int32_t s)
+{
+    uint32_t p = st.pick, i;
+    for (i = 0; i < SO_N; i++) {                        /* the next shown one that way (they stop at the ends) */
+        int32_t q = (int32_t)p + (s > 0 ? 1 : -1);
+        if (q < 0 || q >= SO_N)
+            return;
+        p = (uint32_t)q;
+        if (so_shown(p)) {
+            st.pick = (uint8_t)p;
+            return;
+        }
+    }
+}
+static void st_input(uint32_t pressed, uint32_t notes, uint32_t oct)
+{
+    uint32_t k, p;
+    int32_t s;
+    (void)pressed;                                      /* (PLAY, REC, the page buttons: nothing here) */
+    song.grid = 2;
+    for (k = 0; k < 27u; k++)
+        if (((notes >> k) & 1u) && !key_black(k) && (p = key_place(k)) < SO_N && so_shown(p)) {
+            enc_drop();
+            st_do(p);
+            return;
+        }
+    if ((s = panel_enc(EN_SELECT)) != 0 || (s = panel_enc(EN_K1)) != 0 || (s = panel_enc(EN_PRESET)) != 0)
+        st_move(s);
+    enc_drop();
+    if (oct & 2u)
+        st_do(st.pick);
+}
+static uint32_t st_leds(void)                           /* the shown options' keys lit */
+{
+    uint32_t o, m = 0;
+    static const uint8_t KEY[4] = {0, 2, 4, 6};         /* (F3 G3 A3 B3) */
+    for (o = 0; o < SO_N; o++)
+        if (so_shown(o))
+            m |= 1u << KEY[o];
+    return m;
+}
+static void st_draw(void)
+{
+    uint32_t sig = st.pick * 7u + st.has * 3u + st.crash * 5u + ux.gen * 7919u, o;
+    if (ui.force) {
+        lcd_fill(0, H_HEAD, 240, Y_FOOT - H_HEAD, T_BG);
+        st.sig = ~sig;
+    }
+    draw_head();
+    if (sig != st.sig) {
+        char n[3] = {0, '3', 0};
+        khint_t a[3];
+        st.sig = sig;
+        for (o = 0; o < SO_N; o++) {
+            uint32_t sel = o == st.pick, on = so_shown(o);
+            uint16_t bg = sel ? T_SURF : T_BG;
+            int32_t y = CAP_IN(S, TE_ROW_H);
+            n[0] = W_NOTE[o];
+            cv_begin(240, TE_ROW_H, T_BG);
+            if (sel)
+                cv_rrect(3, 0, 234, TE_ROW_H, 4, T_SURF, T_BG);
+            if (on) {
+                cv_text_on(9, y, &AF_S, n, T_DIM, bg);
+                cv_text_on(31, y, &AF_S, SO_NAME[o], sel ? T_THEME : T_TEXT, bg);
+                cv_text_r(231, y, &AF_S, SO_HINT[o], T_MID, bg);
+            } else if (o == SO_CONT && st.crash) {
+                GFX_HOOK_ALIGN(0, 0, 240, TE_ROW_H, AL_HV, "start crash line centred");
+                cv_text_in(0, y, 240, &AF_S, "LAST SESSION SKIPPED - CRASH", T_ACCENT, bg);
+            }
+            cv_blit(0, TE_ROW_Y + o * TE_ROW_H);
+        }
+        a[0] = (khint_t){KC_OCTUP, "START"};
+        a[1] = (khint_t){KC_K1, "PICK"};
+        a[2] = (khint_t){KC_KEYS, "F3 - B3"};
+        cv_begin(240, H_FOOT, T_BG);
+        cv_key_row(8, 232, 9, a, 3, 7u, T_BG);
+        cv_blit(0, Y_FOOT);
+    }
+    if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {
+        str_cpy(ui.msg, ui.msg2, sizeof ui.msg);
+        ui.msg2[0] = 0;
+        ui.msg_t = 60;
+    }
+    ui.force = 0;
 }

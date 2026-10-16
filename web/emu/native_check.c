@@ -28,6 +28,12 @@ int main(int argc, char **argv)
         return 2;
     web_nor_erase();
     web_boot();
+    render(1000);                                 /* TILT-FM: the start screen's default taken, as emu_test.mjs's */
+    web_buttons(1u << B_OCTUP);                   /* device() does (OCT+: BLANK, no autosave) */
+    render(60);
+    web_buttons(0);
+    render(60);
+    render(100);
     render(500);
     web_test_heavy();
     web_buttons(1u << B_PLAY);

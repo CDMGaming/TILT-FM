@@ -1401,6 +1401,31 @@ static int autosave_now(void)
 #endif
 }
 
+/* TILT-FM: the autosave's baseline is the music now: nothing is written until it changes (the start screen's BLANK,
+ * and a project or NEW SONG it led to: tilt.c) */
+static void autosave_rebase(void)
+{
+    as.saved = as.seen = autosave_sig();
+    as.t = fm1_ms;
+}
+/* TILT-FM: the start screen (tilt.c) at power-on: is there an autosave CONTINUE would load (RESTORE LAST ON, one that
+ * loads, as autosave_boot reads it)? Only looked at: the music stays the power-on set, which is the baseline (nothing
+ * written until it changes). 1 = there is one */
+static int autosave_peek(void)
+{
+    int ok = 0;
+#if FELUCCA_FLASH
+    if (flash_ok && !(ui_prefs & PREF_RESTORE_OFF)) {
+        int n;
+        proj_wire_gen++;
+        n = st_load(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire);
+        ok = n > 0 && proj_import(&proj_scratch, &proj_wire, n);
+    }
+#endif
+    autosave_rebase();
+    return ok;
+}
+
 /* power-on, after the defaults (main.c): the autosave becomes the music when `allowed` (no crash, hang or failed boot
  * before) and RESTORE LAST is ON; an autosave that does not load (none, torn, damaged, another format) is ignored.
  * The music now (restored or not) is what is saved: nothing is written until it changes. 1 = restored */

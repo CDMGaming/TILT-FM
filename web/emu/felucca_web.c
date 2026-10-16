@@ -280,7 +280,10 @@ static void web_power_on(void)
     kb_boot_hold = 1;                     /* main.c (#137): the keys silent under the splash */
     audio_init();
     boot_leds();                          /* main.c: the power-on LED sweep, from the scan's start */
-    autosave_boot(boot_clean);            /* main.c: the last session's music (1.2, project.c) */
+    if (ui_prefs3 & (PREF_START_OFF >> 24))   /* main.c: the last session's music (1.2, project.c); TILT-FM: */
+        autosave_boot(boot_clean);        /* START SCREEN ON, the start screen instead (tilt.c) */
+    else
+        tilt_start_boot(boot_clean);
     web_boot_ms = fm1_ms + 430u;         /* main.c: 30 + 400 ms before the first frame */
     web_booted = 1;
 }

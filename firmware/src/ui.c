@@ -424,9 +424,14 @@ enum { LAYER_NONE, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ, LAYER_
  * 2 TIME) name_on() is true (the keys silent, no layer, OCT- / OCT+ its own, the menu closes it), and the input, the
  * drawing and the key LEDs are its */
 static uint8_t tilt_ns_open;
+#define TILT_START 3u                                   /* (tilt_ns_open: the start screen, tilt.c) */
 static uint16_t master_fade = 4096u;                    /* (TILT-FM: TIME's fade, Q12, on MASTER: master.c) */
 #define MASTER_FADE master_fade
 static int autosave_now(void);                          /* (project.c: TIME's take) */
+static int autosave_peek(void);                         /* (project.c: the start screen's CONTINUE, looked at only) */
+static void autosave_rebase(void);                      /* (project.c: the music now is the baseline: nothing written) */
+static int autosave_boot(int allowed);
+static void tilt_start_boot(int clean);                 /* (tilt.c: the start screen, from main.c's power-on) */
 static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct);
 static void tilt_ns_draw(void);
 static uint32_t tilt_ns_leds(void);

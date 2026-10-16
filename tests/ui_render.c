@@ -777,7 +777,8 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD,
        S_TILT_LAYER, S_TILT_LAYER_EMPTY, S_NEWSONG, S_NEWSONG_HELD, S_NEWSONG_AGAIN,
        S_TIMER, S_TIMER_LAST_MIN, S_TIMER_MSG, S_TIMER_LAYER, S_TIMER_OCT, S_TIMER_SONG,
-       S_TIME, S_TIME_UNSAVED, S_TIME_KEEP, S_COUNT };
+       S_TIME, S_TIME_UNSAVED, S_TIME_KEEP,
+       S_START, S_START_BLANK, S_START_NONE, S_START_CRASH, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -811,7 +812,8 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold",
     "tilt_layer", "tilt_layer_empty", "newsong", "newsong_held", "newsong_again",
     "timer", "timer_last_min", "timer_msg", "timer_layer", "timer_oct", "timer_song",
-    "time", "time_unsaved", "time_keep"};
+    "time", "time_unsaved", "time_keep",
+    "start", "start_blank", "start_none", "start_crash"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1413,6 +1415,12 @@ static void setup(int s)
         song.playing = 0; go_home(); te_show();
         te.saved = s != S_TIME_UNSAVED;
         if (s == S_TIME_KEEP) te.pick = TO_KEEP;
+        break;
+    /* TILT-FM: the start screen: an autosave there (CONTINUE picked; BLANK picked), none, one skipped after a crash */
+    case S_START: case S_START_BLANK: case S_START_NONE: case S_START_CRASH:
+        song.playing = 0; go_home(); tilt_start_boot(s != S_START_CRASH);
+        st.has = s != S_START_NONE; st.crash = s == S_START_CRASH;
+        st.pick = so_shown(SO_CONT) && s != S_START_BLANK ? SO_CONT : SO_BLANK;
         break;
     case S_SEQ_TOOLS_DRUM: drum(0); go_page(GR_ROLL); ui.lane = 2; ui.layer = LAYER_SEQ; break;
     case S_SEQ_TOOLS_SONG: drum(1); go_page(GR_ROLL); ui.lane = 5; chain.running = 1; ui.layer = LAYER_SEQ; break;

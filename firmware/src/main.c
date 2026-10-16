@@ -212,7 +212,10 @@ static void fm1_main(void)
         panel_setup();                        /* OCT- + OCT+ held at power-on */
         settings_save();
     }
-    autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash */
+    if (ui_prefs3 & (PREF_START_OFF >> 24))   /* TILT-FM: START SCREEN OFF: as before, RESTORE LAST decides */
+        autosave_boot(boot_clean);            /* (1.2) the last session's music, under the splash */
+    else
+        tilt_start_boot(boot_clean);          /* (ON: nothing loaded; the start screen after the splash: tilt.c) */
     for (ms = 0; ms < 400u; ms += 10u) {      /* the splash; the pot followed (MIDI IN plays under it) */
         fm1_delay_ms(10);
         master_poll();

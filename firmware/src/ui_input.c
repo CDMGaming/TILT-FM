@@ -1574,6 +1574,8 @@ static void ui_input(void)
     if (home == BT_TAP && ui.menu) {                    /* HOME (pressed, or held) closes the menu, from ABOUT too; */
         menu_close();                                   /* the release of the hold that opened it is no tap */
         home = BT_NONE;                                 /* (menu_close went HOME already) */
+    } else if (home == BT_HOLD && tilt_ns_open == TILT_START) {   /* TILT-FM: not from the start screen (a choice */
+        home = BT_NONE;                                 /* first: the menu would leave it as BLANK unasked) */
     } else if (home == BT_HOLD) {                       /* HOME held: open the menu, or leave it */
         if (ui.menu) {
             menu_close();

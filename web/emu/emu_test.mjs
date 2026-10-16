@@ -20,7 +20,9 @@ const EN = { SELECT: 0, ALGO: 1, PRESETS: 2, K1: 3, K2: 4, K3: 5, K4: 6 };
 let fails = 0;
 const check = (what, ok) => { console.log(`emu: ${what.padEnd(76)} ${ok ? "ok" : "FAIL"}`); if (!ok) fails++; };
 
-async function device(saved) {
+// TILT-FM: power-on shows the start screen (MENU > SYSTEM > START SCREEN ON, the default); `start` takes its default
+// choice (OCT+: CONTINUE when the kept sectors hold an autosave, else BLANK) once the splash is over
+async function device(saved, start = true) {
   const { instance } = await WebAssembly.instantiate(bytes, {});
   const ex = instance.exports, mem = ex.memory;
   ex._initialize();
@@ -48,12 +50,17 @@ async function device(saved) {
   d.turn = (role, n) => { for (let i = 0; i < Math.abs(n); i++) { ex.web_enc(role, Math.sign(n)); d.render(40); } };
   Object.defineProperty(d, "samples", { get: () => new Float32Array(d.kept) });
   d.screen = () => new Uint16Array(mem.buffer, ex.web_screen(), 240 * 240).slice();
+  if (start) {
+    d.render(1000);
+    d.tap(B.OCTUP);
+    d.render(100);
+  }
   return d;
 }
 const colours = (fb) => new Set(fb).size;
 
 // ---- boot, keys, screen, LEDs
-const a = await device(null);
+const a = await device(null, false);
 a.render(200);
 const splash = colours(a.screen());
 { // the power-on LED sweep (hal/fm1_led_anim.h) under the splash: at 200 ms its head on the middle of the keyboard, the
@@ -67,6 +74,18 @@ const splash = colours(a.screen());
 }
 a.render(800);
 check("  over by 1 s (~0.70 s)", a.ex.web_anim_levels() === 0);
+{ // TILT-FM: after the splash, the start screen (no autosave: BLANK picked); a key there sounds nothing; OCT+ takes it
+  const start = colours(a.screen());
+  a.ex.web_keys(1 << 7);                                        // C4: no option's key
+  a.render(300);
+  a.ex.web_keys(0);
+  a.render(300);
+  const silent = a.peak === 0;
+  a.tap(B.OCTUP);
+  a.render(200);
+  check(`TILT-FM: the start screen after the splash (${start} colours), C4 silent there; OCT+ takes BLANK`,
+        start > 4 && silent);
+}
 const home = a.screen();
 check(`boots: the splash, then HOME (${colours(home)} colours), the HOME LED lit`,
       splash > 1 && colours(home) > 4 && (a.ex.web_lit_buttons() >> B.HOME & 1) === 1);
