@@ -55,6 +55,7 @@ static struct {
     uint32_t again_t, sig;
 } ns;
 static const char *const NS_ROLE[NTRK] = {"BASS", "MELODY", "MELODY", "DRUMS"};
+static uint8_t ns_from_start;                           /* (opened from the start screen: OCT- goes back there) */
 static const uint8_t NS_SCALES[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 12};   /* MAJ MIN DOR MIX PEN MPEN HARM PHRY LYD BLUES */
 
 /* sound (e, k) fits track t's role: T4 a kit of the engines that are kits (DRUM, SLICE: category.c cat_of_engine; not
@@ -212,6 +213,9 @@ static void ns_start(void)
         transport_req = 1;
     if (timed)
         tilt_timer_start();
+    if (tilt_start_pending)                             /* (the start screen's NEW SONG: this is the baseline; nothing */
+        autosave_rebase();                              /* written until it changes) */
+    ns_from_start = 0;
 }
 
 static void ns_knob(int32_t s)
@@ -265,8 +269,14 @@ static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct)
     enc_drop();                                         /* the other knobs do nothing here */
     if (oct & 2u)
         ns_nudge();
-    else if (oct & 1u)
+    else if (oct & 1u) {
         name_close();                                   /* back: nothing changed */
+        if (ns_from_start) {                            /* (opened from the start screen: back to it) */
+            ns_from_start = 0;
+            tilt_ns_open = TILT_START;
+            ui.force = 1;
+        }
+    }
     else if ((pressed >> panel.btn[B_PLAY]) & 1u)
         ns_start();
 }
@@ -762,11 +772,15 @@ static void layer_tilt(void)
  *                "LAST SESSION SKIPPED - CRASH" in its place. The selection starts on it; else on BLANK
  *   G3 BLANK     the power-on set as it is (Felucca's: ANALOG ACID, FM6 PAD, LOFI PULSE LD, DRUM KIT; empty patterns,
  *                120 BPM): what RESTORE LAST OFF gives
+ *   A3 NEW SONG  the NEW SONG screen (OCT- there: back here); its START is the choice, not an edit
+ *   B3 LOAD      SAVE > PROJECT (a slot, KNOB 3 LOAD, OCT+); the project loaded is the choice, not an edit
+ * BLANK, NEW SONG and LOAD keep the last session's autosave as it is until the music changes after the choice: BLANK's
+ * baseline is the power-on set; NEW SONG's START and a LOAD while tilt_start_pending reset it to what they made
  * KNOB 1, SELECT or PRESETS move the selection, OCT+ takes it; a white key takes its own at once. Nothing else does
  * anything here: the keys are silent (name_on), no layer, no REC, no MENU (ui_input.c), the knobs only select */
-enum { SO_CONT, SO_BLANK, SO_N };
-static const char *const SO_NAME[SO_N] = {"CONTINUE", "BLANK"};
-static const char *const SO_HINT[SO_N] = {"THE LAST SESSION", "EMPTY TRACKS"};
+enum { SO_CONT, SO_BLANK, SO_NEW, SO_LOAD, SO_N };
+static const char *const SO_NAME[SO_N] = {"CONTINUE", "BLANK", "NEW SONG", "LOAD"};
+static const char *const SO_HINT[SO_N] = {"THE LAST SESSION", "EMPTY TRACKS", "ROLL ONE", "A SAVED PROJECT"};
 static struct {
     uint8_t has, crash, pick;                           /* an autosave to continue; skipped after a crash; the selection */
     uint32_t sig;
@@ -788,12 +802,24 @@ static void st_do(uint32_t o)
     tilt_ns_open = 0;
     go_home();
     ui.force = 1;
+    autosave_rebase();                                  /* (the power-on set: nothing written until a change) */
     if (o == SO_CONT) {
         if (!autosave_boot(1))                          /* (it said RESTORED; its baseline: the session loaded) */
             ui_message("NOTHING TO CONTINUE");
-    } else {
-        autosave_rebase();                              /* (the power-on set: nothing written until a change) */
+    } else if (o == SO_BLANK) {
         ui_message("BLANK");
+    } else if (o == SO_NEW) {
+        tilt_start_pending = 1;
+        ns_from_start = 1;
+        tilt_ns_show();
+    } else {
+        uint32_t i;
+        tilt_start_pending = 1;
+        for (i = 0; i < NPAGES && PAGES[i].graph != GR_SLOTS; i++)
+            ;
+        ui.home = 0;
+        ui.page = (uint8_t)i;
+        ui_message("A SLOT, THEN [K3] LOAD");
     }
 }
 static void st_move(int32_t s)

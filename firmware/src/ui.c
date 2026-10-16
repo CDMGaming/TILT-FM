@@ -425,6 +425,11 @@ enum { LAYER_NONE, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ, LAYER_
  * drawing and the key LEDs are its */
 static uint8_t tilt_ns_open;
 #define TILT_START 3u                                   /* (tilt_ns_open: the start screen, tilt.c) */
+/* TILT-FM: the start screen's NEW SONG or LOAD chosen, nothing changed since: a project loaded, a NEW SONG started are
+ * the choice, not an edit (the autosave's baseline follows them: tilt.c, ui_input.c); the first change clears it
+ * (project.c autosave_poll) */
+static uint8_t tilt_start_pending;
+#define TILT_START_PENDING tilt_start_pending
 static uint16_t master_fade = 4096u;                    /* (TILT-FM: TIME's fade, Q12, on MASTER: master.c) */
 #define MASTER_FADE master_fade
 static int autosave_now(void);                          /* (project.c: TIME's take) */

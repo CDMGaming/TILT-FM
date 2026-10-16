@@ -1357,6 +1357,10 @@ static void autosave_poll(void)
         return;
     as.poll = fm1_ms;
     sig = autosave_sig();
+#ifdef TILT_START_PENDING
+    if (sig != as.saved)                                /* TILT-FM: a change: no more the start screen's choice */
+        TILT_START_PENDING = 0;
+#endif
     if (sig != as.seen || !autosave_quiet()) {
         as.seen = sig;
         as.t = fm1_ms;

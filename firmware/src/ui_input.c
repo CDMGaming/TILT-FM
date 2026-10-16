@@ -1125,6 +1125,8 @@ static void act_do(void)
     switch (id) {
     case G_LOAD:
         project_load(k);
+        if (tilt_start_pending)                         /* TILT-FM: the start screen's LOAD: the project loaded is */
+            autosave_rebase();                          /* the baseline, nothing written until it changes */
         break;
     case G_SAVE:                                          /* the NAME screen writes it */
         if (transport_busy())

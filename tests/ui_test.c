@@ -183,6 +183,8 @@ static void ui_power_on(void)
     memset(&tm, 0, sizeof tm);
     memset(&te, 0, sizeof te);
     memset(&st, 0, sizeof st);
+    tilt_start_pending = 0;
+    ns_from_start = 0;
     master_fade = 4096u;
     memset(&mom, 0, sizeof mom);                  /* MOMENTARY: no value held (the pool at power-on) */
     proj_name[0] = 0;
