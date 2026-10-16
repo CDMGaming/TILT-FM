@@ -40,6 +40,8 @@ static void tilt_stuck(void) { tools_key(tilt_used(TSEL) ? TL_COOK : TL_RANDOM);
  * everywhere: room for a short code later). The first open rolls everything; the values and the holds stay between
  * opens, and each open is a NUDGE */
 enum { NS_KEY, NS_SCALE, NS_BPM, NS_T1, NS_ROWS = NS_T1 + NTRK };
+#define TILT_NS 1u                                      /* tilt_ns_open: NEW SONG; TIME (below) */
+#define TILT_TIME 2u
 #define NS_BPM_LO 75
 #define NS_BPM_HI 145
 #define NS_ROW_H 24                                     /* 7 rows from Y_LABEL: 28 .. 196, the footer at 202 */
@@ -148,7 +150,7 @@ static void tilt_ns_show(void)
         ns.hold = 0;
     }
     ns_nudge();
-    tilt_ns_open = 1;
+    tilt_ns_open = TILT_NS;
     ui.force = 1;
 }
 
@@ -234,10 +236,15 @@ static void ns_knob(int32_t s)
     ns.again = 0;
 }
 
+static void te_input(uint32_t pressed, uint32_t notes, uint32_t oct);
 static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct)
 {
     uint32_t k, p;
     int32_t s;
+    if (tilt_ns_open == TILT_TIME) {
+        te_input(pressed, notes, oct);
+        return;
+    }
     song.grid = 2;                                      /* (silent keys: keys_mode, as NAME's) */
     for (k = 0; k < 27u; k++)
         if (((notes >> k) & 1u) && !key_black(k) && (p = key_place(k)) < NS_ROWS) {
@@ -257,9 +264,11 @@ static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct)
         ns_start();
 }
 
-static uint32_t tilt_ns_leds(void)                       /* the held rows' keys lit */
+static uint32_t tilt_ns_leds(void)                       /* the held rows' keys lit (TIME: its four choices') */
 {
     uint32_t k, m = 0;
+    if (tilt_ns_open == TILT_TIME)
+        return 0x55u;                                   /* (F3 G3 A3 B3: keys 0 2 4 6) */
     for (k = 0; k < 27u; k++)
         if (!key_black(k) && key_place(k) < NS_ROWS && ((ns.hold >> key_place(k)) & 1u))
             m |= 1u << k;
@@ -326,11 +335,16 @@ static void ns_draw_foot(void)
     cv_key_row(8, 232, 21, b, 3, 7u, T_BG);
     cv_blit(0, Y_FOOT);
 }
+static void te_draw(void);
 static void tilt_ns_draw(void)
 {
     uint8_t st[8 + 2 * NTRK] = {ns.row, ns.hold, ns.root, ns.scale, (uint8_t)ns.bpm, (uint8_t)(ns.bpm >> 8), ns.again,
                                 tilt_timer_min};
     uint32_t r, sig;
+    if (tilt_ns_open == TILT_TIME) {
+        te_draw();
+        return;
+    }
     for (r = 0; r < NTRK; r++) {
         st[8 + r] = ns.eng[r];
         st[8 + NTRK + r] = ns.pre[r];
@@ -360,7 +374,312 @@ static void tilt_ns_draw(void)
 }
 
 /* ------------------------------------------------------------- TIMER --- */
-static void tilt_timer_start(void) { }
+/* OFF / 5 / 10 / 15 / 20 minutes (the TILT layer: A3 steps it, KNOB 1 turns it). Setting it starts the countdown, so
+ * does NEW SONG's START with it set; it runs in real time (stopped or playing). In the header, left of the battery, on
+ * every screen: M:SS in a 3 x 5 dot matrix, 1 px dots 2 px apart (9 px high, "20:00" 29 px wide: the octave or the
+ * song row still fits between it and the BPM, ui_draw.c draw_head); amber (fixed, as the splash: dim, from 1:00
+ * bright, the last 10 s flashing) where the palette has colour, the palette's own ink on GREY and MONO */
+#define TM_DIM 0xABA0u                                  /* #A87400 */
+#define TM_BRIGHT 0xFD80u                               /* #FFB000 (the splash's) */
+#define TM_DOT 1
+#define TM_PITCH 2
+static const uint16_t TM_DIGIT[10] = {                  /* 5 rows of 3 (bit 14 the top row's left dot) */
+    075557, 026227, 071747, 071717, 055711, 074717, 074757, 071111, 075757, 075717};
+static struct {
+    uint8_t on;                                         /* counting */
+    uint32_t end;                                       /* fm1_ms when it reaches 0:00 */
+    uint32_t left;                                      /* the seconds shown (frozen at 0 once it is over) */
+} tm;
+static const uint8_t TM_STEPS[5] = {0, 5, 10, 15, 20};
+#ifndef TILT_MIN_MS
+#define TILT_MIN_MS 60000u                              /* a minute (a test build of the emulator: shorter) */
+#endif
+
+static void tilt_timer_start(void)
+{
+    tm.on = tilt_timer_min != 0u;
+    tm.end = fm1_ms + (uint32_t)tilt_timer_min * TILT_MIN_MS;
+    tm.left = (uint32_t)tilt_timer_min * TILT_MIN_MS / 1000u;
+}
+static void tilt_timer_set(uint32_t min)
+{
+    char b[12];
+    tilt_timer_min = (uint8_t)min;
+    tilt_timer_start();
+    if (min) {
+        fmt_int(b, (int32_t)min);
+        str_cpy(b + str_len(b), " MIN", 5);
+        ui_say("TIMER ", b);
+    } else {
+        ui_message("TIMER OFF");
+    }
+}
+static uint32_t tm_step_of(uint32_t min)               /* its place in TM_STEPS */
+{
+    uint32_t i;
+    for (i = 0; i < sizeof TM_STEPS && TM_STEPS[i] != min; i++)
+        ;
+    return i % sizeof TM_STEPS;
+}
+static void tilt_timer_over(void);
+static void te_poll(void);
+static void tilt_timer_poll(void)
+{
+    te_poll();                                          /* (TIME: the bar, the fade) */
+    if (!tm.on)
+        return;
+    if ((int32_t)(tm.end - fm1_ms) <= 0) {
+        tm.on = 0;
+        tm.left = 0;
+        tilt_timer_over();
+        return;
+    }
+    tm.left = (tm.end - fm1_ms + 999u) / 1000u;
+}
+/* the countdown's text, "9:59" / "20:00" */
+static void tm_text(char *b)
+{
+    uint32_t m = tm.left / 60u, s = tm.left % 60u, n;
+    fmt_int(b, (int32_t)m);
+    n = str_len(b);
+    b[n] = ':';
+    b[n + 1u] = (char)('0' + s / 10u);
+    b[n + 2u] = (char)('0' + s % 10u);
+    b[n + 3u] = 0;
+}
+static int32_t tm_char_w(char c) { return c == ':' ? TM_DOT : 3 * TM_PITCH - 1; }
+static int32_t tilt_head_w(void)
+{
+    char b[8];
+    int32_t w = 0, i;
+    if (!tm.on)
+        return 0;
+    tm_text(b);
+    for (i = 0; b[i]; i++)
+        w += tm_char_w(b[i]) + (b[i + 1] ? TM_PITCH : 0);
+    return w;
+}
+/* 0 hidden (flashing), 1 dim, 2 bright */
+static uint32_t tm_level(void)
+{
+    if (tm.left <= 10u)
+        return (fm1_ms / 250u) & 1u ? 0u : 2u;
+    return tm.left <= 60u ? 2u : 1u;
+}
+static uint32_t tilt_head_sig(void) { return tm.on ? tm.left * 4u + tm_level() + 1u : 0u; }
+static void tilt_head_draw(int32_t xr)
+{
+    char b[8];
+    uint32_t lv = tm_level(), i, r, c;
+    uint32_t grey = settings.palette == UI_GREY_INDEX || settings.palette == UI_BW_INDEX;   /* (no colour there) */
+    uint16_t ink = grey ? (lv == 2u ? T_TEXT : T_MID) : lv == 2u ? TM_BRIGHT : TM_DIM;
+    int32_t x = xr - tilt_head_w(), y = (H_HEAD - (5 * TM_PITCH - 1)) / 2;
+    if (!lv)
+        return;
+    tm_text(b);
+    for (i = 0; b[i]; i++) {
+        if (b[i] == ':') {                              /* the colon: two dots */
+            cv_rect(x, y + TM_PITCH, TM_DOT, TM_DOT, ink);
+            cv_rect(x, y + 3 * TM_PITCH, TM_DOT, TM_DOT, ink);
+        } else {
+            uint32_t g = TM_DIGIT[(b[i] - '0') % 10];
+            for (r = 0; r < 5u; r++)
+                for (c = 0; c < 3u; c++)
+                    if ((g >> (14u - 3u * r - c)) & 1u)
+                        cv_rect(x + (int32_t)c * TM_PITCH, y + (int32_t)r * TM_PITCH, TM_DOT, TM_DOT, ink);
+        }
+        x += tm_char_w(b[i]) + TM_PITCH;
+    }
+}
+
+/* -------------------------------------------------------------- TIME --- */
+/* At 0:00: playing, the bar finishes (the clock's 1/16 step back at the bar's first; 8 s at most, a bar at 40 BPM is
+ * 6), then the sound fades out over TE_FADE_MS (MASTER x master_fade: the pot still sets the level), the transport
+ * stops, a moment of quiet for the tails; stopped already: at once. Then the TIME screen: TIME big in the splash's
+ * dot matrix, the project written as the autosave (the timed take: project.c autosave_now; RESTORE LAST ON brings it
+ * back at power-on), and four choices, F3 .. B3 or SELECT / KNOB 1 and OCT+:
+ *   PLAY IT BACK  from the top     SAVE          SAVE > PROJECT: a slot, KNOB 4 SAVE (its name, as ever)
+ *   EXTRA BALL    5 more minutes, the music on again                KEEP WORKING  the timer off (OCT- too)
+ * The menu (HOME held) closes it as KEEP WORKING */
+enum { TE_NONE, TE_BAR, TE_FADE, TE_QUIET };
+enum { TO_PLAY, TO_SAVE, TO_EXTRA, TO_KEEP, TO_N };
+#define TE_BAR_MS 8000u
+#define TE_FADE_MS 2000u
+#define TE_QUIET_MS 700u
+#define TE_ROW_H 18
+#define TE_ROW_Y 124                                    /* 4 rows: 124 .. 196, the footer at 202 */
+static const char *const TO_NAME[TO_N] = {"PLAY IT BACK", "SAVE", "EXTRA BALL", "KEEP WORKING"};
+static const char *const TO_HINT[TO_N] = {"FROM THE TOP", "TO A PROJECT SLOT", "+5 MIN", "TIMER OFF"};
+static struct {
+    uint8_t st, moved, pick, saved;
+    uint32_t t, sig;
+} te;
+static const uint8_t TE_WORD[4][7] = {                  /* T I M E: rows, top first, bit 4 the left column */
+    {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04},
+    {0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E},
+    {0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11},
+    {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F},
+};
+
+static void te_show(void)
+{
+    if (ui.menu)
+        menu_close();
+    ui.confirm = 0;
+    name_close();
+    te.st = TE_NONE;
+    te.saved = (uint8_t)autosave_now();
+    te.pick = TO_PLAY;
+    tilt_ns_open = TILT_TIME;
+    ui.force = 1;
+}
+static void tilt_timer_over(void)
+{
+    if (song.playing || seq_counting()) {
+        te.st = TE_BAR;
+        te.moved = 0;
+        te.t = fm1_ms;
+    } else {
+        te_show();
+    }
+}
+static void te_poll(void)
+{
+    uint32_t e = fm1_ms - te.t;
+    if (te.st == TE_BAR) {
+        if (clk_step != 0u)
+            te.moved = 1;
+        if (!song.playing || (te.moved && clk_step == 0u) || e >= TE_BAR_MS) {
+            te.st = TE_FADE;                            /* (the bar is done: the next one's first step) */
+            te.t = fm1_ms;
+        }
+    } else if (te.st == TE_FADE) {
+        if (e >= TE_FADE_MS) {
+            master_fade = 0;
+            if (song.playing || seq_counting())
+                transport_req = 2;
+            te.st = TE_QUIET;
+            te.t = fm1_ms;
+        } else {
+            master_fade = (uint16_t)(4096u - 4096u * e / TE_FADE_MS);
+        }
+    } else if (te.st == TE_QUIET && e >= TE_QUIET_MS && !song.playing) {
+        master_fade = 4096u;
+        te_show();
+    }
+}
+
+static void te_do(uint32_t o)
+{
+    uint32_t i;
+    tilt_ns_open = 0;
+    go_home();
+    ui.force = 1;
+    if (o == TO_PLAY) {
+        transport_req = 1;
+        ui_message("THE TAKE");
+    } else if (o == TO_SAVE) {
+        for (i = 0; i < NPAGES && PAGES[i].graph != GR_SLOTS; i++)
+            ;
+        ui.home = 0;
+        ui.page = (uint8_t)i;
+        ui_message("A SLOT, THEN [K4] SAVE");
+    } else if (o == TO_EXTRA) {
+        tm.on = 1;
+        tm.end = fm1_ms + 5u * TILT_MIN_MS;
+        tm.left = 5u * TILT_MIN_MS / 1000u;
+        transport_req = 1;
+        ui_message("EXTRA BALL: +5 MIN");
+    } else {
+        ui_message("KEEP WORKING");
+    }
+}
+static void te_input(uint32_t pressed, uint32_t notes, uint32_t oct)
+{
+    uint32_t k, p;
+    int32_t s;
+    song.grid = 2;
+    for (k = 0; k < 27u; k++)
+        if (((notes >> k) & 1u) && !key_black(k) && (p = key_place(k)) < TO_N) {
+            te_do(p);
+            enc_drop();
+            return;
+        }
+    if ((s = panel_enc(EN_SELECT)) != 0 || (s = panel_enc(EN_K1)) != 0)
+        te.pick = (uint8_t)clamp((int32_t)te.pick + (s > 0 ? 1 : -1), 0, TO_N - 1);
+    enc_drop();
+    if (oct & 2u)
+        te_do(te.pick);
+    else if (oct & 1u)
+        te_do(TO_KEEP);
+    else if ((pressed >> panel.btn[B_PLAY]) & 1u)
+        te_do(TO_PLAY);
+}
+
+static void te_draw_word(void)                          /* TIME, 205 x 61 at y 36: lit amber, unlit dim (the splash's) */
+{
+    uint32_t grey = settings.palette == UI_GREY_INDEX || settings.palette == UI_BW_INDEX, col, row;
+    uint16_t lit = grey ? T_TEXT : SPL_AMBER, unlit = grey ? T_RAISE : SPL_AMBER_DIM;
+    for (col = 0; col < SPL_COLS; col++) {
+        uint32_t ch = col / 6u, cx = col % 6u;
+        for (row = 0; row < 7u; row++) {
+            uint32_t x = SPL_X0 + col * SPL_PITCH, y = 36u + row * SPL_PITCH;
+            uint16_t c = cx < 5u && (TE_WORD[ch][row] >> (4u - cx)) & 1u ? lit : unlit;
+            lcd_fill(x + 1u, y, SPL_DOT - 2u, SPL_DOT, c);
+            lcd_fill(x, y + 1u, SPL_DOT, SPL_DOT - 2u, c);
+        }
+    }
+}
+static void te_draw_rows(void)
+{
+    char n[3] = {0, '3', 0};
+    uint32_t i;
+    cv_begin(240, 16, T_BG);                            /* the take: saved or not */
+    GFX_HOOK_ALIGN(0, 0, 240, 16, AL_HV, "time take line centred");
+    cv_text_in(0, CAP_IN(S, 16), 240, &AF_S, te.saved ? "TIMED TAKE SAVED" : "TIMED TAKE NOT SAVED", te.saved ? T_MID : T_ACCENT,
+               T_BG);
+    cv_blit(0, 104);
+    for (i = 0; i < TO_N; i++) {
+        uint32_t sel = i == te.pick;
+        uint16_t bg = sel ? T_SURF : T_BG;
+        int32_t y = CAP_IN(S, TE_ROW_H);
+        n[0] = W_NOTE[i];
+        cv_begin(240, TE_ROW_H, T_BG);
+        if (sel)
+            cv_rrect(3, 0, 234, TE_ROW_H, 4, T_SURF, T_BG);
+        cv_text_on(9, y, &AF_S, n, T_DIM, bg);
+        cv_text_on(31, y, &AF_S, TO_NAME[i], sel ? T_THEME : T_TEXT, bg);
+        cv_text_r(231, y, &AF_S, TO_HINT[i], T_MID, bg);
+        cv_blit(0, TE_ROW_Y + i * TE_ROW_H);
+    }
+}
+static void te_draw(void)
+{
+    uint32_t sig = te.pick * 7u + te.saved * 3u + ux.gen * 7919u;
+    if (ui.force) {
+        lcd_fill(0, H_HEAD, 240, Y_FOOT - H_HEAD, T_BG);
+        te_draw_word();
+        te.sig = ~sig;
+    }
+    draw_head();
+    if (sig != te.sig) {
+        khint_t a[3];
+        te.sig = sig;
+        te_draw_rows();
+        a[0] = (khint_t){KC_OCTUP, "DO IT"};
+        a[1] = (khint_t){KC_SELECT, "PICK"};
+        a[2] = (khint_t){KC_KEYS, "F3 - B3"};
+        cv_begin(240, H_FOOT, T_BG);
+        cv_key_row(8, 232, 9, a, 3, 7u, T_BG);
+        cv_blit(0, Y_FOOT);
+    }
+    if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {
+        str_cpy(ui.msg, ui.msg2, sizeof ui.msg);
+        ui.msg2[0] = 0;
+        ui.msg_t = 60;
+    }
+    ui.force = 0;
+}
 
 /* --------------------------------------------------------- the layer --- */
 static void tilt_key(uint32_t k, uint32_t p)
@@ -371,16 +690,33 @@ static void tilt_key(uint32_t k, uint32_t p)
         tilt_ns_show();
     else if (p == TT_STUCK)
         tilt_stuck();
+    else if (p == TT_TIMER)                             /* A3: OFF 5 10 15 20, each press the next */
+        tilt_timer_set(TM_STEPS[(tm_step_of(tilt_timer_min) + 1u) % sizeof TM_STEPS]);
 }
-static void tilt_knob(uint32_t k, int32_t s) { (void)k; (void)s; }
-static uint32_t tilt_can(uint32_t k, uint32_t p) { return !key_black(k) && (p == TT_NEW || p == TT_STUCK) && !chain_busy(); }
-static uint32_t tilt_on(uint32_t k, uint32_t p) { (void)k; (void)p; return 0; }
-static uint32_t tilt_sig(void) { return (tilt_used(TSEL) != 0u) * 31u + (uint32_t)chain_busy() * 3u + song.sel * 977u; }
+static void tilt_knob(uint32_t k, int32_t s)            /* KNOB 1: the TIMER */
+{
+    if (k == 0u && s)
+        tilt_timer_set(TM_STEPS[(uint32_t)clamp((int32_t)tm_step_of(tilt_timer_min) + (s > 0 ? 1 : -1), 0,
+                                                (int32_t)sizeof TM_STEPS - 1)]);
+}
+static uint32_t tilt_can(uint32_t k, uint32_t p)
+{
+    return !key_black(k) && (((p == TT_NEW || p == TT_STUCK) && !chain_busy()) || p == TT_TIMER);
+}
+static uint32_t tilt_on(uint32_t k, uint32_t p) { return !key_black(k) && p == TT_TIMER && tilt_timer_min; }
+static uint32_t tilt_sig(void)
+{
+    return (tilt_used(TSEL) != 0u) * 31u + (uint32_t)chain_busy() * 3u + song.sel * 977u + tilt_timer_min * 7919u;
+}
 
 static void tilt_cards(void)
 {
+    char v[4];
     uint32_t c;
-    for (c = 0; c < 4u; c++)
+    fmt_int(v, tilt_timer_min);
+    draw_column(0, "TIMER", tilt_timer_min ? v : "OFF", tilt_timer_min ? "MIN" : "", tilt_timer_min ? VAL(0u) : T_DIM,
+                (int32_t)tm_step_of(tilt_timer_min) * 250, ICON_TIME);
+    for (c = 1; c < 4u; c++)
         draw_column(c, "", "", "", T_THEME, -1, ICON_NONE);
 }
 
@@ -393,6 +729,8 @@ static void layer_tilt(void)
     lcell(LC_X(TT_NEW), 4, LC_H, n, ICON_STEPS, 0, "NEW", st, 0);   /* (NEW SONG: wider than a cell) */
     n[0] = 'G';
     lcell(LC_X(TT_STUCK), 4, LC_H, n, ICON_PROB, 0, "STUCK", st, 0);
+    n[0] = 'A';
+    lcell(LC_X(TT_TIMER), 4, LC_H, n, ICON_TIME, 0, "TIMER", tilt_timer_min ? LS_SEL : LS_OFF, 0);
     b[0] = 'T';
     b[1] = (char)('1' + song.sel);
     str_cpy(b + 2, chain_busy() ? ": STOP TO EDIT" : tilt_used(TSEL) ? ": COOK IT" : ": RANDOM", sizeof b - 2);

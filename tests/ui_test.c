@@ -180,6 +180,9 @@ static void ui_power_on(void)
     tilt_ns_open = 0;                             /* (TILT-FM: NEW SONG closed; its rolls and TIMER as at power-on) */
     memset(&ns, 0, sizeof ns);
     tilt_timer_min = 0;
+    memset(&tm, 0, sizeof tm);
+    memset(&te, 0, sizeof te);
+    master_fade = 4096u;
     memset(&mom, 0, sizeof mom);                  /* MOMENTARY: no value held (the pool at power-on) */
     proj_name[0] = 0;
     proj_cur = PROJ_NO_SLOT;

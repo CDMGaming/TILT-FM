@@ -775,7 +775,9 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_DETAIL_COND, S_DETAIL_FILL, S_AUTO_COND, S_GLO_FILL, S_SEQ_EUCLID, S_SEQ_EUCLID_DRUM, S_SEQ_EUCLID_64,
        S_MENU_SELECT, S_PROJECT_ERASE, S_CONFIRM_ERASE_PROJ, S_TOOLS_CLEAN, S_CONFIRM_CLEAN,
        S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD,
-       S_TILT_LAYER, S_TILT_LAYER_EMPTY, S_NEWSONG, S_NEWSONG_HELD, S_NEWSONG_AGAIN, S_COUNT };
+       S_TILT_LAYER, S_TILT_LAYER_EMPTY, S_NEWSONG, S_NEWSONG_HELD, S_NEWSONG_AGAIN,
+       S_TIMER, S_TIMER_LAST_MIN, S_TIMER_MSG, S_TIMER_LAYER, S_TIMER_OCT, S_TIMER_SONG,
+       S_TIME, S_TIME_UNSAVED, S_TIME_KEEP, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -807,7 +809,9 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "layer_seq_euclid_64",
     "menu_select", "project_erase", "confirm_erase_project", "tools_clean", "confirm_clean",
     "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold",
-    "tilt_layer", "tilt_layer_empty", "newsong", "newsong_held", "newsong_again"};
+    "tilt_layer", "tilt_layer_empty", "newsong", "newsong_held", "newsong_again",
+    "timer", "timer_last_min", "timer_msg", "timer_layer", "timer_oct", "timer_song",
+    "time", "time_unsaved", "time_keep"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1394,6 +1398,21 @@ static void setup(int s)
             }
         }
         if (s == S_NEWSONG_AGAIN) { ns.again = 1; ns.again_t = fm1_ms; }
+        break;
+    /* TILT-FM: the TIMER's countdown in the header (20:00 its widest) beside what shares the header with it */
+    case S_TIMER: case S_TIMER_LAST_MIN: case S_TIMER_MSG: case S_TIMER_LAYER: case S_TIMER_OCT: case S_TIMER_SONG:
+        go_home(); tilt_timer_min = 20; tilt_timer_start();
+        if (s == S_TIMER_LAST_MIN) { tm.end = fm1_ms + 45000u; tm.left = 45; }
+        if (s == S_TIMER_MSG) ui_message("SEQUENCE CLEARED");
+        if (s == S_TIMER_LAYER) ui.layer = LAYER_TILT;
+        if (s == S_TIMER_OCT) song.octave = -2;
+        if (s == S_TIMER_SONG) { chain.running = 1; chain.row = 11; }
+        break;
+    /* TILT-FM: TIME, the timer at 0:00 (stopped: at once): the take saved or not, the last choice picked */
+    case S_TIME: case S_TIME_UNSAVED: case S_TIME_KEEP:
+        song.playing = 0; go_home(); te_show();
+        te.saved = s != S_TIME_UNSAVED;
+        if (s == S_TIME_KEEP) te.pick = TO_KEEP;
         break;
     case S_SEQ_TOOLS_DRUM: drum(0); go_page(GR_ROLL); ui.lane = 2; ui.layer = LAYER_SEQ; break;
     case S_SEQ_TOOLS_SONG: drum(1); go_page(GR_ROLL); ui.lane = 5; chain.running = 1; ui.layer = LAYER_SEQ; break;

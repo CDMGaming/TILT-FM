@@ -415,12 +415,22 @@ static int32_t ink_w(const aafont_t *f, const char *s)
 /* the quick layers (ui_layer.c): a button held, the keys and KNOB 1..4 are its shortcuts, its map over the page */
 enum { LAYER_NONE, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ, LAYER_REC, LAYER_TILT, LAYER_N };
 /* (TILT-FM: LAYER_TILT, ENV held, tilt.c; its bit of layer_seen, 7, is the byte's last) */
-/* TILT-FM: NEW SONG (tilt.c), a screen of its own as NAME is: while it is open name_on() is true (the keys silent, no
- * layer, OCT- / OCT+ its own, the menu closes it), and the input, the drawing and the key LEDs are NEW SONG's */
+/* TILT-FM: NEW SONG and TIME (tilt.c), screens of their own as NAME is: while one is open (tilt_ns_open 1 NEW SONG,
+ * 2 TIME) name_on() is true (the keys silent, no layer, OCT- / OCT+ its own, the menu closes it), and the input, the
+ * drawing and the key LEDs are its */
 static uint8_t tilt_ns_open;
+static uint16_t master_fade = 4096u;                    /* (TILT-FM: TIME's fade, Q12, on MASTER: master.c) */
+#define MASTER_FADE master_fade
+static int autosave_now(void);                          /* (project.c: TIME's take) */
 static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct);
 static void tilt_ns_draw(void);
 static uint32_t tilt_ns_leds(void);
+/* TILT-FM: the TIMER's countdown in the header (tilt.c): its width (0: none shown), drawn with its right end at xr, what
+ * it shows (the header's signature); polled each pass (ui_input) */
+static int32_t tilt_head_w(void);
+static void tilt_head_draw(int32_t xr);
+static uint32_t tilt_head_sig(void);
+static void tilt_timer_poll(void);
 static void draw_layer(void);
 static const char *layer_head(void);
 static int layer_locked(void);

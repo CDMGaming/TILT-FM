@@ -261,6 +261,7 @@ static int head_is_hint(const char *s)
  * icon (ui.c MSG_NOFILE: the accent's) and a locked layer's lock. A message in M (as the panel's titles), a key hint
  * (a layer's label, "[SAVE] HOLD TO UNDO") in S as every keycap's word; a message M cannot hold in maxw (right of the
  * BPM; a long name) in S, ellipsised there if it must be */
+static int32_t head_cx = 120;                          /* (TILT-FM: a centred message's middle; the countdown's room) */
 static void head_msg(int32_t x, int32_t maxw)
 {
     const char *m = ui.msg_t ? ui.msg : layer_head();
@@ -269,7 +270,7 @@ static void head_msg(int32_t x, int32_t maxw)
     int32_t lw = lock ? 15 : 0, iw = icon ? 16 + KH_GAP : 0;   /* the lock: its cell 6 px on, its ink to 15 */
     int big = !head_is_hint(m + icon) && text_w(&AF_M, m + icon) <= maxw - lw - iw;
     if (x < 0)
-        x = 120 - HALF_UP(iw + (big ? text_w(&AF_M, m + icon) : head_hint_w(m + icon, maxw - lw - iw)) + lw);
+        x = head_cx - HALF_UP(iw + (big ? text_w(&AF_M, m + icon) : head_hint_w(m + icon, maxw - lw - iw)) + lw);
     if (icon)
         x += cv_icon_mid(x, H_HEAD / 2, 16, ICON_X_NOFILE, T_ACCENT, T_BG) + KH_GAP;
     if (big) {
@@ -302,19 +303,31 @@ static int head_slot(char *b)
         b[1] = '*';
     return 1;
 }
-/* the octave, or the song row while a song plays, its right end at HEAD_GRP_R */
-static void head_group(void)
+/* the octave, or the song row while a song plays, its right end at HEAD_GRP_R (TILT-FM: left of the TIMER's countdown,
+ * and then the number alone, no OCT, no disc: the room between it and the BPM holds no more) */
+static void head_group(int32_t gr, int bare)
 {
     char b[8];
     int32_t x;
+    if (bare) {
+        if (chain.running)
+            fmt_int(b, (int32_t)chain.row + 1);
+        else {
+            str_cpy(b, song.octave > 0 ? "+" : "", sizeof b);
+            fmt_int(b + str_len(b), song.octave);
+        }
+        GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
+        cv_text(gr - text_w(&AF_M, b), HEAD_MY, &AF_M, b, chain.running ? T_MID : T_THEME);
+        return;
+    }
     if (chain.running) {
         fmt_int(b, (int32_t)chain.row + 1);
-        x = HEAD_GRP_R - (16 + 4 + text_w(&AF_M, b));
+        x = gr - (16 + 4 + text_w(&AF_M, b));
         x += cv_icon_mid(x, H_HEAD / 2, 16, ICON_X_SONG, T_MID, T_BG);   /* SONG: the disc */
     } else {
         str_cpy(b, song.octave > 0 ? "+" : "", sizeof b);
         fmt_int(b + str_len(b), song.octave);
-        x = HEAD_GRP_R - (text_w(&AF_S, "OCT") + 4 + text_w(&AF_M, b));
+        x = gr - (text_w(&AF_S, "OCT") + 4 + text_w(&AF_M, b));
         GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
         x = cv_text(x, HEAD_SY, &AF_S, "OCT", T_MID);
     }
@@ -335,10 +348,15 @@ static void draw_head(void)
                    (ui.msg_t ? str_hash(7u, ui.msg) : ui.layer * 7919u + (uint32_t)layer_locked() * 3u) + (uint32_t)song.g[G_BPM] * 101u + (ui.bpm_t != 0) * 31u +
                    (uint32_t)seq_counting() * 7u + (ui_prefs & PREF_BPM_LOCK) * 4099u +
                    (uint32_t)batt_shown() * 7777u + (chain.running ? (chain.row + 1u) * 104729u : 0u) +
-                   (slot ? str_hash(11u, sl) : 0u) + (uint32_t)midi_lit(song.sel) * 15485863u;   /* (1.5.5) */
+                   (slot ? str_hash(11u, sl) : 0u) + (uint32_t)midi_lit(song.sel) * 15485863u +   /* (1.5.5) */
+                   tilt_head_sig() * 2654435761u;     /* (TILT-FM: the TIMER's countdown) */
     int msg = ui.msg_t || ui.layer;
     int centre = !msg || ui.bpm_t || ui.layer == LAYER_GLO;   /* the BPM being changed: it stays, the message right */
     int32_t rx = HEAD_REC_X;
+    int32_t tw = msg && centre ? 0 : tilt_head_w(), tr = HEAD_GRP_R - 2, tl = tw ? tr - tw - 6 : 236;   /* (TILT-FM:
+                                                       * the countdown ends at tr, by the battery; the octave and a
+                                                       * centred message end at tl; a message right of the BPM, a moment
+                                                       * long, takes the room as before: the countdown back after it) */
     if (song.g[G_BPM] != ui.roll_bpm) {
         char a[8];
         fmt_int(a, ui.roll_bpm);
@@ -401,15 +419,20 @@ static void draw_head(void)
         }
         if (msg) {                                     /* right of the BPM, over the right slot */
             int32_t x = lx + 9 > 142 ? lx + 9 : 142;
-            head_msg(x, 236 - x);
+            head_msg(x, tl - x);
         }
     } else {
-        head_msg(-1, HEAD_MSG_W);
+        int32_t ml = 120 - HEAD_MSG_W / 2;             /* (37: after the REC mark) */
+        head_cx = tw ? (ml + tl) / 2 : 120;            /* (TILT-FM: centred in the room left of the countdown) */
+        head_msg(-1, tw ? tl - ml : HEAD_MSG_W);
+        head_cx = 120;
     }
     if (!msg && (chain.running || song.octave))
-        head_group();
-    if (!(msg && centre))
+        head_group(tw ? tl : HEAD_GRP_R, tw != 0);
+    if (!(msg && centre) || tw)
         draw_battery(HEAD_BAT_X);
+    if (tw)
+        tilt_head_draw(tr);
     cv_blit(0, Y_HEAD);
 }
 /* LINE: 1 px dividers in the BG gaps between the strips, not around them: under the header, above and

@@ -1377,6 +1377,30 @@ static void autosave_poll(void)
 #endif
 }
 
+/* TILT-FM: the timed take (tilt.c, the TIMER at 0:00, the transport stopped by then): the autosave written now, not
+ * waiting for its quiet 10 s (once a timed session; RESTORE LAST OFF: none). 1 = written */
+static int autosave_now(void)
+{
+#if FELUCCA_FLASH
+    uint32_t sig;
+    if (!flash_ok || transport_busy() || (ui_prefs & PREF_RESTORE_OFF))
+        return 0;
+    sig = autosave_sig();
+    as.last = fm1_ms;
+    as.wrote = 1;
+    project_capture(&proj_scratch);
+    proj_wire_gen++;
+    as.err = !proj_pack(&proj_wire, &proj_scratch) || st_save(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire) != 0;
+    if (!as.err) {
+        as.saved = as.seen = sig;
+        as.writes++;
+    }
+    return !as.err;
+#else
+    return 0;
+#endif
+}
+
 /* power-on, after the defaults (main.c): the autosave becomes the music when `allowed` (no crash, hang or failed boot
  * before) and RESTORE LAST is ON; an autosave that does not load (none, torn, damaged, another format) is ignored.
  * The music now (restored or not) is what is saved: nothing is written until it changes. 1 = restored */
