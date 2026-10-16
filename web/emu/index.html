@@ -41,18 +41,18 @@ a { color: inherit; }
 .lit .slit { fill: #ececee; filter: drop-shadow(0 0 3px rgba(255, 255, 255, .6)); }
 /* #119: what can be pressed breathes, dark .. ~60 % of lit and back (hal/fm1_input.h fm1_led_breath, ~1.1 s; MENU >
  * LEDS DIM LO ~30 %): the peaks between dark and lit at ~0.8 / ~0.58 on screen (the LED's share, gamma-encoded) */
-@keyframes breath-btn { 0%, 100% { fill: #86dfcf; } 50% { fill: #e2f8f2; } }
-@keyframes breath-slit { 0%, 100% { fill: #24403b; } 50% { fill: #d4f3ec; } }
-@keyframes breath-btn-lo { 0%, 100% { fill: #86dfcf; } 50% { fill: #bfeee4; } }
-@keyframes breath-slit-lo { 0%, 100% { fill: #24403b; } 50% { fill: #8fc4b9; } }
+@keyframes breath-btn { 0%, 100% { fill: #86dfcf; } 50% { fill: #e7f3e1; } }
+@keyframes breath-slit { 0%, 100% { fill: #24403b; } 50% { fill: #c4caca; } }
+@keyframes breath-btn-lo { 0%, 100% { fill: #86dfcf; } 50% { fill: #cceedc; } }
+@keyframes breath-slit-lo { 0%, 100% { fill: #24403b; } 50% { fill: #98a4a3; } }
 .breath .face.btn { animation: breath-btn 1.13s ease-in-out infinite; }
 .breath .slit { animation: breath-slit 1.13s ease-in-out infinite; }
 .dimlo .breath .face.btn { animation-name: breath-btn-lo; }
 .dimlo .breath .slit { animation-name: breath-slit-lo; }
 @media (prefers-reduced-motion: reduce) {
   .breath .face.btn, .breath .slit { animation: none; }
-  .breath .face.btn { fill: #bfeee4; }
-  .breath .slit { fill: #8fc4b9; }
+  .breath .face.btn { fill: #cceedc; }
+  .breath .slit { fill: #98a4a3; }
 }
 /* the DRUM grid's beats (hal/fm1_input.h fm1_led_mid): a steady level between the glow and lit, ~15 % (DIM LO ~10 %) */
 .mid .slit { fill: #7fb3a9; }
