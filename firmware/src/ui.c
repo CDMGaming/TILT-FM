@@ -415,6 +415,12 @@ static int32_t ink_w(const aafont_t *f, const char *s)
 /* the quick layers (ui_layer.c): a button held, the keys and KNOB 1..4 are its shortcuts, its map over the page */
 enum { LAYER_NONE, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ, LAYER_REC, LAYER_TILT, LAYER_N };
 /* (TILT-FM: LAYER_TILT, ENV held, tilt.c; its bit of layer_seen, 7, is the byte's last) */
+/* TILT-FM: NEW SONG (tilt.c), a screen of its own as NAME is: while it is open name_on() is true (the keys silent, no
+ * layer, OCT- / OCT+ its own, the menu closes it), and the input, the drawing and the key LEDs are NEW SONG's */
+static uint8_t tilt_ns_open;
+static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct);
+static void tilt_ns_draw(void);
+static uint32_t tilt_ns_leds(void);
 static void draw_layer(void);
 static const char *layer_head(void);
 static int layer_locked(void);

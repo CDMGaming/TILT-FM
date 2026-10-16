@@ -50,12 +50,13 @@ static struct {
     char ph[NM_LEN + 1u];                              /* what an empty name saves as / shows ("PROJECT A") */
 } nm __attribute__((section(".pool")));                /* (zero-initialised; main loop only: off the audio code's .bss) */
 
-static int name_on(void) { return nm.kind != NK_NONE; }
+static int name_on(void) { return nm.kind != NK_NONE || tilt_ns_open; }   /* (TILT-FM: NEW SONG too, ui.c) */
 static void name_close(void)
 {
-    if (nm.kind)
+    if (nm.kind || tilt_ns_open)
         ui.force = 1;
     nm.kind = NK_NONE;
+    tilt_ns_open = 0;                                  /* (TILT-FM: the menu closes NEW SONG as it does NAME) */
 }
 /* the keys: 2 = NAME's (silent), 1 = the DRUM grid, 3 = SONG's A..D (ui.c song_keys_on), 0 = notes (seq.c keyboard_block
  * reads song.grid) */

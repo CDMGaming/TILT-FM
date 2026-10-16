@@ -774,7 +774,8 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL,
        S_DETAIL_COND, S_DETAIL_FILL, S_AUTO_COND, S_GLO_FILL, S_SEQ_EUCLID, S_SEQ_EUCLID_DRUM, S_SEQ_EUCLID_64,
        S_MENU_SELECT, S_PROJECT_ERASE, S_CONFIRM_ERASE_PROJ, S_TOOLS_CLEAN, S_CONFIRM_CLEAN,
-       S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD, S_COUNT };
+       S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD,
+       S_TILT_LAYER, S_TILT_LAYER_EMPTY, S_NEWSONG, S_NEWSONG_HELD, S_NEWSONG_AGAIN, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -805,7 +806,8 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "detail_cond", "detail_fill", "auto_cond", "layer_glo_fill", "layer_seq_euclid", "layer_seq_euclid_drum",
     "layer_seq_euclid_64",
     "menu_select", "project_erase", "confirm_erase_project", "tools_clean", "confirm_clean",
-    "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold"};
+    "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold",
+    "tilt_layer", "tilt_layer_empty", "newsong", "newsong_held", "newsong_again"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1375,6 +1377,24 @@ static void setup(int s)
     /* 1.2 SEQ TOOLS (SEQ held on STEP): a melodic track (the sequence's tools), the DRUM grid (+ BEAT, the lane's tools,
      * the lanes; CLAP selected), a song playing (every tool dimmed: STOP TO EDIT) */
     case S_SEQ_TOOLS: go_page(GR_ROLL); ui.layer = LAYER_SEQ; break;
+    /* TILT-FM: the TILT layer (ENV held) on a track with steps and on an empty one; NEW SONG rolled, with rows held
+     * (the longest sounds' names on the tracks), and its PLAY AGAIN footer */
+    case S_TILT_LAYER: go_home(); ui.layer = LAYER_TILT; break;
+    case S_TILT_LAYER_EMPTY: go_home(); song.sel = 2; track_defaults_steps(TSEL); ui.layer = LAYER_TILT; break;
+    case S_NEWSONG: case S_NEWSONG_HELD: case S_NEWSONG_AGAIN:
+        song.playing = 0; go_home(); ns.rolled = 1; ns.hold = 0; ns.row = 0; tilt_ns_show();
+        if (s != S_NEWSONG) {
+            uint32_t n, e, k, w, best = 0;
+            ns.hold = 0x5D; ns.row = 4; ns.root = 1; ns.scale = 12; ns.bpm = 145;
+            for (n = 0; ns_fact_at(n, &e, &k); n++) {   /* (the longest "ENGINE PRESET" on T2: what must fit) */
+                const engine_t *en = ENGINES[e];
+                char b[28];
+                str_cpy(b, en->name, 12); str_cpy(b + str_len(b), " ", 2); str_cpy(b + str_len(b), en->presets[k].name, 16);
+                if ((w = (uint32_t)text_w(&AF_S, b)) > best) { best = w; ns.eng[1] = (uint8_t)e; ns.pre[1] = (uint8_t)k; }
+            }
+        }
+        if (s == S_NEWSONG_AGAIN) { ns.again = 1; ns.again_t = fm1_ms; }
+        break;
     case S_SEQ_TOOLS_DRUM: drum(0); go_page(GR_ROLL); ui.lane = 2; ui.layer = LAYER_SEQ; break;
     case S_SEQ_TOOLS_SONG: drum(1); go_page(GR_ROLL); ui.lane = 5; chain.running = 1; ui.layer = LAYER_SEQ; break;
     /* 1.4.1 ENGINE QUICK ACTIONS: the EDIT layer on a DRUM track, KICK and HATOP muted (the black keys' row); on KIT 77

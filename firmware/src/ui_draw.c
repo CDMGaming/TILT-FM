@@ -1592,7 +1592,10 @@ static void ui_draw_page(uint32_t counting)
         return;
     }
     if (name_on()) {                                    /* NAME: a user preset's or a project's (ui_name.c) */
-        name_draw();
+        if (tilt_ns_open)                               /* (TILT-FM: NEW SONG, tilt.c) */
+            tilt_ns_draw();
+        else
+            name_draw();
         return;
     }
     if (ui.layer) {                                     /* a layer's map over the page (ui_layer.c) */
