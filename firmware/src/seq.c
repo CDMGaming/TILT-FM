@@ -97,11 +97,11 @@ static __attribute__((noinline)) uint8_t grid_key_note(uint32_t k)
 }
 /* GLO > SONG (song.grid 3): key k's slot, the white keys A3 B3 C4 D4 (white places 2..5: keys 4 6 7 9 from F) A..D; -1 = a
  * key that plays. A table, not key_place (a loop); the audio ISR's key loop reads SONG_KEYS, the same keys */
-#define SONG_KEYS (1u << 4 | 1u << 6 | 1u << 7 | 1u << 9)
+#define SONG_KEYS (1u << 4 | 1u << 6 | 1u << 7 | 1u << 9 | 1u << 11)   /* (TILT-FM: E4, key 11, "-") */
 static int32_t song_key(uint32_t k)
 {
-    static const int8_t S[10] = {-1, -1, -1, -1, 0, -1, 1, 2, -1, 3};
-    return k < 10u ? S[k] : -1;
+    static const int8_t S[12] = {-1, -1, -1, -1, 0, -1, 1, 2, -1, 3, -1, CHAIN_SILENT};   /* (TILT-FM: E4 "-") */
+    return k < 12u ? S[k] : -1;
 }
 
 static uint32_t scale_mask(const track_t *t)

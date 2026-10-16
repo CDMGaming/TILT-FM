@@ -542,8 +542,9 @@ static void song_add(void)
     chain_config.count = (uint8_t)(n + 1u);
     ui.song_row = (uint8_t)n;
 }
-/* SONG's keys (song.grid 3): a press of A3 B3 C4 D4 (seq.c song_key) sets the selected cell's slot A..D (on + ADD it
- * adds the section first: a copy of the one before, the first with every track on that slot) */
+/* SONG's keys (song.grid 3): a press of A3 B3 C4 D4 (seq.c song_key) sets the selected cell's slot A..D, E4 "-"
+ * (TILT-FM: silent there, as KNOB 3 past D; no new value: CHAIN_SILENT is the project's own). On + ADD it adds the
+ * section first: a copy of the one before, the first with every track on that slot (E4: on A, the cell "-") */
 static void song_keys(uint32_t notes)
 {
     uint32_t k;
@@ -557,17 +558,17 @@ static void song_keys(uint32_t notes)
                 return;
             song_add();
             if (chain_config.count == 1u)
-                chain_config.row[0] = chain_row_of((uint32_t)s, 1);
+                chain_config.row[0] = chain_row_of(s < (int32_t)CHAIN_SILENT ? (uint32_t)s : 0u, 1);
         }
         chain_config.row[ui.song_row].slot[ui.song_trk % NTRK] = (uint8_t)s;
         ui.force = 1;
     }
 }
-/* the key LEDs of SONG: the key of the selected cell's slot (none for "-" and on + ADD) */
+/* the key LEDs of SONG: the key of the selected cell's slot (TILT-FM: "-" E4's; none on + ADD) */
 static uint32_t song_leds(void)
 {
     uint32_t k, s;
-    if (ui.song_row >= chain_config.count || (s = chain_config.row[ui.song_row].slot[ui.song_trk % NTRK]) >= 4u)
+    if (ui.song_row >= chain_config.count || (s = chain_config.row[ui.song_row].slot[ui.song_trk % NTRK]) > CHAIN_SILENT)
         return 0;
     for (k = 0; k < 27u; k++)
         if (song_key(k) == (int32_t)s)

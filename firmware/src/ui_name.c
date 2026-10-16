@@ -58,7 +58,7 @@ static void name_close(void)
     nm.kind = NK_NONE;
     tilt_ns_open = 0;                                  /* (TILT-FM: the menu closes NEW SONG as it does NAME) */
 }
-/* the keys: 2 = NAME's (silent), 1 = the DRUM grid, 3 = SONG's A..D (ui.c song_keys_on), 0 = notes (seq.c keyboard_block
+/* the keys: 2 = NAME's (silent), 1 = the DRUM grid, 3 = SONG's A..D and "-" (ui.c song_keys_on), 0 = notes (seq.c keyboard_block
  * reads song.grid) */
 static uint32_t keys_mode(void) { return name_on() ? 2u : grid_on() ? 1u : song_keys_on() ? 3u : 0u; }
 

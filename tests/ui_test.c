@@ -2476,6 +2476,14 @@ static int test_chain(void)
     turn(EN_K1, 1); tap_key(key_at(0, 4));           /* (C4 on + ADD: a copy of section 2, its T2 on C) */
     bad += check("SONG white key C (C4) on + ADD adds a section, a copy with the cell on C", chain_config.count == 3 &&
                  !memcmp(&chain_config.row[2], &(chain_row_t){{1, 2, CHAIN_SILENT, 2}, 3}, sizeof(chain_row_t)));
+    k = key_at(0, 6);                                /* TILT-FM: E4 (white place 6): "-", as KNOB 3 past D */
+    fm1_in.notes |= 1u << k; host_notes |= 1u << k; frame(); events_block(32);
+    ok = kb_note[k] == KB_SILENT && (key_leds(0) >> k & 1u);
+    fm1_in.notes &= ~(1u << k); frame(); events_block(32);
+    bad += check("SONG white key E4 sets the cell to - (silent), silently; its LED lit", ok &&
+                 !memcmp(&chain_config.row[2], &(chain_row_t){{1, CHAIN_SILENT, CHAIN_SILENT, 2}, 3}, sizeof(chain_row_t)));
+    tap_key(key_at(0, 3));
+    bad += check("  .. and B3 after it: B again", chain_config.row[2].slot[1] == 1);
     chain_config.count = 2; ui.song_row = 1; ui.song_trk = 0;
     turn(EN_K4, 30);
     project_save(0);
