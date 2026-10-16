@@ -863,14 +863,47 @@ static uint32_t st_leds(void)                           /* the shown options' ke
             m |= 1u << KEY[o];
     return m;
 }
+/* the look (attract mode): the whole screen but the footer, no header. "TILT" in the splash's dot matrix, smaller (5 px
+ * dots 6 px apart, 137 x 41 at y 18), and the credit under it; the four rows from ST_ROW_Y: the selected one's name amber
+ * between two pointers, its hint a "PRESS START" flashing (2 Hz); amber where the palette has colour, its ink on GREY
+ * and MONO (the TIMER's rule) */
+#define ST_DOT 5u
+#define ST_PITCH 6u
+#define ST_WY 18u
+#define ST_ROW_Y 108
+#define ST_ROW_H 22
+static int st_grey(void) { return settings.palette == UI_GREY_INDEX || settings.palette == UI_BW_INDEX; }
+static void st_word(void)
+{
+    uint32_t col, row, x0 = (240u - (SPL_COLS * ST_PITCH - (ST_PITCH - ST_DOT))) / 2u;
+    uint16_t lit = st_grey() ? T_TEXT : SPL_AMBER, unlit = st_grey() ? T_RAISE : SPL_AMBER_DIM;
+    for (col = 0; col < SPL_COLS; col++) {
+        uint32_t ch = col / 6u, cx = col % 6u;
+        for (row = 0; row < 7u; row++) {
+            uint32_t x = x0 + col * ST_PITCH, y = ST_WY + row * ST_PITCH;
+            uint16_t c = cx < 5u && (SPLASH_TILT[ch][row] >> (4u - cx)) & 1u ? lit : unlit;
+            lcd_fill(x + 1u, y, ST_DOT - 2u, ST_DOT, c);
+            lcd_fill(x, y + 1u, ST_DOT, ST_DOT - 2u, c);
+        }
+    }
+    draw_text_line(0, ST_WY + 7u * ST_PITCH + 10u, 240, &AF_S, "TILT-FM / Felucca " FELUCCA_VERSION, T_MID, T_BG, 1);
+}
+static void st_pointer(int32_t x, int32_t y, int right, uint16_t c)   /* a 4 x 7 triangle, its base column at x: */
+{                                                                      /* right, pointing right (its point x + 3) */
+    int32_t j;
+    for (j = 0; j < 4; j++)
+        cv_rect(right ? x + j : x - j, y + j, 1, 7 - 2 * j, c);
+}
 static void st_draw(void)
 {
-    uint32_t sig = st.pick * 7u + st.has * 3u + st.crash * 5u + ux.gen * 7919u, o;
+    uint32_t blink = (fm1_ms / 250u) & 1u, o;
+    uint32_t sig = st.pick * 7u + st.has * 3u + st.crash * 5u + blink * 11u + ux.gen * 7919u;
+    uint16_t amber = st_grey() ? T_TEXT : SPL_AMBER;
     if (ui.force) {
-        lcd_fill(0, H_HEAD, 240, Y_FOOT - H_HEAD, T_BG);
+        lcd_fill(0, 0, 240, Y_FOOT, T_BG);
+        st_word();
         st.sig = ~sig;
     }
-    draw_head();
     if (sig != st.sig) {
         char n[3] = {0, '3', 0};
         khint_t a[3];
@@ -878,20 +911,27 @@ static void st_draw(void)
         for (o = 0; o < SO_N; o++) {
             uint32_t sel = o == st.pick, on = so_shown(o);
             uint16_t bg = sel ? T_SURF : T_BG;
-            int32_t y = CAP_IN(S, TE_ROW_H);
+            int32_t y = CAP_IN(S, ST_ROW_H);
             n[0] = W_NOTE[o];
-            cv_begin(240, TE_ROW_H, T_BG);
+            cv_begin(240, ST_ROW_H, T_BG);
             if (sel)
-                cv_rrect(3, 0, 234, TE_ROW_H, 4, T_SURF, T_BG);
+                cv_rrect(3, 0, 234, ST_ROW_H, 4, T_SURF, T_BG);
             if (on) {
                 cv_text_on(9, y, &AF_S, n, T_DIM, bg);
-                cv_text_on(31, y, &AF_S, SO_NAME[o], sel ? T_THEME : T_TEXT, bg);
-                cv_text_r(231, y, &AF_S, SO_HINT[o], T_MID, bg);
+                if (sel) {
+                    st_pointer(27, (ST_ROW_H - 7) / 2, 1, amber);                               /* (a "▶" */
+                    st_pointer(36 + text_w(&AF_S, SO_NAME[o]) + 7, (ST_ROW_H - 7) / 2, 0, amber);   /* .. "◀") */
+                }
+                cv_text_on(36, y, &AF_S, SO_NAME[o], sel ? amber : T_TEXT, bg);
+                if (!sel)
+                    cv_text_r(231, y, &AF_S, SO_HINT[o], T_MID, bg);
+                else if (!blink)
+                    cv_text_r(231, y, &AF_S, "PRESS START", amber, bg);
             } else if (o == SO_CONT && st.crash) {
-                GFX_HOOK_ALIGN(0, 0, 240, TE_ROW_H, AL_HV, "start crash line centred");
+                GFX_HOOK_ALIGN(0, 0, 240, ST_ROW_H, AL_HV, "start crash line centred");
                 cv_text_in(0, y, 240, &AF_S, "LAST SESSION SKIPPED - CRASH", T_ACCENT, bg);
             }
-            cv_blit(0, TE_ROW_Y + o * TE_ROW_H);
+            cv_blit(0, (uint32_t)(ST_ROW_Y + (int32_t)o * ST_ROW_H));
         }
         a[0] = (khint_t){KC_OCTUP, "START"};
         a[1] = (khint_t){KC_K1, "PICK"};
@@ -899,11 +939,6 @@ static void st_draw(void)
         cv_begin(240, H_FOOT, T_BG);
         cv_key_row(8, 232, 9, a, 3, 7u, T_BG);
         cv_blit(0, Y_FOOT);
-    }
-    if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {
-        str_cpy(ui.msg, ui.msg2, sizeof ui.msg);
-        ui.msg2[0] = 0;
-        ui.msg_t = 60;
     }
     ui.force = 0;
 }
