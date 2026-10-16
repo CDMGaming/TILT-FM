@@ -73,6 +73,11 @@ static uint32_t up_gen;                      /* bumped on every user bank change
  * only the panel wakes SCREEN OFF, as up to 1.5.1; 0, every older setting, = +MIDI, the default: a note-on too).
  * 1.5.6: bit 6 SELECT's second bit (#84: sel_mode). Bit 7 free */
 #define ui_prefs2 (favorites.factory[15][24])
+/* TILT-FM: a fourth byte of MENU's two-valued settings, another no engine uses (settings_persist.c keeps it as saved; 0
+ * in every older setting = the default, append-only as the others): bit 0 SYSTEM > START SCREEN OFF (tilt.c; 0 = ON) */
+#define ui_prefs3 (favorites.factory[15][13])
+#define PREF_T 0xFF000000u                     /* (menu_items.c MENU_FLAGS: a bit of ui_prefs3, << 24) */
+#define PREF_START_OFF (0x01u << 24)
 #define PREF_X 0xFF0000u                       /* (menu_items.c MENU_FLAGS: a bit of ui_prefs2, << 16) */
 #define PREF_SCOPE_MIX (0x01u << 16)
 #define PREF_PREVIEW (0x02u << 16)

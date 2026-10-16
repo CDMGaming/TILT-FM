@@ -1658,11 +1658,11 @@ static int test_menu_tabs(void)
             }
     }
     ui_prefs = 0;
-    bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 8 6 8 7 rows: 1.6.1 2ND CORE, a FELUCCA_CPU2=0 build SYSTEM 6; 1.5.5: SELECT, T1..T4 CHANNEL, AUTO SELECT, SCREEN WAKE), 1..8 each in a run, fit the page; tab gaps "
+    bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 8 6 8 8 rows: 1.6.1 2ND CORE, TILT-FM START SCREEN, a FELUCCA_CPU2=0 build SYSTEM 7; 1.5.5: SELECT, T1..T4 CHANNEL, AUTO SELECT, SCREEN WAKE), 1..8 each in a run, fit the page; tab gaps "
                  "constant (S, LARGE)",
                  ok && MTAB_COUNT == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
                  mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && MI_TAB[MI_SELECT] == MTAB_CONTROL && mtab_rows(MTAB_AUDIO) == 6u &&
-                 mtab_rows(MTAB_MIDI) == 8u && MI_TAB[MI_MFOLLOW] == MTAB_MIDI && MI_TAB[MI_SCRWAKE] == MTAB_MIDI && MI_SCRWAKE + 1u == MI_LCLEAR && MI_TAB[MI_LCLEAR] == MTAB_MIDI && MI_TAB[MI_TCH4] == MTAB_MIDI && mtab_rows(MTAB_SYSTEM) == 6u + FELUCCA_CPU2 &&
+                 mtab_rows(MTAB_MIDI) == 8u && MI_TAB[MI_MFOLLOW] == MTAB_MIDI && MI_TAB[MI_SCRWAKE] == MTAB_MIDI && MI_SCRWAKE + 1u == MI_LCLEAR && MI_TAB[MI_LCLEAR] == MTAB_MIDI && MI_TAB[MI_TCH4] == MTAB_MIDI && mtab_rows(MTAB_SYSTEM) == 7u + FELUCCA_CPU2 && MI_TAB[MI_START] == MTAB_SYSTEM &&
 #if FELUCCA_CPU2
                  MI_TAB[MI_CPU2] == MTAB_SYSTEM &&
 #endif
@@ -9310,6 +9310,17 @@ static int test_help(void)
     uint32_t i, l;
     ui_power_on();
     memcpy(before, favorites.factory[15], 32);
+    {   /* TILT-FM: SYSTEM > START SCREEN, ON by default (its bit clear: every older setting), OFF its bit alone */
+        uint8_t b13 = favorites.factory[15][13];
+        ok = menu_get(MI_START) == 0u && !(ui_prefs3 & 1u) && str_eq(MI_NAME[MI_START], "START SCREEN") &&
+             MI_TAB[MI_START] == MTAB_SYSTEM && str_eq(menu_vname(MI_START, 0), "ON");
+        menu_put(MI_START, 1);
+        ok &= (ui_prefs3 & 1u) && menu_get(MI_START) == 1u && str_eq(menu_vname(MI_START, 1), "OFF") &&
+              favorites.factory[15][13] == (uint8_t)(b13 | 1u) && favorites.factory[15][24] == before[24];
+        menu_put(MI_START, 0);
+        ok &= !(ui_prefs3 & 1u) && favorites.factory[15][13] == b13;
+        bad += check("TILT-FM MENU > SYSTEM > START SCREEN: ON by default (bit 0 of [15][13] clear), OFF that bit alone", ok);
+    }
     ok = !help_on() && menu_get(MI_HELP) == 0u && str_eq(MI_NAME[MI_HELP], "HELP") && MI_TAB[MI_HELP] == MTAB_SYSTEM &&
          MI_HELP < MI_VALUES && str_eq(menu_vname(MI_HELP, 1), "ON");
     menu_put(MI_HELP, 1);
