@@ -1692,6 +1692,7 @@ static void ui_input(void)
         case B_GLO:
         case B_SCL:
         case B_EDIT:
+        case B_ENV:                                     /* (TILT-FM: the TILT layer's; its tap ENV's page, layer_tap) */
         case B_HOME:
             break;
         case B_OCTDN:

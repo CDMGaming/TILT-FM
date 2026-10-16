@@ -50,6 +50,14 @@
  * a double tap leaves the page as it was. A first tap that acted instead of opening a page (EDIT on STEP: clear the
  * step; on USER / PROJECT: rename) arms no double tap: two quick taps there still act twice. */
 #include "ui_tools.c"                                   /* SEQ TOOLS' actions */
+/* TILT-FM: the TILT layer (ENV held) and what it opens: tilt.c, included at the end of this file */
+static void tilt_key(uint32_t k, uint32_t p);
+static void tilt_knob(uint32_t k, int32_t s);
+static uint32_t tilt_can(uint32_t k, uint32_t p);
+static uint32_t tilt_on(uint32_t k, uint32_t p);
+static void tilt_cards(void);
+static uint32_t tilt_sig(void);
+static void layer_tilt(void);
 enum { LK_HOLD, LK_SET };
 typedef struct {
     uint8_t btn, kind, fam;            /* the button, HOLD / SET, the family whose first page KNOB 1..4 edit */
@@ -64,8 +72,9 @@ static const layer_t LAYERS[LAYER_N] = {
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] TOOLS", {{KC_KEYS, "TOOLS"}, {KC_OCTDN, "UNDO"}, {KC_SEQ, "DONE"}}},
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
+    {B_ENV, LK_SET, FAM_HOME, "[ENV] TILT", {{KC_KEYS, "QUICK START"}, {KC_OCTDN, "UNDO"}, {KC_ENV, "DONE"}}},
 };
-static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC};
+static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC, KC_ENV};
 /* SCL's knobs: the key and its chord (cur_page() while the layer edits or draws them: page_over) */
 static const page_t LY_SCL = {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_CHRD, P_VOIC}};
 /* SEQ TOOLS' knobs: LEN DIV SWING GATE (the length the tools work in; up to 1.1.5 the PATTERN page's) */
@@ -239,12 +248,12 @@ static void layer_opened(uint32_t l)
     lys.trk = song.sel;
     lys.loaded = 0;
     lys.cook = 0;
-    if (l == LAYER_SEQ || l == LAYER_REC) {             /* the track as it is now (OCT-) */
+    if (l == LAYER_SEQ || l == LAYER_REC || l == LAYER_TILT) {   /* the track as it is now (OCT-) */
         memcpy(tl_open.step, TSEL->step, sizeof tl_open.step);
         motion_snapshot_track(TSEL, &tl_open.mo);
     }
     for (k = 0; k < 4u; k++)
-        if (l == LAYER_SEQ) {
+        if (l == LAYER_SEQ || l == LAYER_TILT) {
             lys.v[k] = TSEL->p[P_SLEN + k];
         } else if (l == LAYER_GLO) {
             lys.v[k] = trk[k].p[P_MUTE];
@@ -668,6 +677,8 @@ static void layer_key(uint32_t l, uint32_t k)
     } else if (l == LAYER_REC) {
         if (!key_black(k) && p < 4u)
             rec_key(p);
+    } else if (l == LAYER_TILT) {
+        tilt_key(k, p);                                 /* (TILT-FM: tilt.c) */
     } else if (l == LAYER_SEQ) {
         if (!key_black(k))
             tools_key(p);
@@ -719,6 +730,8 @@ static void layer_knob(uint32_t k, int32_t s)
             edit_load(NENGINES, s);
         else if (k == 2u)
             preset_mark(s > 0);
+    } else if (l == LAYER_TILT) {                       /* (TILT-FM: tilt.c) */
+        tilt_knob(k, s);
     } else if (l == LAYER_REC) {                        /* CLICK, COUNT-IN, LEVEL (KNOB 4: none) */
         if (k < 3u)
             rec_set(k, (uint32_t)clamp((int32_t)rp_get(RL_F[k]) + s, 0, 2));
@@ -787,7 +800,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
             lys.loaded = 0;
             if (eqa_put_back() && !ld)                  /* (the quick actions: the lanes' mutes) */
                 ui_message("MUTES PUT BACK");
-        } else if (lys.l == LAYER_SEQ || lys.l == LAYER_REC) {
+        } else if (lys.l == LAYER_SEQ || lys.l == LAYER_REC || lys.l == LAYER_TILT) {
             track_t *t = &trk[lys.trk % NTRK];
             if (lys.loaded && chain_busy()) {
                 ui_message("STOP TO EDIT");
@@ -862,6 +875,9 @@ static uint32_t layer_leds(uint32_t *br)
         } else if (l == LAYER_SEQ) {                    /* the tools breathe (not while a song plays); DRUM: the lane */
             on = (b && p < NLANE && drum_track(TSEL) && p == ui.lane) || (!b && p == TL_EUCLID && eu.on);   /* lit, the */
             can = b ? p < NLANE && drum_track(TSEL) : tl_cell(TSEL, p) && !chain_busy();
+        } else if (l == LAYER_TILT) {                   /* (TILT-FM: tilt.c) */
+            can = tilt_can(k, p);
+            on = tilt_on(k, p);
         } else if (l == LAYER_REC && !b && p < 4u) {    /* a setting on (LEVEL: the click on) lit, the rest breathe; */
             on = p == 1u ? rp_get(RP_CLICK) != 0u : p == 2u ? rp_get(RP_COUNTIN) != 0u :   /* CLEAR: something to */
                  p == 3u && rp_get(RP_CLICK) != 0u;    /* clear, not while a song plays */
@@ -1205,6 +1221,8 @@ static void layer_cards(uint32_t l)
             draw_column(3, "LANE", drum_lane_name(TSEL, ui.lane), "", VAL(3u), -1, ICON_DRUM);
         else
             draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
+    } else if (l == LAYER_TILT) {                       /* (TILT-FM: tilt.c) */
+        tilt_cards();
     } else if (l == LAYER_REC) {                        /* CLICK COUNT-IN LEVEL, an empty card */
         for (c = 0; c < 3u; c++) {
             uint32_t v = rp_get(RL_F[c]);
@@ -1245,6 +1263,8 @@ static void draw_layer(void)
                (uint32_t)(trk[0].p[P_MUTE] | trk[1].p[P_MUTE] << 1 | trk[2].p[P_MUTE] << 2 | trk[3].p[P_MUTE] << 3) * 131u;
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
+    else if (l == LAYER_TILT)
+        sig += tilt_sig();
     else if (l == LAYER_REC)
         sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)chain_busy() * 3u + (uint32_t)rec_clearable() * 5u + song.sel * 977u;
     else if (l == LAYER_SEQ)
@@ -1268,6 +1288,8 @@ static void draw_layer(void)
             layer_seq();
         else if (l == LAYER_REC)
             layer_rec();
+        else if (l == LAYER_TILT)
+            layer_tilt();
         else
             layer_edit();
         cv_blit(0, Y_GRAPH);
@@ -1284,3 +1306,5 @@ static void draw_layer(void)
         ui.foot_sig = 0;
     }
 }
+
+#include "tilt.c"                                       /* TILT-FM: the TILT layer, NEW SONG, the TIMER */

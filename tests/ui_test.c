@@ -3300,13 +3300,13 @@ static int test_layer(void)
             ok &= ui.home;
             btn_up(PB[i]); frame();
             ok &= !ui.home && cur_page()->fam == PF[i];
-            if (PB[i] == B_SCL || PB[i] == B_GLO || PB[i] == B_EDIT)
-                continue;                             /* (a layer of their own: held long is a peek) */
-            ui_power_on();
+            if (PB[i] == B_SCL || PB[i] == B_GLO || PB[i] == B_EDIT || PB[i] == B_ENV)
+                continue;                             /* (a layer of their own: held long is a peek; TILT-FM: ENV's */
+            ui_power_on();                            /* is the TILT layer) */
             hold(PB[i]);                              /* (no layer of their own: a long press is a tap too) */
             ok &= !ui.home && cur_page()->fam == PF[i];
         }
-        bad += check("ENV LFO SCL ARP GLO EDIT act when let go, not on press (ENV LFO ARP held long: the same)", ok);
+        bad += check("ENV LFO SCL ARP GLO EDIT act when let go, not on press (LFO ARP held long: the same)", ok);
     }
     ui_power_on();
     go_page(GR_ROLL); my_steps(TSEL); ui.cursor = 0;

@@ -413,7 +413,8 @@ static int32_t ink_w(const aafont_t *f, const char *s)
 }
 
 /* the quick layers (ui_layer.c): a button held, the keys and KNOB 1..4 are its shortcuts, its map over the page */
-enum { LAYER_NONE, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ, LAYER_REC, LAYER_N };
+enum { LAYER_NONE, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ, LAYER_REC, LAYER_TILT, LAYER_N };
+/* (TILT-FM: LAYER_TILT, ENV held, tilt.c; its bit of layer_seen, 7, is the byte's last) */
 static void draw_layer(void);
 static const char *layer_head(void);
 static int layer_locked(void);
