@@ -13,8 +13,10 @@
 /* DotGothic16 (SIL OFL 1.1, fonts/OFL.txt), cut to printable ASCII, for the knob labels */
 @font-face { font-family: "DotGothic16"; src: url("fonts/DotGothic16-subset.woff") format("woff"); font-display: swap; }
 :root { --bg: #8e8e93; --fg: #111; --dim: #2c2c2e; --rule: #5a5a5e;
-        --body: #1d1d1f; --tray: #141415; --part: #2a2a2d; --edge: #3a3a3e; --label: #d6d6d8;
-        --lit: #fff4d6; --green: #5fe08a; color-scheme: light; }
+        --body: #3b3c3e; --tray: #5fc9b6; --part: #86dfcf; --edge: #44a593; --label: #e4e4e6;
+        --ink: #173530; --knob: #1f2022; --knob-ring: #2b2c2e; --knob-edge: #111214;
+        --lit: #fff8e6; --green: #5fe08a; color-scheme: light; }
+/* TILT-FM: the mint FM-1 (charcoal body; the button bed, the buttons and the keys mint, dark ink; the knobs dark) */
 html, body { background: var(--bg); }
 body { margin: 0; color: var(--fg); font: 13px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
 main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 32px; }
@@ -28,33 +30,33 @@ a { color: inherit; }
 .hit.knob { cursor: ns-resize; border-radius: 50%; }
 .hit:focus-visible { outline: 2px solid var(--lit); outline-offset: 2px; }
 .face { transition: fill .05s; }
-.dim .face.btn { fill: #3a3934; }
+.dim .face.btn { fill: #a9ecdf; }
 .lit .face.btn { fill: var(--lit); }
 .lit text { fill: #1d1d1f; }
 .green .face.btn { fill: var(--green); }
 .green text { fill: #0d2414; }
-.face.key { fill: #0c0c0d; stroke: var(--edge); stroke-width: 1.5; }
-.slit { fill: #3a3a3c; transition: fill .05s; }
-.dim .slit { fill: #77777b; }
+.face.key { fill: var(--part); stroke: var(--edge); stroke-width: 1.5; }
+.slit { fill: #24403b; transition: fill .05s; }
+.dim .slit { fill: #5f8f86; }
 .lit .slit { fill: #ececee; filter: drop-shadow(0 0 3px rgba(255, 255, 255, .6)); }
 /* #119: what can be pressed breathes, dark .. ~60 % of lit and back (hal/fm1_input.h fm1_led_breath, ~1.1 s; MENU >
  * LEDS DIM LO ~30 %): the peaks between dark and lit at ~0.8 / ~0.58 on screen (the LED's share, gamma-encoded) */
-@keyframes breath-btn { 0%, 100% { fill: #3a3934; } 50% { fill: #d8cfb6; } }
-@keyframes breath-slit { 0%, 100% { fill: #3a3a3c; } 50% { fill: #c8c8ca; } }
-@keyframes breath-btn-lo { 0%, 100% { fill: #3a3934; } 50% { fill: #aca592; } }
-@keyframes breath-slit-lo { 0%, 100% { fill: #3a3a3c; } 50% { fill: #a1a1a3; } }
+@keyframes breath-btn { 0%, 100% { fill: #86dfcf; } 50% { fill: #e2f8f2; } }
+@keyframes breath-slit { 0%, 100% { fill: #24403b; } 50% { fill: #d4f3ec; } }
+@keyframes breath-btn-lo { 0%, 100% { fill: #86dfcf; } 50% { fill: #bfeee4; } }
+@keyframes breath-slit-lo { 0%, 100% { fill: #24403b; } 50% { fill: #8fc4b9; } }
 .breath .face.btn { animation: breath-btn 1.13s ease-in-out infinite; }
 .breath .slit { animation: breath-slit 1.13s ease-in-out infinite; }
 .dimlo .breath .face.btn { animation-name: breath-btn-lo; }
 .dimlo .breath .slit { animation-name: breath-slit-lo; }
 @media (prefers-reduced-motion: reduce) {
   .breath .face.btn, .breath .slit { animation: none; }
-  .breath .face.btn { fill: #aca592; }
-  .breath .slit { fill: #a1a1a3; }
+  .breath .face.btn { fill: #bfeee4; }
+  .breath .slit { fill: #8fc4b9; }
 }
 /* the DRUM grid's beats (hal/fm1_input.h fm1_led_mid): a steady level between the glow and lit, ~15 % (DIM LO ~10 %) */
-.mid .slit { fill: #9a9a9e; }
-.dimlo .mid .slit { fill: #8a8a8e; }
+.mid .slit { fill: #7fb3a9; }
+.dimlo .mid .slit { fill: #6c9f95; }
 .held .face { stroke: var(--lit); stroke-width: 3; }
 .latched .face { stroke: #79b8ff; stroke-width: 3; }
 .start { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px;
@@ -179,8 +181,8 @@ function build(name) {
                                 width: `${(ss - 2 * inset) / L.w * 100}%`, height: `${(ss - 2 * inset) / L.h * 100}%` });
   KNOBS.forEach((n, i) => {
     const [x, y, r] = L.knobs[i], g = el("g", {});
-    el("circle", { cx: x, cy: y, r: r + 5, fill: "var(--tray)" }, g);
-    el("circle", { cx: x, cy: y, r, fill: "var(--part)", stroke: "var(--edge)", "stroke-width": 2 }, g);
+    el("circle", { cx: x, cy: y, r: r + 5, fill: "var(--knob-ring)" }, g);
+    el("circle", { cx: x, cy: y, r, fill: "var(--knob)", stroke: "var(--knob-edge)", "stroke-width": 2 }, g);
     const ind = n === "MASTER" ? el("line", { x1: x, y1: y - r + 5, x2: x, y2: y - r + 14, stroke: "var(--label)", "stroke-width": 3, "stroke-linecap": "round" }, g) : null;
     label(g, x, y - r - 12, n, 16, DOT);
     el("circle", { cx: x, cy: y, r: r + 12, fill: "transparent" }, g);
@@ -189,8 +191,8 @@ function build(name) {
   const button = ([x, y, w, h], n, sub) => {
     const g = el("g", {});
     el("rect", { x, y, width: w, height: h, rx: 8, fill: "var(--part)", stroke: "var(--edge)", "stroke-width": 1.5, class: "face btn" }, g);
-    const ink = n === "REC" ? "#ff453a" : undefined;
-    if (sub) { label(g, x + w / 2, y + h / 2 - 2, n, 10.8, SANS, ink); label(g, x + w / 2, y + h / 2 + 11, sub, 9.9); }
+    const ink = n === "REC" ? "#d7261c" : "var(--ink)";
+    if (sub) { label(g, x + w / 2, y + h / 2 - 2, n, 10.8, SANS, ink); label(g, x + w / 2, y + h / 2 + 11, sub, 9.9, SANS, ink); }
     else label(g, x + w / 2, y + h / 2 + 4.5, n, 12.6, SANS, ink);
     buttons.push({ g, bit: B[n], name: sub ? `${n} / ${sub}` : n });
   };
