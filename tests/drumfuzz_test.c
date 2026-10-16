@@ -20,6 +20,7 @@
  * ALNK0 interrupt does), held off by fm1_irq_off / motion_guard as on the device */
 #define HOST_IRQ_STUBS 1
 #define FM1_IRQ_TARGET 1
+#include <stdint.h>                     /* (uint32_t before ui_test.c brings it: GCC 15 has no implicit int) */
 static volatile int host_irq_mask, host_irq_pend;
 static uint32_t fm1_icfg(void) { return (uint32_t)host_irq_mask; }
 static void host_isr(void);
