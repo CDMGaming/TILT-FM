@@ -518,7 +518,8 @@ static void tilt_head_draw(int32_t xr)
 /* -------------------------------------------------------------- TIME --- */
 /* At 0:00: playing, the bar finishes (the clock's 1/16 step back at the bar's first; 8 s at most, a bar at 40 BPM is
  * 6), then the sound fades out over TE_FADE_MS (MASTER x master_fade: the pot still sets the level), the transport
- * stops, a moment of quiet for the tails; stopped already: at once. Then the TIME screen: TIME big in the splash's
+ * stops, a moment of quiet for the tails (TE_QUIET_MS; at most TE_QUIET_MAX_MS, the transport stopped or not: MASTER
+ * is never left down, every way out of the bar / fade / quiet puts it back, te_end); stopped already: at once. Then the TIME screen: TIME big in the splash's
  * dot matrix, the project written as the autosave (the timed take: project.c autosave_now; RESTORE LAST ON brings it
  * back at power-on; nothing new since the last autosave or the start screen's choice: none, "NOTHING NEW TO SAVE"),
  * and four choices, F3 .. B3 or SELECT / KNOB 1 and OCT+:
@@ -530,6 +531,7 @@ enum { TO_PLAY, TO_SAVE, TO_EXTRA, TO_KEEP, TO_N };
 #define TE_BAR_MS 8000u
 #define TE_FADE_MS 2000u
 #define TE_QUIET_MS 700u
+#define TE_QUIET_MAX_MS 3000u                           /* (the transport still running then, an external clock: on) */
 #define TE_ROW_H 18
 #define TE_ROW_Y 124                                    /* 4 rows: 124 .. 196, the footer at 202 */
 static const char *const TO_NAME[TO_N] = {"PLAY IT BACK", "SAVE", "EXTRA BALL", "KEEP WORKING"};
@@ -545,13 +547,18 @@ static const uint8_t TE_WORD[4][7] = {                  /* T I M E: rows, top fi
     {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F},
 };
 
+static void te_end(void)                                /* the bar / fade / quiet over: MASTER as the pot says */
+{
+    te.st = TE_NONE;
+    master_fade = 4096u;
+}
 static void te_show(void)
 {
     if (ui.menu)
         menu_close();
     ui.confirm = 0;
     name_close();
-    te.st = TE_NONE;
+    te_end();
     te.saved = (uint8_t)autosave_now();
     te.pick = TO_PLAY;
     tilt_ns_open = TILT_TIME;
@@ -587,8 +594,8 @@ static void te_poll(void)
         } else {
             master_fade = (uint16_t)(4096u - 4096u * e / TE_FADE_MS);
         }
-    } else if (te.st == TE_QUIET && e >= TE_QUIET_MS && !song.playing) {
-        master_fade = 4096u;
+    } else if (te.st == TE_QUIET && e >= TE_QUIET_MS && (!song.playing || e >= TE_QUIET_MAX_MS)) {
+        te_end();
         te_show();
     }
 }
