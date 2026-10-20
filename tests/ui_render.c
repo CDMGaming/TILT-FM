@@ -1413,7 +1413,7 @@ static void setup(int s)
     /* TILT-FM: TIME, the timer at 0:00 (stopped: at once): the take saved or not, the last choice picked */
     case S_TIME: case S_TIME_UNSAVED: case S_TIME_KEEP:
         song.playing = 0; go_home(); te_show();
-        te.saved = s != S_TIME_UNSAVED;
+        te.saved = s == S_TIME_UNSAVED ? 0u : s == S_TIME_KEEP ? 2u : 1u;   /* (KEEP: "NOTHING NEW TO SAVE" too) */
         if (s == S_TIME_KEEP) te.pick = TO_KEEP;
         break;
     /* TILT-FM: the start screen: an autosave there (CONTINUE picked; BLANK picked), none, one skipped after a crash */

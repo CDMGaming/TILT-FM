@@ -520,7 +520,8 @@ static void tilt_head_draw(int32_t xr)
  * 6), then the sound fades out over TE_FADE_MS (MASTER x master_fade: the pot still sets the level), the transport
  * stops, a moment of quiet for the tails; stopped already: at once. Then the TIME screen: TIME big in the splash's
  * dot matrix, the project written as the autosave (the timed take: project.c autosave_now; RESTORE LAST ON brings it
- * back at power-on), and four choices, F3 .. B3 or SELECT / KNOB 1 and OCT+:
+ * back at power-on; nothing new since the last autosave or the start screen's choice: none, "NOTHING NEW TO SAVE"),
+ * and four choices, F3 .. B3 or SELECT / KNOB 1 and OCT+:
  *   PLAY IT BACK  from the top     SAVE          SAVE > PROJECT: a slot, KNOB 4 SAVE (its name, as ever)
  *   EXTRA BALL    5 more minutes, the music on again                KEEP WORKING  the timer off (OCT- too)
  * The menu (HOME held) closes it as KEEP WORKING */
@@ -659,8 +660,8 @@ static void te_draw_rows(void)
     uint32_t i;
     cv_begin(240, 16, T_BG);                            /* the take: saved or not */
     GFX_HOOK_ALIGN(0, 0, 240, 16, AL_HV, "time take line centred");
-    cv_text_in(0, CAP_IN(S, 16), 240, &AF_S, te.saved ? "TIMED TAKE SAVED" : "TIMED TAKE NOT SAVED", te.saved ? T_MID : T_ACCENT,
-               T_BG);
+    cv_text_in(0, CAP_IN(S, 16), 240, &AF_S, te.saved == 1u ? "TIMED TAKE SAVED" : te.saved == 2u ? "NOTHING NEW TO SAVE" :
+               "TIMED TAKE NOT SAVED", te.saved ? T_MID : T_ACCENT, T_BG);   /* (project.c autosave_now: 1, 2, 0) */
     cv_blit(0, 104);
     for (i = 0; i < TO_N; i++) {
         uint32_t sel = i == te.pick;

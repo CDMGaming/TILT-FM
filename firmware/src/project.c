@@ -1386,7 +1386,9 @@ static void autosave_poll(void)
 }
 
 /* TILT-FM: the timed take (tilt.c, the TIMER at 0:00, the transport stopped by then): the autosave written now, not
- * waiting for its quiet 10 s (once a timed session; RESTORE LAST OFF: none). 1 = written */
+ * waiting for its quiet 10 s (once a timed session; RESTORE LAST OFF: none). Nothing new (the music as the autosave
+ * holds it, or the start screen's choice not changed since: the last session kept): no write. 1 = written, 2 = nothing
+ * new, 0 = not written (no flash, RESTORE LAST OFF, playing, a failed write) */
 static int autosave_now(void)
 {
 #if FELUCCA_FLASH
@@ -1394,6 +1396,12 @@ static int autosave_now(void)
     if (!flash_ok || transport_busy() || (ui_prefs & PREF_RESTORE_OFF))
         return 0;
     sig = autosave_sig();
+#ifdef TILT_START_PENDING
+    if (TILT_START_PENDING)
+        return 2;
+#endif
+    if (sig == as.saved)
+        return 2;
     as.last = fm1_ms;
     as.wrote = 1;
     project_capture(&proj_scratch);
