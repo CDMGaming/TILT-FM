@@ -821,6 +821,8 @@ static void st_do(uint32_t o)
     go_home();
     ui.force = 1;
     autosave_rebase();                                  /* (the power-on set: nothing written until a change) */
+    if (o == SO_CONT || o == SO_BLANK)                  /* (no load or START to come as the choice: a NEW SONG left */
+        tilt_start_pending = 0;                         /* with OCT- before this keeps it no more) */
     if (o == SO_CONT) {
         if (!autosave_boot(1))                          /* (it said RESTORED; its baseline: the session loaded) */
             ui_message("NOTHING TO CONTINUE");
