@@ -527,8 +527,9 @@ static void tilt_head_draw(int32_t xr)
  * and four choices, F3 .. B3 or SELECT / KNOB 1 and OCT+:
  *   PLAY IT BACK  from the top     SAVE          SAVE > PROJECT: a slot, KNOB 4 SAVE (its name, as ever)
  *   EXTRA BALL    5 more minutes, the music on again                KEEP WORKING  the timer off (OCT- too)
- * The menu (HOME held) closes it as KEEP WORKING */
-enum { TE_NONE, TE_BAR, TE_FADE, TE_QUIET };
+ * The menu (HOME held) closes it as KEEP WORKING. Due while NAME, a dialog, the MENU or NEW SONG is open, TIME waits
+ * until that closes (MASTER back meanwhile): what is being typed or asked is never closed under the player */
+enum { TE_NONE, TE_BAR, TE_FADE, TE_QUIET, TE_WAIT };   /* (TE_WAIT: due, NAME / a dialog / MENU / NEW SONG open) */
 enum { TO_PLAY, TO_SAVE, TO_EXTRA, TO_KEEP, TO_N };
 #define TE_BAR_MS 8000u
 #define TE_FADE_MS 2000u
@@ -554,17 +555,23 @@ static void te_end(void)                                /* the bar / fade / quie
     te.st = TE_NONE;
     master_fade = 4096u;
 }
-static void te_show(void)
+static int te_ready(void) { return !nm.kind && !ui.confirm && !ui.menu && tilt_ns_open != TILT_NS; }
+static void te_show(void)                               /* (te_ready: nothing else open to close) */
 {
-    if (ui.menu)
-        menu_close();
-    ui.confirm = 0;
-    name_close();
     te_end();
     te.saved = (uint8_t)autosave_now();
     te.pick = TO_PLAY;
     tilt_ns_open = TILT_TIME;
     ui.force = 1;
+}
+static void te_show_when_ready(void)
+{
+    if (te_ready()) {
+        te_show();
+    } else {
+        te_end();
+        te.st = TE_WAIT;
+    }
 }
 static void tilt_timer_over(void)
 {
@@ -573,7 +580,7 @@ static void tilt_timer_over(void)
         te.moved = 0;
         te.t = fm1_ms;
     } else {
-        te_show();
+        te_show_when_ready();
     }
 }
 static void te_poll(void)
@@ -597,7 +604,8 @@ static void te_poll(void)
             master_fade = (uint16_t)(4096u - 4096u * e / TE_FADE_MS);
         }
     } else if (te.st == TE_QUIET && e >= TE_QUIET_MS && (!song.playing || e >= TE_QUIET_MAX_MS)) {
-        te_end();
+        te_show_when_ready();
+    } else if (te.st == TE_WAIT && te_ready()) {
         te_show();
     }
 }
