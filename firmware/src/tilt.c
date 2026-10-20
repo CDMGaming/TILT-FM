@@ -418,8 +418,10 @@ static const uint8_t TM_STEPS[5] = {0, 5, 10, 15, 20};
 #define TILT_MIN_MS 60000u                              /* a minute (a test build of the emulator: shorter) */
 #endif
 
-static void tilt_timer_start(void)
-{
+static void te_end(void);
+static void tilt_timer_start(void)                      /* (tilt_timer_set and NEW SONG's START: a TIME on its way, its */
+{                                                       /* bar, fade or quiet, is called off, MASTER back: te_end) */
+    te_end();
     tm.on = tilt_timer_min != 0u;
     tm.end = fm1_ms + (uint32_t)tilt_timer_min * TILT_MIN_MS;
     tm.left = (uint32_t)tilt_timer_min * TILT_MIN_MS / 1000u;
