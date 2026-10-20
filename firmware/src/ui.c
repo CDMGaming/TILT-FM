@@ -430,6 +430,7 @@ static uint8_t tilt_ns_open;
  * (project.c autosave_poll) */
 static uint8_t tilt_start_pending;
 #define TILT_START_PENDING tilt_start_pending
+#define TILT_AUTOSAVE_HOLD (tilt_ns_open == TILT_START)   /* (project.c autosave_poll: nothing while it shows) */
 static uint16_t master_fade = 4096u;                    /* (TILT-FM: TIME's fade, Q12, on MASTER: master.c) */
 #define MASTER_FADE master_fade
 static int autosave_now(void);                          /* (project.c: TIME's take) */

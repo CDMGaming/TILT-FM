@@ -1355,6 +1355,10 @@ static void autosave_poll(void)
     uint32_t sig;
     if (!flash_ok || fm1_ms - as.poll < AS_POLL_MS)
         return;
+#ifdef TILT_AUTOSAVE_HOLD
+    if (TILT_AUTOSAVE_HOLD)                             /* TILT-FM: the start screen: nothing chosen yet, nothing written */
+        return;                                         /* (a MIDI CC there included); the choice rebases (tilt.c st_do) */
+#endif
     as.poll = fm1_ms;
     sig = autosave_sig();
 #ifdef TILT_START_PENDING
