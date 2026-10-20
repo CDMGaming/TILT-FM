@@ -71,18 +71,25 @@ static int ns_role_ok(uint32_t t, uint32_t e, uint32_t k)
         return cat == CAT_BASS;
     return cat == CAT_LEAD || cat == CAT_PAD || cat == CAT_PLUCK || cat == CAT_KEYS;
 }
-/* the factory sounds in PRESETS order (engines.c ENGINE_ORDER, the aliases skipped): the n-th as *e, *k; 1 = found */
+/* the factory sounds in PRESETS order (engines.c ENGINE_ORDER, the aliases skipped), walked once each time (no table,
+ * no RAM; each lookup one pass over the ~100 sounds, never a pass inside a pass): the n-th as *e, *k; 1 = found */
 static int ns_fact_at(uint32_t n, uint32_t *e, uint32_t *k)
 {
     uint32_t r, i;
     for (r = 0; r < NENG_SHOWN; r++) {
         const engine_t *en = ENGINES[eng_vis(r)];
+        uint32_t shown = preset_shown(eng_vis(r));
+        if (n >= shown) {                               /* (a whole engine at a time) */
+            n -= shown;
+            continue;
+        }
         for (i = 0; i < en->npresets; i++)
             if (preset_orig(en, i) == i && !n--) {
                 *e = eng_vis(r);
                 *k = i;
                 return 1;
             }
+        return 0;
     }
     return 0;
 }
@@ -95,26 +102,44 @@ static uint32_t ns_fact_n(void)
 }
 static uint32_t ns_fact_pos(uint32_t e, uint32_t k)    /* (not in the list: 0) */
 {
-    uint32_t n, ne, nk, total = ns_fact_n();
-    for (n = 0; n < total; n++)
-        if (ns_fact_at(n, &ne, &nk) && ne == e && nk == k)
-            return n;
+    uint32_t r, i, n = 0;
+    for (r = 0; r < NENG_SHOWN; r++) {
+        const engine_t *en = ENGINES[eng_vis(r)];
+        if (eng_vis(r) != e) {
+            n += preset_shown(eng_vis(r));
+            continue;
+        }
+        for (i = 0; i < en->npresets && i <= k; i++)
+            if (preset_orig(en, i) == i) {
+                if (i == k)
+                    return n;
+                n++;
+            }
+        return 0;
+    }
     return 0;
 }
-/* track t's sound at random among its role's */
+/* track t's sound at random among its role's: one pass to count them, one to take the picked one */
 static void ns_roll_track(uint32_t t)
 {
-    uint32_t total = ns_fact_n(), n, c = 0, pick, e = 0, k = 0, tries;
-    for (n = 0; n < total; n++)
-        if (ns_fact_at(n, &e, &k) && ns_role_ok(t, e, k))
-            c++;
+    uint32_t r, i, c = 0, pick, tries;
+    for (r = 0; r < NENG_SHOWN; r++) {
+        const engine_t *en = ENGINES[eng_vis(r)];
+        for (i = 0; i < en->npresets; i++)
+            c += preset_orig(en, i) == i && ns_role_ok(t, eng_vis(r), i);
+    }
     for (tries = 0; c && tries < 4u; tries++) {
         pick = rng() % c;
-        for (n = 0; n < total; n++)
-            if (ns_fact_at(n, &e, &k) && ns_role_ok(t, e, k) && !pick--)
-                break;
-        ns.eng[t] = (uint8_t)e;
-        ns.pre[t] = (uint8_t)k;
+        for (r = 0; r < NENG_SHOWN; r++) {
+            const engine_t *en = ENGINES[eng_vis(r)];
+            for (i = 0; i < en->npresets; i++)
+                if (preset_orig(en, i) == i && ns_role_ok(t, eng_vis(r), i) && !pick--) {
+                    ns.eng[t] = (uint8_t)eng_vis(r);
+                    ns.pre[t] = (uint8_t)i;
+                    r = NENG_SHOWN;                     /* (found: out of both loops) */
+                    break;
+                }
+        }
         if (t != 2u || ns.eng[2] != ns.eng[1] || ns.pre[2] != ns.pre[1])   /* (T2, T3: two different sounds) */
             break;
     }
