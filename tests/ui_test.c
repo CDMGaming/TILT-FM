@@ -9859,6 +9859,125 @@ static int test_edit_quick_actions(void)
     return bad;
 }
 
+
+/* TILT-FM (the review's fixes): the start screen's choices against the autosave's baseline (this build has no flash:
+ * "nothing to write" is the autosave's own rule, the music equal to as.saved; persistence_test.c writes for real), TIME's
+ * fade and its deferral */
+static int test_tilt_review(void)
+{
+    int bad = 0, ok;
+    uint32_t i;
+    /* the start screen: after a clean boot with an autosave, CONTINUE picked; after a crash, hidden, the line, BLANK */
+    ui_power_on();
+    tilt_start_boot(1);
+    st.has = 1; st.crash = 0; st.pick = SO_CONT;          /* (an autosave there: what autosave_peek says with flash) */
+    ok = tilt_ns_open == TILT_START && so_shown(SO_CONT) && st.pick == SO_CONT;
+    ui_power_on();
+    tilt_start_boot(0);
+    ok &= tilt_ns_open == TILT_START && !so_shown(SO_CONT) && st.pick == SO_BLANK;
+    st.has = 1; st.crash = 1;
+    ok &= !so_shown(SO_CONT);
+    bad += check("TILT-FM start screen: clean boot CONTINUE picked; after a crash CONTINUE hidden (the line), BLANK picked", ok);
+    /* each choice: nothing to write until an edit */
+    ui_power_on();
+    tilt_start_boot(1);
+    st_do(SO_BLANK);
+    ok = autosave_sig() == as.saved && !tilt_start_pending && tilt_ns_open == 0u;
+    trk[0].step[0].time = ST_NOTE; trk[0].step[0].n = 1; trk[0].step[0].note[0] = 61;
+    ok &= autosave_sig() != as.saved;
+    bad += check("TILT-FM start screen BLANK: nothing to write; an edit after it is", ok);
+    ui_power_on();
+    tilt_start_boot(1);
+    st.has = 1;
+    st_do(SO_CONT);
+    ok = autosave_sig() == as.saved && !tilt_start_pending;
+    bad += check("TILT-FM start screen CONTINUE: the baseline is what it loaded, nothing to write", ok);
+    ui_power_on();
+    tilt_start_boot(1);
+    st_do(SO_NEW);
+    ok = tilt_ns_open == TILT_NS && tilt_start_pending;
+    ns_start();
+    ok &= tilt_ns_open == 0u && autosave_sig() == as.saved && trk[0].p[P_ROOT] == ns.root && song.g[G_BPM] == ns.bpm;
+    bad += check("TILT-FM start screen NEW SONG: START made the song and is the baseline, nothing to write", ok);
+    ui_power_on();
+    trk[0].p[P_SLEN] = 8; trk[0].step[1].time = ST_NOTE; trk[0].step[1].n = 1; trk[0].step[1].note[0] = 66;
+    project_save(0);                                  /* (a project in slot A, other than the power-on music) */
+    {
+        static project_store_t a;
+        a = proj_slot[0];
+        ui_power_on();                                /* (it empties the slots: A put back, as a power-on keeps it) */
+        proj_slot[0] = a;
+    }
+    tilt_start_boot(1);
+    st_do(SO_LOAD);
+    ok = cur_page()->graph == GR_SLOTS && tilt_start_pending;
+    song.g[G_SLOT] = 1; ui.act = 3u; act_do(); ui.act = 0;   /* (SAVE > PROJECT: slot A, LOAD) */
+    ok &= trk[0].p[P_SLEN] == 8 && autosave_sig() == as.saved;
+    bad += check("TILT-FM start screen LOAD: the project loaded is the baseline, nothing to write", ok);
+    /* NEW SONG left with OCT-, then BLANK: the pending choice is gone (a later load is ordinary) */
+    ui_power_on();
+    tilt_start_boot(1);
+    st_do(SO_NEW);
+    name_close(); ns_from_start = 0; tilt_ns_open = TILT_START;   /* (OCT- there: back to the start screen) */
+    st_do(SO_BLANK);
+    bad += check("TILT-FM start screen: NEW SONG left, then BLANK: no pending choice", !tilt_start_pending);
+    /* TIME: the fade always gives MASTER back, the transport still running after the quiet included */
+    ui_power_on();
+    tilt_timer_set(5);
+    song.playing = 1;
+    tm.end = fm1_ms;
+    tilt_timer_poll();
+    ok = te.st == TE_BAR;
+    fm1_ms += TE_BAR_MS + 1u; tilt_timer_poll();        /* (the bar: at most 8 s) */
+    ok &= te.st == TE_FADE;
+    fm1_ms += TE_FADE_MS / 2u; tilt_timer_poll();
+    ok &= master_fade > 1000u && master_fade < 3000u;
+    fm1_ms += TE_FADE_MS; tilt_timer_poll();
+    ok &= te.st == TE_QUIET && master_fade == 0u && transport_req == 2u;
+    transport_req = 0;                                  /* (an external clock: the transport runs on) */
+    fm1_ms += TE_QUIET_MS + 100u; tilt_timer_poll();
+    ok &= te.st == TE_QUIET && master_fade == 0u;
+    fm1_ms += TE_QUIET_MAX_MS; tilt_timer_poll();
+    ok &= te.st == TE_NONE && master_fade == 4096u && tilt_ns_open == TILT_TIME;
+    bad += check("TILT-FM TIME: bar, fade, quiet; MASTER back after at most 3 s, the transport still running, TIME shown", ok);
+    /* a timer change during the fade cancels TIME */
+    ui_power_on();
+    tilt_timer_set(5);
+    song.playing = 1;
+    tm.end = fm1_ms;
+    tilt_timer_poll();
+    fm1_ms += TE_BAR_MS + 1u; tilt_timer_poll();
+    fm1_ms += TE_FADE_MS / 2u; tilt_timer_poll();
+    ok = te.st == TE_FADE && master_fade < 4096u;
+    tilt_timer_set(10);
+    ok &= te.st == TE_NONE && master_fade == 4096u && tm.on;
+    for (i = 0; i < 20u; i++) { fm1_ms += 500u; tilt_timer_poll(); }
+    ok &= tilt_ns_open != TILT_TIME && master_fade == 4096u;
+    bad += check("TILT-FM TIME: a timer change during the fade calls it off, MASTER back, no TIME", ok);
+    /* TIME due while NAME is open: deferred, NAME kept; shown once NAME closes. The same with a dialog */
+    ui_power_on();
+    song.playing = 0;
+    name_open(NK_PROJ_SAVE, 0);
+    tilt_timer_set(5);
+    tm.end = fm1_ms;
+    tilt_timer_poll();
+    ok = te.st == TE_WAIT && nm.kind == NK_PROJ_SAVE && tilt_ns_open == 0u && master_fade == 4096u;
+    fm1_ms += 1000u; tilt_timer_poll();
+    ok &= te.st == TE_WAIT && nm.kind == NK_PROJ_SAVE;
+    name_close(); tilt_timer_poll();
+    ok &= tilt_ns_open == TILT_TIME && te.st == TE_NONE;
+    ui_power_on();
+    ui.confirm = CF_CLEAR_TRK;
+    tilt_timer_set(5);
+    tm.end = fm1_ms;
+    tilt_timer_poll();
+    ok &= te.st == TE_WAIT && ui.confirm == CF_CLEAR_TRK && tilt_ns_open == 0u;
+    ui.confirm = 0; tilt_timer_poll();
+    ok &= tilt_ns_open == TILT_TIME;
+    bad += check("TILT-FM TIME: due under NAME or a dialog: waits (they stay open), shown when they close", ok);
+    ui_power_on();
+    return bad;
+}
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -9945,6 +10064,7 @@ int main(void)
     bad += test_home_tracks();
     bad += test_fx_map_columns();
     bad += test_help();
+    bad += test_tilt_review();                     /* (TILT-FM) */
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

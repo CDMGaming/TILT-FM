@@ -422,6 +422,77 @@ static int autosave_test(void)
     return bad;
 }
 
+
+/* ---- TILT-FM (the review's fixes): the start screen and the timed take against the autosave in flash, and the web
+ * editor's settings write keeping TILT-FM's settings byte ---- */
+static int tilt_autosave_test(void)
+{
+    int bad = 0, ok;
+    uint32_t w;
+    static uint8_t before_scratch[sizeof proj_scratch];
+    reset();
+    as_power_on();
+    autosave_boot(1);
+    as_edit(0);
+    as_run(11000u);                                      /* (an autosave in flash) */
+    w = as.writes;
+    as_power_on();                                       /* after a crash: there (1), never parsed */
+    memset(&proj_scratch, 0xA5, sizeof proj_scratch);
+    memcpy(before_scratch, &proj_scratch, sizeof proj_scratch);
+    ok = w == 1u && autosave_peek(0) == 1 && !memcmp(before_scratch, &proj_scratch, sizeof proj_scratch);
+    bad += check("TILT-FM start screen after a crash: the autosave is there, not parsed (the import buffer untouched)", ok);
+    ok = autosave_peek(1) == 1 && memcmp(before_scratch, &proj_scratch, sizeof proj_scratch);
+    bad += check("TILT-FM start screen after a clean boot: the autosave there and imported to look at", ok);
+    as_power_on();
+    autosave_peek(1);
+    w = as.writes;                                       /* (a power-on: the count from 0) */
+    tilt_ns_open = TILT_START;                           /* the start screen up: a change (a MIDI CC) writes nothing */
+    as_edit(5);
+    as_run(120000u);
+    ok = as.writes == w;
+    tilt_ns_open = 0;
+    autosave_rebase();                                   /* (BLANK: tilt.c st_do) */
+    as_run(120000u);
+    ok &= as.writes == w;
+    bad += check("TILT-FM start screen: a change while it shows (a MIDI CC), then BLANK: nothing written", ok);
+    as_edit(6);
+    as_run(11000u);
+    bad += check("  .. an edit after it: written once idle 10 s", as.writes == w + 1u);
+    w = as.writes;
+    tilt_start_pending = 1;                              /* LOAD / NEW SONG chosen: what they made is the baseline */
+    song.g[G_BPM] = 97;
+    autosave_rebase();
+    as_run(120000u);
+    ok = as.writes == w && tilt_start_pending;
+    as_edit(7);
+    as_run(300u);
+    ok &= !tilt_start_pending;
+    as_run(11000u);
+    bad += check("TILT-FM start screen LOAD / NEW SONG: nothing written until an edit; the edit ends the choice, written",
+                 ok && as.writes == w + 1u);
+    w = as.writes;                                       /* the timed take */
+    song.playing = 0;
+    ok = autosave_now() == 2 && as.writes == w;
+    as_edit(8);
+    tilt_start_pending = 1;
+    ok &= autosave_now() == 2 && as.writes == w;
+    tilt_start_pending = 0;
+    ok &= autosave_now() == 1 && as.writes == w + 1u;
+    ok &= autosave_now() == 2 && as.writes == w + 1u;
+    bad += check("TILT-FM timed take: unchanged, or the start screen's choice: nothing written (2); changed: written (1)", ok);
+    {
+        const uint8_t pal[] = {0, 3};
+        persist_t got;
+        song.playing = 0;
+        favorites.factory[15][13] = 1;                   /* START SCREEN OFF */
+        ok = ed_ui_set(pal, sizeof pal) == 0 && persist_saved.favorites.factory[15][13] == 1u &&
+             st_load(OBJ_SETTINGS, &got, sizeof got) == (int)sizeof got && got.favorites.factory[15][13] == 1u;
+        favorites.factory[15][13] = 0;
+        settings_save();
+        bad += check("TILT-FM: the web editor's settings write keeps [15][13] (START SCREEN), in RAM and in flash", ok);
+    }
+    return bad;
+}
 int main(void)
 {
     int bad = 0, ok;
@@ -725,6 +796,7 @@ int main(void)
                   irq_races == 3u && song.playing && !transport_req && persist_pending && erases == before);
     bad += mig_test();
     bad += autosave_test();
+    bad += tilt_autosave_test();                     /* (TILT-FM) */
     printf("%s\n", bad ? "PERSISTENCE TEST FAILED" : "persistence test passed");
     return bad != 0;
 }
