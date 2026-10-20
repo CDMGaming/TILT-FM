@@ -789,7 +789,7 @@ static struct {
 static int so_shown(uint32_t o) { return o == SO_CONT ? st.has && !st.crash : o < SO_N; }
 static void tilt_start_boot(int clean)
 {
-    st.has = (uint8_t)autosave_peek();
+    st.has = (uint8_t)autosave_peek(clean);             /* (after a crash: only that one is there, never parsed) */
     st.crash = (uint8_t)(!clean && st.has);
     st.pick = so_shown(SO_CONT) ? SO_CONT : SO_BLANK;
     tilt_ns_open = TILT_START;

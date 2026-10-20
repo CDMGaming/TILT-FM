@@ -433,7 +433,7 @@ static uint8_t tilt_start_pending;
 static uint16_t master_fade = 4096u;                    /* (TILT-FM: TIME's fade, Q12, on MASTER: master.c) */
 #define MASTER_FADE master_fade
 static int autosave_now(void);                          /* (project.c: TIME's take) */
-static int autosave_peek(void);                         /* (project.c: the start screen's CONTINUE, looked at only) */
+static int autosave_peek(int clean);                    /* (project.c: the start screen's CONTINUE, looked at only) */
 static void autosave_rebase(void);                      /* (project.c: the music now is the baseline: nothing written) */
 static int autosave_boot(int allowed);
 static void tilt_start_boot(int clean);                 /* (tilt.c: the start screen, from main.c's power-on) */

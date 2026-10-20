@@ -1414,8 +1414,10 @@ static void autosave_rebase(void)
 }
 /* TILT-FM: the start screen (tilt.c) at power-on: is there an autosave CONTINUE would load (RESTORE LAST ON, one that
  * loads, as autosave_boot reads it)? Only looked at: the music stays the power-on set, which is the baseline (nothing
- * written until it changes). 1 = there is one */
-static int autosave_peek(void)
+ * written until it changes). After a crash, a hang or a failed boot (`clean` 0) only whether one is there (a stored
+ * object at all): as autosave_boot's rule, the music of that boot is never parsed (it could be what crashed). 1 = there
+ * is one */
+static int autosave_peek(int clean)
 {
     int ok = 0;
 #if FELUCCA_FLASH
@@ -1423,8 +1425,10 @@ static int autosave_peek(void)
         int n;
         proj_wire_gen++;
         n = st_load(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire);
-        ok = n > 0 && proj_import(&proj_scratch, &proj_wire, n);
+        ok = n > 0 && (!clean || proj_import(&proj_scratch, &proj_wire, n));
     }
+#else
+    (void)clean;
 #endif
     autosave_rebase();
     return ok;
