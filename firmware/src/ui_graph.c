@@ -985,8 +985,8 @@ static const char *graph_project_name(uint32_t slot)  /* (after graph_project_us
 }
 
 /* SONG's timeline (graph_song): the sections left to right, each as wide as it plays: REPS x its clock track's pattern
- * (song_chain.c chain_clock: the first track not silent there; project_info: that track's LEN x DIV in its slot, what
- * chain_tick counts; a slot not saved, or every track silent: one bar). A short song is stretched over the strip
+ * (song_chain.c chain_clock_by: the track not silent there with the longest loop; project_info: each track's LEN x DIV
+ * in its slot, what chain_tick counts; a slot not saved, or every track silent: one bar). A short song is stretched over the strip
  * (fitted); a section under SG_MINW gets SG_MINW and the rest is shared out again; when the sections would get under
  * SG_FITBAR px a bar the song scrolls at SG_BAR px a bar, the view following the cursor's section and, playing, the
  * playing one. + ADD's slot (count < CHAIN_ROWS) at the end. Content px: 0 .. the width. Four lanes, T1 at the top */
@@ -1018,7 +1018,11 @@ static uint32_t sg_muldiv(uint32_t a, uint32_t b, uint32_t c)
 }
 static uint32_t song_unit(const chain_row_t *r)        /* one pass of a section: its clock track's (1/48 quarters) */
 {
-    uint32_t k = chain_clock(r), s = r->slot[k];
+    uint32_t k, s, len48[NTRK];
+    for (k = 0; k < NTRK; k++)
+        len48[k] = (s = r->slot[k]) < 4u && graph_project_used(s) ? graph_plen[s][k] : 0u;
+    k = chain_clock_by(r, len48);
+    s = r->slot[k];
     return s < 4u && graph_project_used(s) && graph_plen[s][k] ? graph_plen[s][k] : SG_BARU;
 }
 static void song_layout(song_lay_t *L)

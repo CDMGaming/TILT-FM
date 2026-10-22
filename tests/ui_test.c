@@ -8712,7 +8712,8 @@ static int test_head_group(void)
 /* SONG lanes (1.2, song_chain.c): a section names a slot per track ("-": silent). The rows of before (one slot each)
  * play bit for bit as before lanes (tests/song_probe.h, against the firmware before); each lane plays its own slot's
  * steps, LEN / DIV, QUANTIZE and automation; "-" plays nothing and releases; the section's length is its clock
- * track's loop (the first lane not silent; every lane silent: a 4/4 bar); all four restart together; STOP restores */
+ * track's loop (TILT-FM: the lane not silent with the longest loop, LEN x DIV, the lowest of equal ones; every lane
+ * silent: a 4/4 bar); all four restart together; STOP restores */
 #include "song_probe.h"
 static uint32_t lanes_until(uint32_t row, uint32_t max)   /* blocks of 32 until the section changes (or the song ends) */
 {
@@ -8729,7 +8730,7 @@ static int test_song_lanes(void)
     int bad = 0, ok;
     uint32_t n = 0, h, k, i, st, rev[NTRK];
     h = song_probe(&n);
-    bad += check("SONG of rows (one slot each): bit for bit as before lanes, block by block (song_probe.h)",
+    bad += check("SONG of rows (one slot each): block by block as recorded, each section its longest loop (song_probe.h)",
                  h == SONG_PROBE_GOLDEN && n == SONG_PROBE_BLOCKS);
     seq_stop();
     ui_power_on();
@@ -8775,13 +8776,15 @@ static int test_song_lanes(void)
     chain_config.row[3] = (chain_row_t){{1, 0, 1, 0}, 1};
     bad += check("SONG lanes prepare: the slots the lanes name (A, B), the silent ones none", chain_prepare() == 0);
     events_block(32);
-    ok = chain.running && chain.row == 0u && chain.clk == 0u;
+    ok = chain.running && chain.row == 0u && chain.clk == 1u;
     ok &= seq_steps(&trk[0])[0].note[0] == 60 && seq_steps(&trk[1])[0].note[0] == 73 && seq_steps(&trk[3])[0].note[0] == 75;
     ok &= seq_steps(&trk[2]) == chain_silent && !trk[2].seq_n && trk[0].seq_n == 1 && trk[0].seq_notes[0] == 60;
     ok &= trk[0].p[P_SLEN] == 4 && trk[1].p[P_SLEN] == 6 && trk[3].p[P_SLEN] == 2 && trk[1].seq_notes[0] == 73;
     bad += check("SONG lanes: each track its own slot's steps and LEN (T1 A, T2 B, T3 -, T4 B)", ok);
     n = 1u + lanes_until(0, 4000);
-    bad += check("  section 1 lasts T1's loop (A: 4 x 1/16)", chain.row == 1u && lanes_near(n, 4u * div_samples(2)));
+    bad += check("  section 1 lasts its longest loop, T2's (B: 6 x 1/16; T1 A 4, T4 B 2)",
+                 chain.row == 1u && lanes_near(n - 1u, 3u * div_samples(1)));   /* (6 x 1/16 exact: 3 x 1/8; n - 1: not the
+                                                                                 * block PLAY starts in) */
     ok = chain.clk == 1u && !trk[0].seq_n && !trk[3].seq_n && trk[2].seq_notes[0] == 62 && trk[1].seq_notes[0] == 73;
     for (k = 0; k < NTRK; k++) ok &= trk[k].seq_idx == 0u;
     ok &= trk[2].p[P_REV] == 100 && trk[2].p[P_SLEN] == 4 && trk[2].p[P_SQNT] == 1;
@@ -8812,7 +8815,8 @@ static int test_song_lanes(void)
     for (k = 0; k < NTRK; k++)
         ok &= trk[k].p[P_SLEN] == 3 && trk[k].p[P_SDIV] == 2 && trk[k].p[P_SQNT] == 1 && trk[k].step[0].note[0] == 48u + k &&
               trk[k].p[P_REV] == (int16_t)rev[k] && !trk[k].seq_n;
-    bad += check("SONG lanes: the end (T1 B's 8 steps) stops; the working patterns, LEN DIV and QUANTIZE back", ok);
+    bad += check("SONG lanes: the end (T1 B's 8 x 1/16, as long as T3 B's 4 x 1/8: the lower track) stops; the working "
+                 "patterns, LEN DIV and QUANTIZE back", ok);
     chain_config.count = 1;
     chain_config.row[0] = (chain_row_t){{CHAIN_SILENT, 2, CHAIN_SILENT, CHAIN_SILENT}, 1};
     ok = chain_prepare() == 3u + 2u && !chain.armed;
@@ -8825,6 +8829,40 @@ static int test_song_lanes(void)
     bad += check("SONG lanes: a lane on an empty slot refuses (PATTERN C EMPTY); a silent song needs none", ok);
     chain_config.row[0].slot[0] = 5;
     bad += check("SONG lanes: a slot past \"-\" is no section", !chain_valid(&chain_config));
+    /* TILT-FM: a 1-bar drum loop on T1 and a 2-bar line on T2 (A: T1 16 x 1/16, T2 16 x 1/8), x1: the section is 2 bars,
+     * not 1; and the timeline draws it so (song_unit) */
+    ui_power_on();
+    for (k = 0; k < NTRK; k++) {
+        track_t *t = &trk[k];
+        track_defaults_steps(t);
+        motion_clear(t);
+        for (i = 0; i < 16u; i++) {
+            t->step[i].note[0] = (uint8_t)(60u + k);
+            t->step[i].n = 1;
+            t->step[i].time = ST_NOTE;
+            t->step[i].vel = 100;
+        }
+        t->p[P_SLEN] = 16;
+        t->p[P_SDIV] = k == 1u ? 1 : 2;
+        t->p[P_SSWING] = 0;
+    }
+    project_save(0);
+    chain_config.count = 2;
+    chain_config.row[0] = (chain_row_t){{0, 0, CHAIN_SILENT, CHAIN_SILENT}, 1};
+    chain_config.row[1] = (chain_row_t){{CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT}, 1};
+    ui.force = 1;                                     /* (graph_project_used reads the slots again) */
+    ui.frame++;
+    ok = song_unit(&chain_config.row[0]) == 2u * SG_BARU && song_unit(&chain_config.row[1]) == SG_BARU;
+    ok &= chain_prepare() == 0;
+    events_block(32);
+    ok &= chain.running && chain.clk == 1u;
+    n = 1u + lanes_until(0, 8000);
+    bad += check("SONG (TILT-FM): 1-bar drums on T1 + a 2-bar line on T2, x1: the section is 2 bars (the timeline too)",
+                 ok && chain.row == 1u && lanes_near(n - 1u, 16u * div_samples(1)));
+    ok = chain.clk == 0u;
+    n = lanes_until(1, 8000);
+    bad += check("SONG (TILT-FM): an all-silent section is still one 4/4 bar", ok && !chain.running && lanes_near(n + 1u, 16u * div_samples(2)));
+    seq_stop();
     chain_defaults(&chain_config);
     return bad;
 }

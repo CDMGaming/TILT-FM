@@ -8,8 +8,9 @@
  * CHANCE, RATCH, NUDGE), its automation and locks, LEN / DIV / SWING / GATE and QUANTIZE from its own slot's copy for
  * that track only; all four slots in use are copied before PLAY (chain_prepare: the four sources were there already
  * for whole rows, so lanes cost no more RAM). Sections keep one boundary for all four tracks: a section lasts `repeat`
- * loops of its clock track (chain_clock): the first track that is not silent there (track 1 when it plays: every song
- * before lanes counts as it did), or, every track silent, a 4/4 bar (CHAIN_SIL_*). At each section all four tracks
+ * loops of its clock track (chain_clock): the track not silent there with the longest loop (LEN x DIV; the lowest of
+ * equal ones. TILT-FM: up to Felucca 1.6.1 the first track not silent, so a 1-bar loop on T1 cut a 2-bar line on T2 in
+ * half), or, every track silent, a 4/4 bar (CHAIN_SIL_*). At each section all four tracks
  * start together from their step 1, as rows always did.
  * A silent track ("-", CHAIN_SILENT) plays nothing in that section: at its start the track's sequenced notes are
  * released (seq_release, as at every section) and its automation goes back to the sound's own values (motion_restore);
@@ -87,8 +88,33 @@ static int chain_from_v9(chain_config_t *c, const chain_v9_t *o)
     c->count = o->count;
     return 1;
 }
-/* the track whose loops count section r's length: the first one not silent; every track silent: track 1 (a bar) */
+/* LEN steps of DIV in 1/48 quarters (a 4/4 bar: 192), clamped as chain_prepare does (project.c project_info's too) */
+static uint32_t len48_of(int32_t len, int32_t div)
+{
+    uint32_t n = (uint32_t)clamp(len, TP[P_SLEN].min, TP[P_SLEN].max), d = (uint32_t)clamp(div, TP[P_SDIV].min, TP[P_SDIV].max);
+    return n * (d < 6u ? 48u / DIV_DEN[d] : d < 10u ? 48u << (d - 5u) : 48u / DIV_DEN[d % 6u]);   /* (fx.c div_samples) */
+}
+/* the track whose loops count section r's length (TILT-FM): of the tracks not silent there, the one whose loop is the
+ * longest, len48[k] (its LEN x DIV in 1/48 quarters), the lowest of equal ones; every track silent: track 1 (a bar) */
+static uint32_t chain_clock_by(const chain_row_t *r, const uint32_t *len48)
+{
+    uint32_t k, c = NTRK;
+    for (k = 0; k < NTRK; k++)
+        if (r->slot[k] < CHAIN_SILENT && (c == NTRK || len48[k] > len48[c]))
+            c = k;
+    return c < NTRK ? c : 0u;
+}
+/* .. as a song plays it: each lane's LEN and DIV in its slot's copy (chain_prepare; once a section, chain_apply) */
 static uint32_t chain_clock(const chain_row_t *r)
+{
+    uint32_t k, len48[NTRK];
+    for (k = 0; k < NTRK; k++)
+        len48[k] = r->slot[k] < 4u ? len48_of(chain.source[r->slot[k]].timing[k][0], chain.source[r->slot[k]].timing[k][1])
+                                   : 0u;
+    return chain_clock_by(r, len48);
+}
+/* the first track not silent in r (every track silent: track 1): the one slot a row of before lanes names (editor v6) */
+static uint32_t chain_lead(const chain_row_t *r)
 {
     uint32_t k;
     for (k = 0; k < NTRK; k++)
