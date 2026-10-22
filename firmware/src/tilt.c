@@ -31,7 +31,9 @@ static void tilt_stuck(void) { tools_key(tilt_used(TSEL) ? TL_COOK : TL_RANDOM);
  *   SELECT                 the row; KNOB 1 its value (a track: any factory sound, in PRESETS order)
  *   OCT+  NUDGE            every row not held rolled again
  *   PLAY  START            the project made from it: the sounds loaded (as PRESETS does: one undo a track), every
- *                          track's ROOT and SCL, the tempo; the transport starts. With the TIMER set the steps and the
+ *                          track's ROOT and SCL, the tempo; T1..T3's QNT WHITE (the white keys walk the scale from
+ *                          C4, the root; the black keys silent; SCALE LEDS shows them; T4's kit maps its own keys);
+ *                          the transport starts. With the TIMER set the steps and the
  *                          automation of every track go too (a fresh project: PLAY twice when there was something
  *                          to clear); without it they stay, as a sound load leaves them
  *   OCT-                   back, nothing changed
@@ -214,6 +216,8 @@ static void ns_start(void)
         apply_preset_to(t, ns.pre[i]);
         t->p[P_ROOT] = ns.root;
         t->p[P_SCALE] = ns.scale;
+        if (i != NTRK - 1u)                             /* (the melodic tracks: every white key in the scale; T4 a kit) */
+            t->p[P_QUANT] = QN_WHITE;
         if (timed) {                                    /* (as TRACK CLEAR and AUTOMATION CLEAR do) */
             load_begin(t, UNDO_PAT);
             track_defaults_steps(t);

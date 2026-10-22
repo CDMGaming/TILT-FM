@@ -9898,6 +9898,9 @@ static int test_tilt_review(void)
     ok = tilt_ns_open == TILT_NS && tilt_start_pending;
     ns_start();
     ok &= tilt_ns_open == 0u && autosave_sig() == as.saved && trk[0].p[P_ROOT] == ns.root && song.g[G_BPM] == ns.bpm;
+    for (i = 0; i < NTRK - 1u; i++)                   /* (T1..T3: QNT WHITE, the scale on the white keys; T4 as it was) */
+        ok &= trk[i].p[P_QUANT] == QN_WHITE;
+    ok &= trk[NTRK - 1u].p[P_QUANT] == TP[P_QUANT].def;
     bad += check("TILT-FM start screen NEW SONG: START made the song and is the baseline, nothing to write", ok);
     ui_power_on();
     trk[0].p[P_SLEN] = 8; trk[0].step[1].time = ST_NOTE; trk[0].step[1].n = 1; trk[0].step[1].note[0] = 66;
