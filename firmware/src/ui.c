@@ -78,6 +78,8 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 #define ui_prefs3 (favorites.factory[15][13])
 #define PREF_T 0xFF000000u                     /* (menu_items.c MENU_FLAGS: a bit of ui_prefs3, << 24) */
 #define PREF_START_OFF (0x01u << 24)
+#define PREF_SCENE_SH 1u                       /* TILT-FM: bits 1..3 of ui_prefs3, the scene the music is in: 0 none, 1..4 A..D
+                                                * (project.c scene_boot, tilt.c tilt_scene_poll; no MENU row) */
 #define PREF_X 0xFF0000u                       /* (menu_items.c MENU_FLAGS: a bit of ui_prefs2, << 16) */
 #define PREF_SCOPE_MIX (0x01u << 16)
 #define PREF_PREVIEW (0x02u << 16)
@@ -231,7 +233,8 @@ static struct {
 } ui;
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
-       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND };
+       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
+       CF_SCENE_DROP };                                 /* (TILT-FM: the music in no scene, edited, leaves: tilt.c) */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot; a pattern over the user's steps;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
@@ -443,6 +446,20 @@ static int autosave_peek(int clean);                    /* (project.c: the start
 static void autosave_rebase(void);                      /* (project.c: the music now is the baseline: nothing written) */
 static int autosave_boot(int allowed);
 static void tilt_start_boot(int clean);                 /* (tilt.c: the start screen, from main.c's power-on) */
+/* TILT-FM: SCENES (project.c, tilt.c): the PROJECT slots are the song's scenes A..D */
+#define SCENE_NONE 4u
+static struct { uint32_t sig; } tsc;                    /* (project.c scene_sig as the scene was loaded, stored, begun) */
+static uint32_t scene_sig(void);
+static uint32_t scene_cur(void);                        /* 0..3 A..D, SCENE_NONE */
+static int scene_edited(void);
+static void scene_based(void);
+static void scene_claim(void);
+static void scene_boot(int restored);
+static int scene_load(uint32_t slot);
+static void scene_blank(uint32_t slot);
+static int project_used(uint32_t slot);
+static void tilt_scene_go(uint32_t s, int drop);        /* (tilt.c: the dialog's OCT+) */
+static uint32_t tilt_mid(void);                         /* (tilt.c: the TILT layer's keys at the mid level) */
 static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct);
 static void tilt_ns_draw(void);
 static uint32_t tilt_ns_leds(void);
@@ -961,12 +978,15 @@ static uint32_t pat_from_sig(const track_t *t)
     uint32_t h = fnv(fnv(steps_sig(t), &t->p[P_SLEN], 4u * sizeof t->p[0]), &q, sizeof q);
     return h ^ motion_sig(t);
 }
-static void pat_from_set(uint32_t slot)             /* every track's pattern is slot's now (1..4), 0 none */
+static void pat_from_set(uint32_t slot)             /* every track's pattern is slot's now (1..4), 0 none (TILT-FM: and
+                                                     * 1..4 the scene's baseline, project.c scene_based) */
 {
     for (uint32_t k = 0; k < NTRK; k++) {
         pat_from[k] = (uint8_t)slot;
         pat_from_h[k] = pat_from_sig(&trk[k]);
     }
+    if (slot)                                       /* (TILT-FM: a PROJECT load or save, a scene: its baseline) */
+        scene_based();
 }
 
 /* load_begin, the copy taken: a pattern load drops the track's motion (its steps go); a sound load pauses it (PLAY

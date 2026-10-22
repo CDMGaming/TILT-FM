@@ -421,6 +421,8 @@ static void ui_leds(void)
     c = key_leds(&br);
     g = !keys_map ? 0u : grid_on() && !ui.layer && !name_on() ? grid_glow() : 0u;   /* (key_leds: the grid's map) */
     beat = g ? grid_beats() & ~c : 0u;                  /* (the grid's empty beat starts: brighter than the glow) */
+    if (ui.layer == LAYER_TILT && !name_on())           /* (TILT-FM: the TILT layer's stored scenes, tilt.c) */
+        beat |= tilt_mid() & ~c & ~br;
     sc = keys_map ? 0u : scale_leds(&sr);               /* SCALE LEDS: the scale's keys glow, the root's brighter */
     for (k = 0; k < 27u; k++) {
         uint32_t in = (sc >> k) & 1u, rt = (sr >> k) & 1u, idle = !((c >> k) & 1u);
@@ -1633,6 +1635,8 @@ static void ui_input(void)
                 up_ui(1u, ui.confirm_trk);
             } else if (kind == CF_ERASE_PROJ) {
                 (void)project_erase(ui.confirm_trk & 3u);
+            } else if (kind == CF_SCENE_DROP) {         /* (TILT-FM: the music in no scene left for scene n: tilt.c) */
+                tilt_scene_go(ui.confirm_trk & 3u, 1);
             } else if (kind == CF_LOAD_PAT) {
                 pat_load_ui(&trk[ui.confirm_trk % NTRK], pat_pick());
                 str_cpy(ui.msg2, "[SAVE] HOLD TO UNDO", sizeof ui.msg2);

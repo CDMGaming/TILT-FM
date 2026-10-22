@@ -282,11 +282,9 @@ static void head_msg(int32_t x, int32_t maxw)
     if (lock)
         cv_icon_mid(x + 6, H_HEAD / 2, 16, ICON_X_LOCK, T_THEME, T_BG);
 }
-/* the slot letter after the track's cushion (1.2): the PROJECT slot of the pattern the selected track plays or edits.
- * A song playing: its section's slot for the track ("-" silent there); else the slot the working pattern came from
- * (ui.c pat_from: the last PROJECT load or save), with a mark ("A*") once it was edited since (its steps, LEN DIV SWING
- * GATE, QUANTIZE or automation: ui.c pat_from_sig); none at power-on, after a PHRASES pattern or the editor's restore.
- * b: the letter (b[1] '*' or 0); 0 = none */
+/* TILT-FM: SCENE and its letter at the header's left (Felucca's track cushion and slot letter there): the scene the
+ * music is in (project.c scene_cur), "A*" edited since it was loaded or stored, "-" none. A song playing: its section's
+ * scene for the selected track ("-" silent there). b: the letter (b[1] '*' or 0); always 1 */
 static int head_slot(char *b)
 {
     uint32_t k = song.sel % NTRK, s;
@@ -296,10 +294,9 @@ static int head_slot(char *b)
         b[0] = s < 4u ? (char)('A' + s) : '-';
         return 1;
     }
-    if (!pat_from[k] || pat_from[k] > 4u)
-        return 0;
-    b[0] = (char)('A' + pat_from[k] - 1u);
-    if (pat_from_sig(TSEL) != pat_from_h[k])
+    s = scene_cur();
+    b[0] = s < 4u ? (char)('A' + s) : '-';
+    if (s < 4u && scene_edited())
         b[1] = '*';
     return 1;
 }
@@ -388,12 +385,12 @@ static void draw_head(void)
     ui.head_sig = sig;
     metro_x = -1;
     cv_begin(240, H_HEAD, T_BG);
-    cv_icon_mid(HEAD_TRK_X, H_HEAD / 2, 16, trk_icon(song.sel, 1), midi_lit(song.sel) ? T_TEXT : T_ACCENT, T_BG);   /* (1.5.5:
-                                                       * a MIDI IN note into it, #208: lit) */
-    if (slot && (centre || !msg)) {                    /* the slot letter (not under a message centred: its room) */
+    if (slot && (centre || !msg)) {                    /* TILT-FM: SCENE A (not under a message centred: its room) */
         char l[2] = {sl[0], 0};
         GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
-        rx = cv_text(HEAD_SLOT_X, HEAD_MY, &AF_M, l, sl[0] == '-' ? T_MID : T_THEME);
+        rx = cv_text(HEAD_TRK_X, HEAD_SY, &AF_S, "SCENE", T_MID);
+        GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
+        rx = cv_text(rx + 3, HEAD_MY, &AF_M, l, sl[0] == '-' ? T_MID : T_THEME);
         if (sl[1])                                     /* edited since: the mark, up by the letter's top */
             rx = cv_text(rx, HEAD_MY, &AF_M, "*", T_MID);
         rx += 1;                                       /* (the REC mark's cell after it, its ink 3 px on) */
@@ -1487,6 +1484,10 @@ static void confirm_text(char *a, char *b)
         break;
     case CF_INIT_SOUND:
         str_cpy(a, "INITIALIZE SOUND?", 24);
+        break;
+    case CF_SCENE_DROP:                              /* TILT-FM: the music in no scene, edited (tilt.c) */
+        str_cpy(a, "LEAVE THIS MUSIC?", 24);
+        str_cpy(b, "NO SCENE WAS FREE", 24);
         break;
     case CF_CLEAN_SOUND:                             /* 1.5.5 (#190): the basic sound, nothing added */
         str_cpy(a, "CLEAN INIT SOUND?", 24);

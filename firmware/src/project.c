@@ -1464,10 +1464,106 @@ static int autosave_boot(int allowed)
 #else
     (void)allowed;
 #endif
+#ifdef TILT_START
+    scene_boot(rc);                                     /* TILT-FM: the scene it was in (restored), else an empty one */
+#endif
     as.saved = as.seen = autosave_sig();
     as.t = fm1_ms;
     return rc;
 }
+
+#ifdef TILT_START
+/* TILT-FM: SCENES (tilt.c, the TILT layer's C4..F4). The four PROJECT slots are the scenes A..D of one song, and the
+ * music is always one of them (proj_cur) or, when none could take it, none ("SCENE -"). A scene is the four tracks:
+ * their sounds, mix, patterns and automation. The rest of a project is the song's and stays as it is when the scene
+ * changes: the tempo and the other globals (swing, the delay, reverb and chorus, the clock), the SONG's sections,
+ * MIDI IN's channels, the selected track and the name; a scene stored takes them as they are now (project_capture),
+ * so the slots of one song agree. A project LOADed on SAVE > PROJECT is loaded whole, as ever, and is the scene of its
+ * slot. The format is unchanged.
+ * tsc.sig: scene_sig() as the scene was loaded, stored or begun; edited = the music's differs ("SCENE A*"). After a
+ * restore (CONTINUE, RESTORE LAST) the scene is the one the settings remember (ui.c PREF_SCENE: written as it changes,
+ * tilt.c tilt_scene_poll; an autosave is written right after each change of scene, so the two agree), counted as
+ * edited (the autosave may hold edits never stored) */
+static uint32_t scene_sig(void)                         /* the four tracks, as autosave_sig sees them */
+{
+    uint32_t h = 2166136261u, i, j;
+    for (i = 0; i < NTRK; i++) {
+        const track_t *t = &trk[i];
+        for (j = 0; j < P_COUNT; j++) {
+            int16_t v = motion_base_value(t, j);
+            h = as_mix(h, &v, sizeof v);
+        }
+        h = as_mix(h, &t->eng_req, 1);
+        h = as_mix(h, &t->preset, 1);
+        h = as_mix(h, t->step, sizeof t->step);
+        h = as_mix(h, fm6_patch[i], sizeof fm6_patch[i]);
+    }
+    return as_mix(h, &motion, sizeof motion);
+}
+static uint32_t scene_cur(void) { return proj_cur < 4u ? proj_cur : SCENE_NONE; }
+static int scene_edited(void) { return scene_sig() != tsc.sig; }
+static void scene_based(void) { tsc.sig = scene_sig(); }
+/* the music is now none of the scenes: it takes the first empty one (none empty: none) */
+static void scene_claim(void)
+{
+    uint32_t s;
+    for (s = 0; s < 4u && project_used(s); s++)
+        ;
+    proj_cur = (uint8_t)(s < 4u ? s : PROJ_NO_SLOT);
+    scene_based();
+}
+/* power-on (autosave_boot; the start screen's CONTINUE): restored, the scene the settings remember (edited: what the
+ * autosave holds may not be stored); else the music is the power-on set, in an empty scene */
+static void scene_boot(int restored)
+{
+    uint32_t s = (ui_prefs3 >> PREF_SCENE_SH) & 7u;
+    if (!restored) {
+        scene_claim();
+        return;
+    }
+    proj_cur = (uint8_t)(s >= 1u && s <= 4u ? s - 1u : PROJ_NO_SLOT);
+    tsc.sig = ~scene_sig();
+}
+/* scene `slot`'s tracks become the music (stopped: project_restore_runtime stops the transport); the song's own as it
+ * is. 0 done, 1 an empty slot, 2 not loaded */
+static int scene_load(uint32_t slot)
+{
+    project_t *p = &proj_scratch;
+    slot &= 3u;
+#if FELUCCA_FLASH
+    if (flash_ok && !proj_import(p, &proj_slot[slot], sizeof(project_store_t))) proj_fetch(slot);
+#endif
+    if (!proj_import(p, &proj_slot[slot], sizeof(project_store_t)))
+        return 1;
+    proj_bound(p);
+    memcpy(p->g, song.g, sizeof p->g);
+    p->chain = chain_config;
+    memcpy(p->mch, song.mch, sizeof p->mch);
+    p->sel = song.sel;
+    memset(p->name, 0, sizeof p->name);
+    memcpy(p->name, proj_name, str_len(proj_name) < PROJ_NAME_LEN ? str_len(proj_name) : PROJ_NAME_LEN);
+    p->sum = proj_sum(p);                               /* (proj_ok checks it) */
+    if (project_restore_runtime(p))
+        return 2;
+    proj_cur = (uint8_t)slot;
+    pat_from_set(slot + 1u);                            /* (scene_based) */
+    return 0;
+}
+/* an empty scene `slot` becomes the music: the sounds and the mix as they are, no steps, no automation */
+static void scene_blank(uint32_t slot)
+{
+    uint32_t k;
+    for (k = 0; k < NTRK; k++) {
+        track_defaults_steps(&trk[k]);
+        motion_clear(&trk[k]);
+        trk[k].nheld = 0;                               /* (and a latched arp chord) */
+        trk[k].arp_phys = 0;
+    }
+    undo.trk = 0;                                       /* (ui.c: the undo copy was the scene before) */
+    proj_cur = (uint8_t)(slot & 3u);
+    pat_from_set((slot & 3u) + 1u);
+}
+#endif
 
 #if FELUCCA_FLASH
 _Static_assert(sizeof(project_store_t) <= ST_PAYLOAD_MAX, "project does not fit one flash sector");

@@ -8589,7 +8589,8 @@ static int test_head_centres(void)
                 memset(host_screen, 0, sizeof host_screen);
                 ui.force = 1; draw_head(); ui.force = 0;
                 ok &= head_centres(HS_NAME[s], pr);
-                okp = nhel > 0 && hel[0][0] == 4;      /* the track cushion first, its ink from x 4 */
+                okp = msg || (nhel > 0 && hel[0][0] == 4);   /* SCENE first, its ink from x 4 (TILT-FM: in the track
+                                                        * cushion's place; a message centred hides it, as the slot letter) */
                 if (s != HS_GLO_TURN) {                /* the battery last, in its cell; nothing between 208 and it */
                     okp &= head_span2(HEAD_BAT_X, 239, &a, &b) && a >= 214 && b <= 236;
                     okp &= !head_span2(HEAD_GRP_R, HEAD_BAT_X - 1, &a, &b);
@@ -8615,7 +8616,7 @@ static int test_head_centres(void)
             }
     ui_style = ST_FLAT; style_apply();
     bad += check("header: every element's ink centred on row 12 (+-1 px), every state, FLAT and LINE, every palette", ok);
-    bad += check("header: three slots: track at 4, BPM / message on x 120, octave to 208, battery 214..236 (GLO with "
+    bad += check("header: three slots: SCENE at 4, BPM / message on x 120, octave to 208, battery 214..236 (GLO with "
                  "the tempo turned: the label right of the BPM and its lock)", place);
     ui_power_on();
     return bad;
@@ -9005,8 +9006,9 @@ static int test_song_pictures(void)
     return bad;
 }
 
-/* the header's slot letter (ui_draw.c head_slot): the PROJECT slot of the selected track's pattern; "A*" edited since;
- * none at power-on and after a PHRASES pattern; a song playing: its section's slot ("-" silent); a message hides it */
+/* the header's scene (TILT-FM, ui_draw.c head_slot: Felucca's slot letter of the selected track's pattern before):
+ * "SCENE A", the scene the music is in, "A*" edited since it was loaded or stored (any track, its sound too), "-" none;
+ * a song playing: its section's scene for the selected track ("-" silent); a message hides it */
 static uint32_t head_ink_cols(int32_t x0, int32_t x1)  /* header columns x0..x1 with anything not BG */
 {
     uint32_t n = 0;
@@ -9025,16 +9027,22 @@ static int test_head_slot(void)
 {
     int bad = 0, ok;
     ui_power_on();
+    proj_cur = PROJ_NO_SLOT;
+    scene_based();
+    ui.msg_t = 0;
     frames(50);
-    ok = head_is(0) && !head_ink_cols(23, 32);
+    ok = head_is("-") && head_ink_cols(4, 40) > 20;
     project_save(1); ui.msg_t = 0; frames(50);
-    ok &= head_is("B") && head_ink_cols(23, 32) > 4;
-    bad += check("header: no letter at power-on; \"1 B\" after PROJECT SAVE to B", ok);
+    ok &= head_is("B") && head_ink_cols(4, 40) > 20;
+    bad += check("header: \"SCENE -\" in no scene; \"SCENE B\" after PROJECT SAVE to B", ok);
     trk[0].step[0].note[0] = 70; trk[0].step[0].n = 1; frames(50);
     ok = head_is("B*");
-    song.sel = 1; ok &= head_is("B");
+    song.sel = 1; ok &= head_is("B*");
     song.sel = 0;
-    bad += check("header: an edit since marks it (\"B*\"), on that track only", ok);
+    trk[0].step[0].n = 0; trk[0].step[0].note[0] = 0; ok &= head_is("B");
+    trk[3].p[P_LEVEL] = (int16_t)(trk[3].p[P_LEVEL] == 50 ? 51 : 50); ok &= head_is("B*");
+    project_save(1); ui.msg_t = 0; ok &= head_is("B");
+    bad += check("header: an edit since marks the scene (\"B*\"), whatever the track selected, its mix too", ok);
     project_load(1);
     ok = head_is("B");
     project_save(0);
@@ -9049,9 +9057,9 @@ static int test_head_slot(void)
     bad += check("header: a load of B \"B\", a save to A \"A\"; LEN and automation edits mark it, undone clear it",
                  ok && head_is("A"));
     pat_load(&trk[0], 2);
-    ok = head_is(0);
+    ok = head_is("A*");
     undo_swap();
-    bad += check("header: a PHRASES pattern shows none, SAVE held (undo) brings the letter back", ok && head_is("A"));
+    bad += check("header: a PHRASES pattern is an edit of the scene (\"A*\"), SAVE held (undo) takes it back", ok && head_is("A"));
     chain_config.count = 1;
     chain_config.row[0] = (chain_row_t){{1, CHAIN_SILENT, 0, 0}, 4};
     chain_prepare(); events_block(32); frames(50);
@@ -9059,9 +9067,9 @@ static int test_head_slot(void)
     song.sel = 1; ok &= head_is("-");
     song.sel = 0;
     ui_message("SAVED"); frames(20);
-    ok &= !head_ink_cols(23, 32);
+    ok &= !head_ink_cols(4, 40);
     seq_stop(); ui.msg_t = 0; frames(50);
-    bad += check("header: a song playing: its section's slot (\"1 B\", T2 \"-\"); a message hides it; STOP: \"A\"", ok &&
+    bad += check("header: a song playing: its section's scene (\"SCENE B\", T2 \"-\"); a message hides it; STOP: \"A\"", ok &&
                  head_is("A"));
     chain_defaults(&chain_config);
     return bad;
@@ -9901,6 +9909,91 @@ static int test_edit_quick_actions(void)
 /* TILT-FM (the review's fixes): the start screen's choices against the autosave's baseline (this build has no flash:
  * "nothing to write" is the autosave's own rule, the music equal to as.saved; persistence_test.c writes for real), TIME's
  * fade and its deferral */
+
+/* TILT-FM SCENES (tilt.c, project.c): the PROJECT slots are the song's scenes A..D, the TILT layer's C4..F4. Leaving
+ * an edited scene stores it; an unedited one is left as it is; an empty one keeps the sounds and the mix with no steps;
+ * the tempo, the SONG and the name are the song's and stay; the settings remember the scene, a restore takes it back
+ * (edited); the music in no scene, edited: the dialog first; playing: nothing changes; the LEDs: now lit, stored mid */
+static void sc_note(uint32_t t, uint32_t i, uint32_t n)
+{
+    step_t *s = &trk[t].step[i];
+    s->time = ST_NOTE; s->n = 1; s->note[0] = (uint8_t)n; s->vel = 100;
+}
+static int test_tilt_scenes(void)
+{
+    int bad = 0, ok;
+    uint32_t br = 0, lit;
+    static project_store_t a0;
+    ui_power_on();                                    /* (the slots empty) */
+    st_do(SO_BLANK);
+    ok = scene_cur() == 0u && !scene_edited();
+    bad += check("TILT-FM scenes: BLANK begins in the first empty scene (A), not edited", ok);
+    sc_note(0, 0, 60);
+    trk[0].p[P_LEVEL] = 90;
+    ok = scene_edited();
+    tilt_scene_go(1, 0);
+    ok &= scene_cur() == 1u && project_used(0) && !project_used(1) && !scene_edited();
+    ok &= trk[0].step[0].time != ST_NOTE && trk[0].p[P_LEVEL] == 90 && str_eq(ui.msg2, "A STORED");
+    bad += check("TILT-FM scenes: A edited, C4->D4: A stored; B empty: the same sounds and mix, no steps", ok);
+    sc_note(0, 0, 64);
+    song.g[G_BPM] = 100;
+    chain_config.count = 1;
+    chain_config.row[0] = (chain_row_t){{0, 1, 0, 1}, 2};
+    tilt_scene_go(0, 0);
+    ok = scene_cur() == 0u && project_used(1) && trk[0].step[0].note[0] == 60 && trk[0].step[0].time == ST_NOTE;
+    ok &= song.g[G_BPM] == 100 && chain_config.count == 1u && chain_config.row[0].slot[1] == 1u && !scene_edited();
+    bad += check("TILT-FM scenes: back to A: its notes; the tempo and the SONG are the song's and stay", ok);
+    tilt_scene_go(1, 0);
+    ok = scene_cur() == 1u && trk[0].step[0].note[0] == 64;
+    a0 = proj_slot[0];
+    tilt_scene_go(0, 0);
+    tilt_scene_go(1, 0);
+    ok &= !memcmp(&a0, &proj_slot[0], sizeof a0) && scene_cur() == 1u;
+    tilt_scene_go(1, 0);
+    ok &= scene_cur() == 1u && str_eq(ui.msg, "SCENE B");
+    bad += check("TILT-FM scenes: an unedited scene is left as stored (not written again); its own key: stays", ok);
+    tilt_scene_poll();
+    ok = ((ui_prefs3 >> PREF_SCENE_SH) & 7u) == 2u;
+    proj_cur = PROJ_NO_SLOT;
+    scene_boot(1);
+    ok &= scene_cur() == 1u && scene_edited();
+    scene_based();
+    bad += check("TILT-FM scenes: the settings remember the scene; a restore is in it again, counted as edited", ok);
+    ui.layer = LAYER_TILT;
+    lit = layer_leds(&br);
+    ok = ((lit >> key_at(0, TT_SCENE + 1u)) & 1u) && !((lit >> key_at(0, TT_SCENE)) & 1u) &&
+         ((tilt_mid() >> key_at(0, TT_SCENE)) & 1u) && !((tilt_mid() >> key_at(0, TT_SCENE + 2u)) & 1u) &&
+         !((br >> key_at(0, TT_SCENE)) & 1u);
+    ui.layer = 0;
+    bad += check("TILT-FM scenes: LEDs: B now lit, A stored at the mid level, C empty dark", ok);
+    song.playing = 1;
+    tilt_scene_go(0, 0);
+    ok = scene_cur() == 1u && str_eq(ui.msg, "STOP TO CHANGE SCENE");
+    song.playing = 0;
+    bad += check("TILT-FM scenes: playing: STOP TO CHANGE SCENE, nothing changes", ok);
+    tilt_scene_go(2, 0);                              /* (C and D stored too: all four full) */
+    sc_note(1, 0, 50);
+    tilt_scene_go(3, 0);
+    sc_note(1, 0, 52);
+    tilt_scene_go(2, 0);
+    ok = project_used(2) && project_used(3);
+    proj_cur = PROJ_NO_SLOT;
+    sc_note(2, 0, 70);
+    tilt_scene_go(0, 0);
+    ok &= ui.confirm == CF_SCENE_DROP && scene_cur() == SCENE_NONE;
+    ui.confirm = 0;
+    tilt_scene_go(0, 1);
+    ok &= scene_cur() == 0u && trk[0].step[0].note[0] == 60 && trk[2].step[0].time != ST_NOTE;
+    bad += check("TILT-FM scenes: the music in no scene, edited: the dialog first (nothing keeps it); its OCT+ goes", ok);
+    proj_cur = PROJ_NO_SLOT;
+    scene_based();
+    tilt_scene_go(3, 0);
+    ok = ui.confirm == 0u && scene_cur() == 3u;
+    bad += check("TILT-FM scenes: in no scene, not edited: no dialog", ok);
+    ui_power_on();
+    chain_defaults(&chain_config);
+    return bad;
+}
 static int test_tilt_review(void)
 {
     int bad = 0, ok;
@@ -10106,6 +10199,7 @@ int main(void)
     bad += test_fx_map_columns();
     bad += test_help();
     bad += test_tilt_review();                     /* (TILT-FM) */
+    bad += test_tilt_scenes();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

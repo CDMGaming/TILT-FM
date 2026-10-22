@@ -72,7 +72,7 @@ static const layer_t LAYERS[LAYER_N] = {
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] TOOLS", {{KC_KEYS, "TOOLS"}, {KC_OCTDN, "UNDO"}, {KC_SEQ, "DONE"}}},
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
-    {B_ENV, LK_SET, FAM_HOME, "[ENV] TILT", {{KC_KEYS, "QUICK START"}, {KC_OCTDN, "UNDO"}, {KC_ENV, "DONE"}}},
+    {B_ENV, LK_SET, FAM_HOME, "[ENV] TILT", {{KC_KEYS, "SCENES, START"}, {KC_OCTDN, "UNDO"}, {KC_ENV, "DONE"}}},
 };
 static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC, KC_ENV};
 /* SCL's knobs: the key and its chord (cur_page() while the layer edits or draws them: page_over) */

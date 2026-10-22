@@ -7,8 +7,10 @@
  * track's sequence as the layer opened, SAVE held undoes the last action. The white keys from F3:
  *   F3 NEW SONG  the NEW SONG screen (below)
  *   G3 STUCK     the selected track: COOK if it holds something (a NOTE step, a drum hit), else RANDOM: the SEQ TOOLS
- *                actions themselves (ui_tools.c), in the track's scale (ROOT, SCL), one undo each */
-enum { TT_NEW, TT_STUCK, TT_TIMER, TT_N };              /* the white keys from F3 (key_place) */
+ *                actions themselves (ui_tools.c), in the track's scale (ROOT, SCL), one undo each
+ *   A3 TIMER     (below)
+ *   C4..F4       SCENE A..D (below, project.c): the music goes to that scene, the one it leaves stored first */
+enum { TT_NEW, TT_STUCK, TT_TIMER, TT_SCENE = 4, TT_N = TT_SCENE + 4 };   /* the white keys from F3 (key_place) */
 static uint8_t tilt_timer_min;                          /* the TIMER: 0 off, else its minutes */
 
 /* the selected track holds something to cook (as tl_do counts it) */
@@ -477,8 +479,10 @@ static uint32_t tm_step_of(uint32_t min)               /* its place in TM_STEPS 
 }
 static void tilt_timer_over(void);
 static void te_poll(void);
+static void tilt_scene_poll(void);
 static void tilt_timer_poll(void)
 {
+    tilt_scene_poll();                                  /* (the scene remembered: SCENES, below) */
     te_poll();                                          /* (TIME: the bar, the fade) */
     if (!tm.on)
         return;
@@ -752,11 +756,75 @@ static void te_draw(void)
 }
 
 /* --------------------------------------------------------- the layer --- */
+/* ------------------------------------------------------------ SCENES --- */
+/* C4..F4: SCENE A..D (project.c: the PROJECT slots are the song's scenes; a scene is the four tracks, the song's
+ * tempo, effects, sections and name stay). Stopped: the scene the music is in, when edited since it was loaded or
+ * stored (SCENE A*), is stored to its slot first (as SAVE > PROJECT saves: its flash at once), then the other one's
+ * tracks are loaded; an empty one keeps the sounds and the mix with no steps and no automation. Then the autosave is
+ * written (the settings remember the scene: tilt_scene_poll; both at once, so CONTINUE finds them agreeing) and the
+ * start screen's choice is over (a change of scene is a change). The music in no scene (none was empty for it) and
+ * edited: the dialog first (CF_SCENE_DROP), as nothing would keep it. While playing: STOP TO CHANGE SCENE. The key
+ * LEDs: the scene now lit, a stored one at the mid level, an empty one dark */
+static void tilt_scene_go(uint32_t s, int drop)
+{
+    uint32_t cur = scene_cur(), stored = 0, used;
+    char b[24] = "SCENE A";
+    s &= 3u;
+    b[6] = (char)('A' + s);
+    if (transport_busy()) {
+        ui_message("STOP TO CHANGE SCENE");
+        return;
+    }
+    if (s == cur) {
+        ui_message(b);
+        return;
+    }
+    if (scene_edited()) {
+        if (cur == SCENE_NONE && !drop) {
+            confirm_open(CF_SCENE_DROP, s);
+            return;
+        }
+        if (cur != SCENE_NONE) {
+            if (project_save_as(cur, 0))                /* (it said why: SAVE ERROR) */
+                return;
+            stored = 1;
+        }
+    }
+    used = (uint32_t)project_used(s);
+    if (used ? scene_load(s) != 0 : (scene_blank(s), 0)) {
+        ui_message("SCENE NOT LOADED");
+        return;
+    }
+    tilt_start_pending = 0;
+    autosave_now();
+    ui_message(b);
+    if (stored) {
+        str_cpy(b, "A STORED", sizeof b);
+        b[0] = (char)('A' + cur);
+        str_cpy(ui.msg2, b, sizeof ui.msg2);
+    } else if (!used) {
+        str_cpy(ui.msg2, "EMPTY: THE SAME SOUNDS", sizeof ui.msg2);
+    }
+    ui.force = 1;
+}
+/* the settings follow the scene the music is in (ui.c PREF_SCENE; deferred while playing, as every settings write).
+ * Not while the start screen shows: the one remembered is CONTINUE's to restore */
+static void tilt_scene_poll(void)
+{
+    uint32_t v = scene_cur() < 4u ? scene_cur() + 1u : 0u;
+    if (tilt_ns_open == TILT_START || ((ui_prefs3 >> PREF_SCENE_SH) & 7u) == v)
+        return;
+    ui_prefs3 = (uint8_t)((ui_prefs3 & ~(7u << PREF_SCENE_SH)) | v << PREF_SCENE_SH);
+    settings_save();
+}
+
 static void tilt_key(uint32_t k, uint32_t p)
 {
     if (key_black(k))
         return;
-    if (p == TT_NEW)
+    if (p >= TT_SCENE && p < TT_SCENE + 4u)
+        tilt_scene_go(p - TT_SCENE, 0);
+    else if (p == TT_NEW)
         tilt_ns_show();
     else if (p == TT_STUCK)
         tilt_stuck();
@@ -773,10 +841,31 @@ static uint32_t tilt_can(uint32_t k, uint32_t p)
 {
     return !key_black(k) && (((p == TT_NEW || p == TT_STUCK) && !chain_busy()) || p == TT_TIMER);
 }
-static uint32_t tilt_on(uint32_t k, uint32_t p) { return !key_black(k) && p == TT_TIMER && tilt_timer_min; }
+static uint32_t tilt_on(uint32_t k, uint32_t p)
+{
+    return !key_black(k) && ((p == TT_TIMER && tilt_timer_min) || (p >= TT_SCENE && p < TT_SCENE + 4u && p - TT_SCENE == scene_cur()));
+}
+/* the keys at the mid level: the stored scenes (not the one now: lit) */
+static uint32_t tilt_mid(void)
+{
+    uint32_t k, m = 0, p;
+    for (k = 0; k < 27u; k++)
+        if (!key_black(k) && (p = key_place(k)) >= TT_SCENE && p < TT_SCENE + 4u && p - TT_SCENE != scene_cur() &&
+            graph_project_used(p - TT_SCENE))
+            m |= 1u << k;
+    return m;
+}
+static uint32_t tilt_scenes_sig(void)                   /* (the strip: which are stored, the one now, edited) */
+{
+    uint32_t s, h = scene_cur() * 3u + (uint32_t)scene_edited() * 5u;
+    for (s = 0; s < 4u; s++)
+        h = h * 7u + (uint32_t)graph_project_used(s);
+    return h;
+}
 static uint32_t tilt_sig(void)
 {
-    return (tilt_used(TSEL) != 0u) * 31u + (uint32_t)chain_busy() * 3u + song.sel * 977u + tilt_timer_min * 7919u;
+    return (tilt_used(TSEL) != 0u) * 31u + (uint32_t)chain_busy() * 3u + song.sel * 977u + tilt_timer_min * 7919u +
+           tilt_scenes_sig() * 104729u;
 }
 
 static void tilt_cards(void)
@@ -790,23 +879,42 @@ static void tilt_cards(void)
         draw_column(c, "", "", "", T_THEME, -1, ICON_NONE);
 }
 
-/* the map: F3 NEW SONG, G3 STUCK, and under them what STUCK will do to the selected track */
+/* the map: on top the song's four scenes, the keys C4..F4 (the one now THEME, NOW, EDIT edited since; a stored one
+ * raised, USED; an empty one dim, FREE), then F3 NEW SONG, G3 STUCK, A3 TIMER, and what STUCK will do to the selected
+ * track */
+#define TS_Y 4                                          /* the scenes' row */
+#define TS_H 36
+#define TK_Y (TS_Y + TS_H + 4)                          /* F3 G3 A3 */
+#define TK_H 34
+#define TL_Y (TK_Y + TK_H + 4)                          /* the STUCK line's row */
 static void layer_tilt(void)
 {
-    uint32_t st = chain_busy() ? LS_DIM : LS_OFF;
-    char n[3] = {'F', 0, 0}, b[24];
+    uint32_t st = chain_busy() ? LS_DIM : LS_OFF, s, cur = scene_cur();
+    char n[3] = {'F', '3', 0}, b[24];
     uint16_t ink, fill;
-    lcell(LC_X(TT_NEW), 4, LC_H, n, ICON_STEPS, 0, "NEW", st, 0);   /* (NEW SONG: wider than a cell) */
+    for (s = 0; s < 4u; s++) {                          /* C4 D4 E4 F4: the scenes A B C D */
+        static const char NOTE[4] = {'C', 'D', 'E', 'F'};
+        uint32_t used = (uint32_t)graph_project_used(s), now = s == cur, idle;
+        char l[2] = {(char)('A' + s), 0}, kn[3] = {NOTE[s], '4', 0};
+        fill = lc_box(LC_X(s), TS_Y, LC_W, TS_H, lc_fill(now ? LS_SEL : used ? LS_OFF : LS_DIM, &ink));
+        idle = !now;
+        cv_text_on(LC_X(s) + 5, TS_Y + 3, &AF_S, kn, idle ? T_MID : ink, fill);
+        cv_text_on(LC_X(s) + 6, TS_Y + TS_H - 4 - AF_M_CAP_H - AF_M_CAP_Y, &AF_M, l, ink, fill);
+        cv_text_r(LC_X(s) + LC_W - 5, TS_Y + TS_H - 4 - AF_S_CAP_H - AF_S_CAP_Y, &AF_S,
+                  now ? (scene_edited() ? "EDIT" : "NOW") : used ? "USED" : "FREE",
+                  ink, fill);
+    }
+    lcell(LC_X(TT_NEW), TK_Y, TK_H, n, ICON_STEPS, 0, "NEW", st, 0);   /* (NEW SONG: wider than a cell) */
     n[0] = 'G';
-    lcell(LC_X(TT_STUCK), 4, LC_H, n, ICON_PROB, 0, "STUCK", st, 0);
+    lcell(LC_X(TT_STUCK), TK_Y, TK_H, n, ICON_PROB, 0, "STUCK", st, 0);
     n[0] = 'A';
-    lcell(LC_X(TT_TIMER), 4, LC_H, n, ICON_TIME, 0, "TIMER", tilt_timer_min ? LS_SEL : LS_OFF, 0);
+    lcell(LC_X(TT_TIMER), TK_Y, TK_H, n, ICON_TIME, 0, "TIMER", tilt_timer_min ? LS_SEL : LS_OFF, 0);
     b[0] = 'T';
     b[1] = (char)('1' + song.sel);
     str_cpy(b + 2, chain_busy() ? ": STOP TO EDIT" : tilt_used(TSEL) ? ": COOK IT" : ": RANDOM", sizeof b - 2);
-    fill = lc_box(6, 100, 228, 18, lc_fill(st, &ink));
-    GFX_HOOK_ALIGN(6, 100, 234, 118, AL_HV, "tilt layer stuck line centred");
-    cv_text_in(6, 100 + CAP_IN(S, 18), 228, &AF_S, b, ink, fill);
+    fill = lc_box(LC_X(2), TL_Y, 2 * LC_W + 4, TK_H, lc_fill(st, &ink));
+    GFX_HOOK_ALIGN(LC_X(2), TL_Y, LC_X(2) + 2 * LC_W + 4, TL_Y + TK_H, AL_HV, "tilt layer stuck line centred");
+    cv_text_in(LC_X(2), TL_Y + CAP_IN(S, TK_H), 2 * LC_W + 4, &AF_S, b, ink, fill);
 }
 
 /* -------------------------------------------------------- START SCREEN --- */
@@ -853,11 +961,13 @@ static void st_do(uint32_t o)
     if (o == SO_CONT || o == SO_BLANK)                  /* (no load or START to come as the choice: a NEW SONG left */
         tilt_start_pending = 0;                         /* with OCT- before this keeps it no more) */
     if (o == SO_CONT) {
-        if (!autosave_boot(1))                          /* (it said RESTORED; its baseline: the session loaded) */
-            ui_message("NOTHING TO CONTINUE");
+        if (!autosave_boot(1))                          /* (it said RESTORED; its baseline: the session loaded; and its */
+            ui_message("NOTHING TO CONTINUE");          /* scene, project.c scene_boot) */
     } else if (o == SO_BLANK) {
+        scene_claim();                                  /* (an empty scene, if there is one: project.c) */
         ui_message("BLANK");
     } else if (o == SO_NEW) {
+        scene_claim();
         tilt_start_pending = 1;
         ns_from_start = 1;
         tilt_ns_show();

@@ -778,7 +778,8 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_TILT_LAYER, S_TILT_LAYER_EMPTY, S_NEWSONG, S_NEWSONG_HELD, S_NEWSONG_AGAIN,
        S_TIMER, S_TIMER_LAST_MIN, S_TIMER_MSG, S_TIMER_LAYER, S_TIMER_OCT, S_TIMER_SONG,
        S_TIME, S_TIME_UNSAVED, S_TIME_KEEP,
-       S_START, S_START_BLANK, S_START_NONE, S_START_CRASH, S_COUNT };
+       S_START, S_START_BLANK, S_START_NONE, S_START_CRASH,
+       S_TILT_SCENES, S_SCENE_DROP, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -813,7 +814,8 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "tilt_layer", "tilt_layer_empty", "newsong", "newsong_held", "newsong_again",
     "timer", "timer_last_min", "timer_msg", "timer_layer", "timer_oct", "timer_song",
     "time", "time_unsaved", "time_keep",
-    "start", "start_blank", "start_none", "start_crash"};
+    "start", "start_blank", "start_none", "start_crash",
+    "tilt_scenes", "scene_drop"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1386,6 +1388,16 @@ static void setup(int s)
     /* TILT-FM: the TILT layer (ENV held) on a track with steps and on an empty one; NEW SONG rolled, with rows held
      * (the longest sounds' names on the tracks), and its PLAY AGAIN footer */
     case S_TILT_LAYER: go_home(); ui.layer = LAYER_TILT; break;
+    /* TILT-FM SCENES: A and D stored, B the scene now and edited ("B*"), C empty; the music in no scene leaving it */
+    case S_TILT_SCENES:
+        song.playing = 0; go_home();
+        memset(proj_slot, 0, sizeof proj_slot);
+        project_save_as(0, "SCENES"); project_save_as(3, "SCENES"); project_save_as(1, "SCENES");
+        ui.msg_t = 0; ui.frame++;                     /* (graph_project_used reads the slots again) */
+        trk[0].step[5].time = ST_NOTE; trk[0].step[5].n = 1; trk[0].step[5].note[0] = 67;
+        ui.layer = LAYER_TILT;
+        break;
+    case S_SCENE_DROP: song.playing = 0; go_home(); ui.confirm = CF_SCENE_DROP; ui.confirm_trk = 2; break;
     case S_TILT_LAYER_EMPTY: go_home(); song.sel = 2; track_defaults_steps(TSEL); ui.layer = LAYER_TILT; break;
     case S_NEWSONG: case S_NEWSONG_HELD: case S_NEWSONG_AGAIN:
         song.playing = 0; go_home(); ns.rolled = 1; ns.hold = 0; ns.row = 0; tilt_ns_show();
