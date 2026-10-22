@@ -1503,6 +1503,7 @@ static uint32_t scene_sig(void)                         /* the four tracks, as a
 static uint32_t scene_cur(void) { return proj_cur < 4u ? proj_cur : SCENE_NONE; }
 static int scene_edited(void) { return scene_sig() != tsc.sig; }
 static void scene_based(void) { tsc.sig = scene_sig(); }
+static void scene_enter(uint32_t s) { proj_cur = (uint8_t)(s & 3u); }   /* (tilt.c: a flip while playing done) */
 /* the music is now none of the scenes: it takes the first empty one (none empty: none) */
 static void scene_claim(void)
 {
@@ -1548,6 +1549,92 @@ static int scene_load(uint32_t slot)
     proj_cur = (uint8_t)slot;
     pat_from_set(slot + 1u);                            /* (scene_based) */
     return 0;
+}
+/* playing (seq.c scene_stage): scene `slot`'s tracks decoded into the stage as project_restore_runtime would load them
+ * (the same fixes of older formats); an empty slot: the music's sounds and mix (their own values, not the automation's)
+ * with no steps and no automation. 0 staged, 2 not (a project of before 1.0 that a load must convert: stopped only) */
+static int scene_stage_from(uint32_t slot)
+{
+    project_t *p = &proj_scratch;
+    uint32_t k, i;
+    slot &= 3u;
+#if FELUCCA_FLASH
+    if (flash_ok && !proj_import(p, &proj_slot[slot], sizeof(project_store_t))) proj_fetch(slot);
+#endif
+    if (!proj_import(p, &proj_slot[slot], sizeof(project_store_t))) {
+        for (k = 0; k < NTRK; k++) {
+            const track_t *t = &trk[k];
+            for (i = 0; i < P_COUNT; i++)
+                scene_stage.p[k][i] = motion_base_value(t, i);
+            scene_stage.eng[k] = t->eng_req;
+            scene_stage.preset[k] = t->preset;
+            for (i = 0; i < NSTEP; i++)
+                step_clear(&scene_stage.step[k][i]);
+            memcpy(scene_stage.fm6[k], fm6_patch[k], sizeof scene_stage.fm6[k]);
+        }
+        memset(&scene_stage.motion, 0, sizeof scene_stage.motion);
+        return 0;
+    }
+    proj_bound(p);
+    if (!proj_ok(p) || !proj_engines_ok(p))
+        return 2;
+    proj_drums_to_part(p);
+    proj_phys(p);
+    proj_fm4(p);
+    proj_perc(p);
+    for (k = 0; k < NTRK; k++) {
+        const proj_trk_t *s = &p->t[k];
+        uint32_t e = s->engine;
+        uint8_t v[FP_SIZE + 1u];
+        if (s->preset >= PROJ_DEF_KEEP)                 /* (PROJ_DEF_SOUND / KEEP: the load's own conversions) */
+            return 2;
+        for (i = 0; i < P_COUNT; i++)
+            scene_stage.p[k][i] = (int16_t)param_fit(param_desc_of(e, i), s->p[i]);
+        scene_stage.eng[k] = (uint8_t)e;
+        scene_stage.preset[k] = (uint8_t)(ENGINES[e]->npresets ? s->preset % ENGINES[e]->npresets : 0u);
+        memcpy(scene_stage.step[k], s->step, sizeof scene_stage.step[k]);
+        proj_steps(scene_stage.step[k]);
+        fm6_unpack(p->fm6[k], v);
+        fm6_sanitize(v);
+        memcpy(scene_stage.fm6[k], v, sizeof scene_stage.fm6[k]);
+    }
+    scene_stage.motion = p->motion;
+    return 0;
+}
+/* playing: the music stored to scene `slot` in RAM only (a flash write would silence the audio): its slot holds it at
+ * once (SAVE > PROJECT, SONG, a scene load read it there) and flash gets it when the transport stops (scene_flush);
+ * the header's dot meanwhile (tsc.pend). 0 stored */
+static int scene_store_ram(uint32_t slot)
+{
+    project_t *p = &proj_scratch;
+    slot &= 3u;
+    project_capture(p);
+    proj_wire_gen++;
+    if (!proj_pack(&proj_wire, p)) {
+        ui_message("SAVE FORMAT ERROR");
+        return 2;
+    }
+    memcpy(&proj_slot[slot], &proj_wire, sizeof proj_wire);
+    tsc.pend |= (uint8_t)(1u << slot);
+    scene_based();
+    return 0;
+}
+/* stopped: the scenes stored while playing go to flash (each as SAVE > PROJECT writes it), then the autosave, so the
+ * remembered scene and the music agree as after a change of scene stopped */
+static void scene_flush(void)
+{
+    uint32_t s;
+    if (!tsc.pend || transport_busy())
+        return;
+#if FELUCCA_FLASH
+    for (s = 0; s < 4u && flash_ok; s++)
+        if (((tsc.pend >> s) & 1u) && st_save(OBJ_PROJECT0 + s, &proj_slot[s], sizeof(project_store_t)))
+            ui_message("SAVE ERROR");
+#else
+    (void)s;
+#endif
+    tsc.pend = 0;
+    autosave_now();
 }
 /* an empty scene `slot` becomes the music: the sounds and the mix as they are, no steps, no automation */
 static void scene_blank(uint32_t slot)

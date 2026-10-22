@@ -448,15 +448,23 @@ static int autosave_boot(int allowed);
 static void tilt_start_boot(int clean);                 /* (tilt.c: the start screen, from main.c's power-on) */
 /* TILT-FM: SCENES (project.c, tilt.c): the PROJECT slots are the song's scenes A..D */
 #define SCENE_NONE 4u
-static struct { uint32_t sig; } tsc;                    /* (project.c scene_sig as the scene was loaded, stored, begun) */
+static struct {
+    uint32_t sig;                                       /* project.c scene_sig as the scene was loaded, stored, begun */
+    uint8_t pend;                                       /* bit s: scene s stored in RAM while playing, not in flash yet */
+    uint8_t cue;                                        /* the scene staged (seq.c scene_armed), SCENE_NONE none */
+} tsc = {0, 0, 4u};
 static uint32_t scene_sig(void);
 static uint32_t scene_cur(void);                        /* 0..3 A..D, SCENE_NONE */
 static int scene_edited(void);
 static void scene_based(void);
+static void scene_enter(uint32_t s);
 static void scene_claim(void);
 static void scene_boot(int restored);
 static int scene_load(uint32_t slot);
 static void scene_blank(uint32_t slot);
+static int scene_stage_from(uint32_t slot);
+static int scene_store_ram(uint32_t slot);
+static void scene_flush(void);
 static int project_used(uint32_t slot);
 static void tilt_scene_go(uint32_t s, int drop);        /* (tilt.c: the dialog's OCT+) */
 static uint32_t tilt_mid(void);                         /* (tilt.c: the TILT layer's keys at the mid level) */

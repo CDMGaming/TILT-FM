@@ -346,6 +346,7 @@ static void draw_head(void)
                    (uint32_t)seq_counting() * 7u + (ui_prefs & PREF_BPM_LOCK) * 4099u +
                    (uint32_t)batt_shown() * 7777u + (chain.running ? (chain.row + 1u) * 104729u : 0u) +
                    (slot ? str_hash(11u, sl) : 0u) + (uint32_t)midi_lit(song.sel) * 15485863u +   /* (1.5.5) */
+                   tsc.pend * 7907u +                 /* (TILT-FM: the scenes not in flash yet) */
                    tilt_head_sig() * 2654435761u;     /* (TILT-FM: the TIMER's countdown) */
     int msg = ui.msg_t || ui.layer;
     int centre = !msg || ui.bpm_t || ui.layer == LAYER_GLO;   /* the BPM being changed: it stays, the message right */
@@ -391,6 +392,10 @@ static void draw_head(void)
         rx = cv_text(HEAD_TRK_X, HEAD_SY, &AF_S, "SCENE", T_MID);
         GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
         rx = cv_text(rx + 3, HEAD_MY, &AF_M, l, sl[0] == '-' ? T_MID : T_THEME);
+        if (tsc.pend && !chain.running) {              /* (TILT-FM: a scene stored in RAM, not in flash yet: a dot) */
+            cv_rect(rx + 2, H_HEAD / 2 - 1, 3, 3, T_ACCENT);
+            rx += 5;
+        }
         if (sl[1])                                     /* edited since: the mark, up by the letter's top */
             rx = cv_text(rx, HEAD_MY, &AF_M, "*", T_MID);
         rx += 1;                                       /* (the REC mark's cell after it, its ink 3 px on) */

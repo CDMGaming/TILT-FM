@@ -9966,11 +9966,6 @@ static int test_tilt_scenes(void)
          !((br >> key_at(0, TT_SCENE)) & 1u);
     ui.layer = 0;
     bad += check("TILT-FM scenes: LEDs: B now lit, A stored at the mid level, C empty dark", ok);
-    song.playing = 1;
-    tilt_scene_go(0, 0);
-    ok = scene_cur() == 1u && str_eq(ui.msg, "STOP TO CHANGE SCENE");
-    song.playing = 0;
-    bad += check("TILT-FM scenes: playing: STOP TO CHANGE SCENE, nothing changes", ok);
     tilt_scene_go(2, 0);                              /* (C and D stored too: all four full) */
     sc_note(1, 0, 50);
     tilt_scene_go(3, 0);
@@ -10034,6 +10029,171 @@ static int test_tilt_scenes(void)
     ok &= chain_config.count == 2u && str_eq(ui.msg, "STOP TO EDIT");
     seq_stop();
     bad += check("TILT-FM ADD TO SONG: SONG FULL; playing and edited: STOP TO STORE SCENE; a song playing: STOP TO EDIT", ok);
+    ui_power_on();
+    chain_defaults(&chain_config);
+    return bad;
+}
+
+/* TILT-FM SCENES while playing (seq.c scene_flip, tilt.c): a scene cued plays from the bar's end, every track from its
+ * step 1 there, with the cued scene's steps and sounds, in the block a 1/16 track of LEN 16 wraps in; the scene left is
+ * stored in RAM (again as it is edited while cued) and goes to flash at STOP; the cue taken back with its key again;
+ * stopped before the bar's end it goes at once; a song playing refuses */
+static int test_tilt_scenes_live(void)
+{
+    int bad = 0, ok;
+    uint32_t n, k;
+    ui_power_on();
+    chain_defaults(&chain_config);
+    st_do(SO_BLANK);
+    for (k = 0; k < NTRK; k++) { trk[k].p[P_SLEN] = 16; trk[k].p[P_SDIV] = 2; trk[k].p[P_SSWING] = 0; }
+    song.g[G_SWING] = 50;
+    sc_note(0, 0, 60);
+    trk[0].p[P_LEVEL] = 90;
+    tilt_scene_go(1, 0);                              /* (A stored; B: the same sounds, no steps) */
+    sc_note(0, 0, 64);
+    sc_note(1, 0, 40);
+    trk[0].p[P_LEVEL] = 77;
+    trk[1].p[P_SLEN] = 8;
+    tilt_scene_go(0, 0);                              /* (B stored; A back) */
+    ok = scene_cur() == 0u && trk[0].p[P_LEVEL] == 90 && trk[0].step[0].note[0] == 60;
+    transport_req = 1;
+    events_block(32);
+    for (n = 1; n < 300u; n++)
+        events_block(32);
+    tilt_scene_go(1, 0);
+    ok &= scene_armed == 1u && tsc.cue == 1u && scene_cur() == 0u && str_eq(ui.msg, "SCENE B: NEXT BAR");
+    sc_note(0, 2, 61);                                /* (an edit of A while B is cued: kept) */
+    tilt_scene_poll();
+    ok &= (tsc.pend & 1u) && !scene_edited();
+    bad += check("TILT-FM scenes playing: cued for the bar's end (SCENE B: NEXT BAR), A stored in RAM, again as edited", ok);
+    ok = 1;
+    while (n < 4000u && scene_armed == 1u) {
+        uint32_t wrap = trk[2].seq_idx == 15u &&      /* (T3: LEN 16 of 1/16, its last step ending in this block) */
+                        trk[2].seq_pos + 32u >= step_samples(&trk[2], div_samples(2), 15u);
+        events_block(32);
+        n++;
+        if (scene_armed == 2u)
+            ok &= wrap;
+        else
+            ok &= trk[0].step[0].note[0] == 60;
+    }
+    ok &= scene_armed == 2u && n * 32u >= 16u * div_samples(2) && n * 32u <= 16u * div_samples(2) + 64u;   /* (a bar) */
+    ok &= trk[0].step[0].note[0] == 64 && trk[1].step[0].note[0] == 40 && trk[0].p[P_LEVEL] == 77 && trk[1].p[P_SLEN] == 8;
+    for (k = 0; k < NTRK; k++)
+        ok &= trk[k].seq_idx == 0u && trk[k].seq_pos < div_samples(2);
+    bad += check("TILT-FM scenes playing: the flip at the bar's end, as a LEN 16 track wraps: B's steps and sounds, all "
+                 "four from step 1", ok);
+    tilt_scene_poll();
+    ok = scene_armed == 0u && scene_cur() == 1u && !scene_edited() && str_eq(ui.msg, "SCENE B") && (tsc.pend & 1u);
+    bad += check("TILT-FM scenes playing: then the music is scene B (SCENE B), A still to go to flash", ok);
+    tilt_scene_go(0, 0);
+    ok = scene_armed == 1u;
+    tilt_scene_go(0, 0);
+    ok &= scene_armed == 0u && tsc.cue == SCENE_NONE && str_eq(ui.msg, "SCENE CHANGE OFF");
+    tilt_scene_go(2, 0);
+    tilt_scene_go(1, 0);
+    ok &= scene_armed == 0u && scene_cur() == 1u;
+    bad += check("TILT-FM scenes playing: the cued key again, or the scene now's, takes the cue back", ok);
+    tilt_scene_go(0, 0);
+    transport_req = 2;
+    events_block(32);
+    tilt_scene_poll();
+    ok = !song.playing && scene_armed == 0u && scene_cur() == 0u && !tsc.pend;
+    ok &= trk[0].step[2].time == ST_NOTE && trk[0].step[2].note[0] == 61 && trk[0].step[0].note[0] == 60;
+    bad += check("TILT-FM scenes playing: stopped while cued: it goes at once; the RAM stores flushed (A with its edit)", ok);
+    chain_config.count = 1;
+    chain_config.row[0] = (chain_row_t){{0, 0, 0, 0}, 1};
+    ok = chain_prepare() == 0;
+    events_block(32);
+    tilt_scene_go(1, 0);
+    ok &= scene_armed == 0u && scene_cur() == 0u && str_eq(ui.msg, "STOP TO CHANGE SCENE");
+    seq_stop();
+    bad += check("TILT-FM scenes: a song playing: STOP TO CHANGE SCENE", ok);
+    ui_power_on();
+    chain_defaults(&chain_config);
+    tilt_scene_uncue();
+    return bad;
+}
+
+/* TILT-FM SCENES while playing, heard: T1 holds a note across the bar (a NOTE and 15 TIEs) in scene A; scene B has no
+ * step there, so the bar's end is A's note let go into B's sound. Three ways: the same engine with other values (another
+ * preset), another engine (ANALOG -> FM6: voice.c's 2.9 ms fade), FM6 -> FM6 with another patch. As hostsim.c's engine
+ * switch test: the largest sample step in the 10 ms after the flip against the 0.1 s before (a click: several x) */
+static void scl_hold(track_t *t, uint32_t note)
+{
+    uint32_t i;
+    for (i = 0; i < 16u; i++) {
+        step_clear(&t->step[i]);
+        t->step[i].time = i ? ST_TIE : ST_NOTE;
+    }
+    t->step[0].n = 1;
+    t->step[0].note[0] = (uint8_t)note;
+    t->step[0].vel = 100;
+}
+static double scene_click(uint32_t how)               /* 0 same engine, 1 ANALOG -> FM6, 2 FM6 -> FM6 */
+{
+    static int32_t L[FS];
+    int32_t o[2u * CTL];
+    uint32_t k, i, n = 0, at = 0, flip = 0, mq = song.master_q12;
+    int32_t calm = 1, big = 0;
+    ui_power_on();
+    chain_defaults(&chain_config);
+    memset(proj_slot, 0, sizeof proj_slot);
+    for (k = 0; k < NTRK; k++) {
+        track_defaults_steps(&trk[k]);
+        trk[k].p[P_SLEN] = 16; trk[k].p[P_SDIV] = 2; trk[k].p[P_SSWING] = 0; trk[k].p[P_MUTE] = k != 0u;
+        trk[k].p[P_DLY] = trk[k].p[P_REV] = trk[k].p[P_CHOR] = 0;
+    }
+    if (how == 2u) { set_engine_of(&trk[0], ENGI_FM6); fm6_load_slot(0, 0); }
+    else set_engine_of(&trk[0], 0);
+    trk[0].p[P_DLY] = trk[0].p[P_REV] = trk[0].p[P_CHOR] = 0;
+    trk[0].p[P_VOICE] = V_POLY;
+    scl_hold(&trk[0], 57);
+    project_save(0);                                  /* A */
+    track_defaults_steps(&trk[0]);
+    if (how == 0u) apply_preset_to(&trk[0], 3);
+    else if (how == 1u) set_engine_of(&trk[0], ENGI_FM6);
+    else fm6_load_slot(0, 5);
+    trk[0].p[P_DLY] = trk[0].p[P_REV] = trk[0].p[P_CHOR] = 0;
+    project_save(1);                                  /* B: no steps */
+    scene_load(0);
+    song.master_q12 = 4096;
+    song.g[G_BPM] = 120;
+    transport_req = 1;
+    for (n = 0; n < 4u * FS / CTL && !flip; n++) {    /* (cued at once: the flip at the first bar's end) */
+        if (n == 4u)
+            tilt_scene_go(1, 0);
+        mix_block(o, CTL);
+        for (i = 0; i < CTL; i++)
+            L[(n * CTL + i) % FS] = o[2 * i];
+        if (scene_armed == 2u)
+            flip = n * CTL;
+    }
+    for (k = 0; k < FS / 100u / CTL; k++, n++) {
+        mix_block(o, CTL);
+        for (i = 0; i < CTL; i++)
+            L[(n * CTL + i) % FS] = o[2 * i];
+    }
+    for (i = flip - FS / 10u; i < flip; i++)
+        calm = abs(L[i % FS] - L[(i - 1u) % FS]) > calm ? abs(L[i % FS] - L[(i - 1u) % FS]) : calm;
+    for (i = flip; i < flip + FS / 100u; i++)
+        big = abs(L[i % FS] - L[(i - 1u) % FS]) > big ? abs(L[i % FS] - L[(i - 1u) % FS]) : big;
+    at = trk[0].eng_req == trk[0].engine;
+    seq_stop();
+    song.master_q12 = mq;
+    tilt_scene_uncue();
+    tilt_scene_poll();
+    printf("    scene flip %s: largest sample step %d in the 10 ms after, %d in the 0.1 s before (%.2f x)%s\n",
+           how == 0u ? "same engine" : how == 1u ? "ANALOG -> FM6" : "FM6 -> FM6", big, calm, (double)big / calm,
+           flip && at ? "" : " (no flip?)");
+    return flip && at ? (double)big / calm : 99.0;
+}
+static int test_tilt_scenes_heard(void)
+{
+    int bad = 0;
+    double a = scene_click(0), b = scene_click(1), c = scene_click(2);
+    bad += check("TILT-FM scenes playing, heard: the flip clicks no more than an engine switch may (1.5 x the step "
+                 "before): same engine, ANALOG -> FM6, FM6 -> FM6", a <= 1.5 && b <= 1.5 && c <= 1.5);
     ui_power_on();
     chain_defaults(&chain_config);
     return bad;
@@ -10244,6 +10404,8 @@ int main(void)
     bad += test_help();
     bad += test_tilt_review();                     /* (TILT-FM) */
     bad += test_tilt_scenes();
+    bad += test_tilt_scenes_live();
+    bad += test_tilt_scenes_heard();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

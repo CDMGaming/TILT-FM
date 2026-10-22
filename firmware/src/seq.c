@@ -1154,6 +1154,7 @@ static __attribute__((noinline)) void seq_enter(track_t *t, uint32_t top, uint32
     rec_hold(t, t->seq_idx, len);
 }
 
+static uint32_t scene_carry;                    /* (TILT-FM: a scene's flip, below) */
 static void seq_tick(track_t *t, uint32_t n)
 {
     uint32_t period, len, top;
@@ -1176,7 +1177,7 @@ static void seq_tick(track_t *t, uint32_t n)
         if (t->seq_pos < cur_len && t->seq_pos != 0x7FFFFFFFu + n)
             break;
         top = t->seq_pos >= 0x7FFFFFFFu;            /* (PLAY, a SONG section: its first step) */
-        t->seq_pos = top ? (chain.running ? chain.carry : 0u) : t->seq_pos - cur_len;
+        t->seq_pos = top ? (chain.running ? chain.carry : scene_carry) : t->seq_pos - cur_len;   /* (TILT-FM: a scene's) */
         t->seq_idx = (uint16_t)((t->seq_idx + 1u) % len);
         seq_enter(t, top, len);
         if (t->p[P_SQNT] && !t->nd_fired)
@@ -1292,6 +1293,63 @@ static int32_t click_beat_now(void)
     return clk_pos == CLK_START ? 0 : (int32_t)(clk_step >> 2);
 }
 
+/* TILT-FM: SCENES while playing (tilt.c, project.c). A scene cued while the transport runs is staged by the main loop
+ * (scene_stage: the four tracks' values, engines, steps, FM6 patches and the automation, decoded from its slot) and
+ * armed (scene_armed 1); at the bar's end, the block the metronome's 16th step ends in (clk_step 15 -> 0, as a 1/16
+ * track of LEN 16 wraps), the audio ISR flips to it: each track's notes released and its automation put back
+ * (motion_restore), the staged values and steps in, the engine asked for (voice.c engine_block fades the old one out
+ * over 2.9 ms, the new notes after it), the FM6 patch (fm6_pgen: the voice rereads it), the automation; then every
+ * track from its step 1 together, scene_carry samples into it (seq_tick: as a SONG section's chain.carry). Not while
+ * a song plays (chain.running: its sections have the tracks). Armed 2: flipped, the main loop's to finish (tilt.c) */
+typedef struct {
+    int16_t p[NTRK][P_COUNT];
+    uint8_t eng[NTRK], preset[NTRK];
+    step_t step[NTRK][NSTEP];
+    uint8_t fm6[NTRK][FP_SIZE + 1u];
+    motion_store_t motion;
+} scene_stage_t;
+static scene_stage_t scene_stage __attribute__((section(".pool")));
+static volatile uint8_t scene_armed;            /* 0 none, 1 staged (flips at the bar's end), 2 flipped */
+/* (scene_carry: the flip's block, samples past the bar's end; 0 in every other, so PLAY's step 1 is at 0) */
+static void motion_rebase(track_t *t);
+static __attribute__((noinline)) void scene_flip(uint32_t carry)   /* (once a scene, off the ISR's loop) */
+{
+    uint32_t k;
+    for (k = 0; k < NTRK; k++) {
+        track_t *t = &trk[k];
+        seq_release(t);
+        motion_restore(t);
+        memcpy(t->p, scene_stage.p[k], sizeof t->p);
+        t->eng_req = scene_stage.eng[k];
+        t->preset = scene_stage.preset[k];
+        memcpy(t->step, scene_stage.step[k], sizeof t->step);
+        if (memcmp(fm6_patch[k], scene_stage.fm6[k], sizeof fm6_patch[k])) {
+            memcpy(fm6_patch[k], scene_stage.fm6[k], sizeof fm6_patch[k]);
+            fm6_pgen[k]++;
+        }
+        t->seq_idx = (uint16_t)((t->p[P_SLEN] > 0 ? t->p[P_SLEN] : 1) - 1);
+        t->seq_pos = 0x7FFFFFFFu;
+        t->rh_n = t->rskip_n = 0;
+        t->rat_left = 0;
+        t->nd_late = t->nd_early = ND_NONE;
+        t->nd_fired = 0;
+    }
+    motion = scene_stage.motion;
+    for (k = 0; k < NTRK; k++)
+        motion_rebase(&trk[k]);
+    scene_carry = carry;
+    scene_armed = 2;
+}
+static void scene_tick(uint32_t n)
+{
+    uint32_t p;
+    if (scene_armed != 1u || !song.playing || chain.running || clk_pos == CLK_START || clk_step != 15u)
+        return;
+    p = div_samples(2);
+    if (clk_pos + n >= p)
+        scene_flip(clk_pos + n - p);
+}
+
 /* everything that happens between two rendered blocks */
 static void events_block(uint32_t n)
 {
@@ -1398,9 +1456,11 @@ static void events_block(uint32_t n)
     }
     if (aud_req)
         seq_audition();                               /* (STEP PREVIEW: a step sounds, stopped) */
+    scene_tick(seq_n);                                /* (TILT-FM: a scene cued: its flip at the bar's end) */
     chain_tick(seq_n);
     for (i = 0; i < NTRK; i++)
         seq_tick(&trk[i], seq_n);
+    scene_carry = 0;
     if (cin_flush)
         cin_record();
     if (song.playing)
