@@ -9,8 +9,11 @@
  *   G3 STUCK     the selected track: COOK if it holds something (a NOTE step, a drum hit), else RANDOM: the SEQ TOOLS
  *                actions themselves (ui_tools.c), in the track's scale (ROOT, SCL), one undo each
  *   A3 TIMER     (below)
- *   C4..F4       SCENE A..D (below, project.c): the music goes to that scene, the one it leaves stored first */
-enum { TT_NEW, TT_STUCK, TT_TIMER, TT_SCENE = 4, TT_N = TT_SCENE + 4 };   /* the white keys from F3 (key_place) */
+ *   C4..F4       SCENE A..D (below, project.c): the music goes to that scene, the one it leaves stored first
+ *   G4 NEXT      NEXT SCENE: the scene now copied to the next empty one, and the music goes there
+ *   A4 ADD       ADD TO SONG: a SONG section at the end, the four tracks on the scene now, x1 */
+enum { TT_NEW, TT_STUCK, TT_TIMER, TT_SCENE = 4, TT_NEXT = TT_SCENE + 4, TT_ADD, TT_N };   /* the white keys from F3
+                                                         * (key_place) */
 static uint8_t tilt_timer_min;                          /* the TIMER: 0 off, else its minutes */
 
 /* the selected track holds something to cook (as tl_do counts it) */
@@ -807,6 +810,73 @@ static void tilt_scene_go(uint32_t s, int drop)
     }
     ui.force = 1;
 }
+/* G4 NEXT SCENE: the scene now (edited: stored as it is, as leaving it stores it) copied to the next empty one after
+ * it (round; in no scene: the first empty one), and the music is there: SCENE C, COPY OF B. None empty: SCENES FULL.
+ * Stopped (a store's flash) */
+static void tilt_scene_next(void)
+{
+    uint32_t cur = scene_cur(), s = 0, i;
+    char b[24] = "SCENE A";
+    if (transport_busy()) {
+        ui_message("STOP TO COPY SCENE");
+        return;
+    }
+    for (i = 1; i <= 4u; i++)
+        if (!project_used(s = (cur == SCENE_NONE ? i - 1u : cur + i) & 3u))
+            break;
+    if (i > 4u) {
+        ui_message("SCENES FULL");
+        return;
+    }
+    if (cur != SCENE_NONE && scene_edited() && project_save_as(cur, 0))   /* (it said why) */
+        return;
+    if (project_save_as(s, 0))                          /* the copy: the music as it is, its baseline, its scene */
+        return;
+    tilt_start_pending = 0;
+    autosave_now();
+    b[6] = (char)('A' + s);
+    ui_message(b);
+    if (cur != SCENE_NONE) {
+        str_cpy(b, "COPY OF A", sizeof b);
+        b[8] = (char)('A' + cur);
+        str_cpy(ui.msg2, b, sizeof ui.msg2);
+    }
+    ui.force = 1;
+}
+/* A4 ADD TO SONG: a SONG section at the end with the four tracks on the scene now, x1 (core.h chain_row_t; the SONG
+ * page edits it as any): ADDED: SECTION 3. The song plays a scene as stored: one edited (or never stored) is stored
+ * first, stopped (playing: STOP TO STORE SCENE, nothing added). In no scene: NO SCENE TO ADD; sixteen sections:
+ * SONG FULL; a song playing: STOP TO EDIT, as the SONG page */
+static void tilt_scene_add(void)
+{
+    uint32_t cur = scene_cur();
+    char b[24] = "ADDED: SECTION ";
+    if (chain_busy()) {
+        ui_message("STOP TO EDIT");
+        return;
+    }
+    if (cur == SCENE_NONE) {
+        ui_message("NO SCENE TO ADD");
+        return;
+    }
+    if (chain_config.count >= CHAIN_ROWS) {
+        ui_message("SONG FULL");
+        return;
+    }
+    if (scene_edited() || !project_used(cur)) {
+        if (transport_busy()) {
+            ui_message("STOP TO STORE SCENE");
+            return;
+        }
+        if (project_save_as(cur, 0))
+            return;
+    }
+    chain_config.row[chain_config.count] = chain_row_of(cur, 1);
+    chain_config.count++;
+    fmt_int(b + str_len(b), chain_config.count);
+    ui_message(b);
+    ui.force = 1;
+}
 /* the settings follow the scene the music is in (ui.c PREF_SCENE; deferred while playing, as every settings write).
  * Not while the start screen shows: the one remembered is CONTINUE's to restore */
 static void tilt_scene_poll(void)
@@ -824,6 +894,10 @@ static void tilt_key(uint32_t k, uint32_t p)
         return;
     if (p >= TT_SCENE && p < TT_SCENE + 4u)
         tilt_scene_go(p - TT_SCENE, 0);
+    else if (p == TT_NEXT)
+        tilt_scene_next();
+    else if (p == TT_ADD)
+        tilt_scene_add();
     else if (p == TT_NEW)
         tilt_ns_show();
     else if (p == TT_STUCK)
@@ -837,9 +911,19 @@ static void tilt_knob(uint32_t k, int32_t s)            /* KNOB 1: the TIMER */
         tilt_timer_set(TM_STEPS[(uint32_t)clamp((int32_t)tm_step_of(tilt_timer_min) + (s > 0 ? 1 : -1), 0,
                                                 (int32_t)sizeof TM_STEPS - 1)]);
 }
+static int tilt_free(void)                              /* an empty scene for NEXT (the strip's, graph_project_used) */
+{
+    uint32_t s;
+    for (s = 0; s < 4u; s++)
+        if (!graph_project_used(s))
+            return 1;
+    return 0;
+}
+static int tilt_addable(void) { return scene_cur() != SCENE_NONE && chain_config.count < CHAIN_ROWS && !chain_busy(); }
 static uint32_t tilt_can(uint32_t k, uint32_t p)
 {
-    return !key_black(k) && (((p == TT_NEW || p == TT_STUCK) && !chain_busy()) || p == TT_TIMER);
+    return !key_black(k) && (((p == TT_NEW || p == TT_STUCK) && !chain_busy()) || p == TT_TIMER ||
+                             (p == TT_NEXT && tilt_free()) || (p == TT_ADD && tilt_addable()));
 }
 static uint32_t tilt_on(uint32_t k, uint32_t p)
 {
@@ -857,7 +941,7 @@ static uint32_t tilt_mid(void)
 }
 static uint32_t tilt_scenes_sig(void)                   /* (the strip: which are stored, the one now, edited) */
 {
-    uint32_t s, h = scene_cur() * 3u + (uint32_t)scene_edited() * 5u;
+    uint32_t s, h = scene_cur() * 3u + (uint32_t)scene_edited() * 5u + chain_config.count * 11u;
     for (s = 0; s < 4u; s++)
         h = h * 7u + (uint32_t)graph_project_used(s);
     return h;
@@ -880,8 +964,8 @@ static void tilt_cards(void)
 }
 
 /* the map: on top the song's four scenes, the keys C4..F4 (the one now THEME, NOW, EDIT edited since; a stored one
- * raised, USED; an empty one dim, FREE), then F3 NEW SONG, G3 STUCK, A3 TIMER, and what STUCK will do to the selected
- * track */
+ * raised, USED; an empty one dim, FREE), then F3 NEW SONG, G3 STUCK, A3 TIMER; G4 NEXT, A4 ADD (dim when they cannot:
+ * no scene free; no scene, the song full or playing) and what STUCK will do to the selected track */
 #define TS_Y 4                                          /* the scenes' row */
 #define TS_H 36
 #define TK_Y (TS_Y + TS_H + 4)                          /* F3 G3 A3 */
@@ -909,6 +993,11 @@ static void layer_tilt(void)
     lcell(LC_X(TT_STUCK), TK_Y, TK_H, n, ICON_PROB, 0, "STUCK", st, 0);
     n[0] = 'A';
     lcell(LC_X(TT_TIMER), TK_Y, TK_H, n, ICON_TIME, 0, "TIMER", tilt_timer_min ? LS_SEL : LS_OFF, 0);
+    n[0] = 'G';
+    n[1] = '4';
+    lcell(LC_X(0), TL_Y, TK_H, n, ICON_X_PATTERN, 0, "NEXT", tilt_free() ? LS_OFF : LS_DIM, 0);
+    n[0] = 'A';
+    lcell(LC_X(1), TL_Y, TK_H, n, ICON_ORDER, 0, "ADD", tilt_addable() ? LS_OFF : LS_DIM, 0);
     b[0] = 'T';
     b[1] = (char)('1' + song.sel);
     str_cpy(b + 2, chain_busy() ? ": STOP TO EDIT" : tilt_used(TSEL) ? ": COOK IT" : ": RANDOM", sizeof b - 2);
