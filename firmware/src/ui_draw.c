@@ -1380,8 +1380,8 @@ static void draw_splash(void)
             lcd_fill(x, y + 1u, SPL_DOT, SPL_DOT - 2u, c);
         }
     }
-    draw_text_line(0, 176, 240, &AF_M, "TILT-FM / Felucca " FELUCCA_VERSION, SPL_AMBER_MID, 0, 1);
-    draw_text_line(0, 196, 240, &AF_M, "H\xFCgelton Instruments", SPL_AMBER_MID, 0, 1);
+    draw_text_line(0, 176, 240, &AF_S, "TILT-FM " TILT_VERSION " / Felucca " FELUCCA_VERSION, SPL_AMBER_MID, 0, 1);
+    draw_text_line(0, 196, 240, &AF_S, "H\xFCgelton Instruments", SPL_AMBER_MID, 0, 1);
     lcd_sync();
 }
 

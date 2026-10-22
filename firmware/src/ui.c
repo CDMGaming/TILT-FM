@@ -424,6 +424,11 @@ enum { LAYER_NONE, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ, LAYER_
  * 2 TIME) name_on() is true (the keys silent, no layer, OCT- / OCT+ its own, the menu closes it), and the input, the
  * drawing and the key LEDs are its */
 static uint8_t tilt_ns_open;
+/* TILT-FM's own version (tools/build.py --release checks it); FELUCCA_VERSION stays the Felucca it is built on (the
+ * web editor and the console still see that one) */
+#ifndef TILT_VERSION
+#define TILT_VERSION "0.1.0"
+#endif
 #define TILT_START 3u                                   /* (tilt_ns_open: the start screen, tilt.c) */
 /* TILT-FM: the start screen's NEW SONG or LOAD chosen, nothing changed since: a project loaded, a NEW SONG started are
  * the choice, not an edit (the autosave's baseline follows them: tilt.c, ui_input.c); the first change clears it

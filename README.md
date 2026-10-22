@@ -6,6 +6,12 @@ role-aware sounds, HOLD and NUDGE, START), STUCK (RANDOM or COOK on the current 
 a timed take, and the amber TILT look. Like Felucca it is GPL-3.0-only; everything below is Felucca's own README,
 unchanged. Changes: `git log` from `86655d0` on the `tilt` branch; flashing: [docs/tilt/FLASHING-CHECKLIST.md](docs/tilt/FLASHING-CHECKLIST.md).
 
+TILT-FM's identity is **FM-1_984** (its own: Felucca's is FM-1_900, its releases FM-1_9XY), and every build has it. A
+release: set `TILT_VERSION` in `firmware/src/ui.c`, then `./build.sh --release X.Y.Z`; `build/release-X.Y.Z/` holds
+`tilt-fm-X.Y.Z.fwsc`, the app, `SHA256SUMS` and the licences. The build itself is Felucca's: see
+[BUILDING.md](BUILDING.md). It keeps Felucca's update loader, so it can be left again to any firmware or to the
+official V15.
+
 ---
 
 # Felucca

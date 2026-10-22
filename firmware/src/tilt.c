@@ -931,7 +931,7 @@ static void st_word(void)
             lcd_fill(x, y + 1u, ST_DOT, ST_DOT - 2u, c);
         }
     }
-    draw_text_line(0, ST_WY + 7u * ST_PITCH + 10u, 240, &AF_S, "TILT-FM / Felucca " FELUCCA_VERSION, T_MID, T_BG, 1);
+    draw_text_line(0, ST_WY + 7u * ST_PITCH + 10u, 240, &AF_S, "TILT-FM " TILT_VERSION " / Felucca " FELUCCA_VERSION, T_MID, T_BG, 1);
 }
 static void st_pointer(int32_t x, int32_t y, int right, uint16_t c)   /* a 4 x 7 triangle, its base column at x: */
 {                                                                      /* right, pointing right (its point x + 3) */
