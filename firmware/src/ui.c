@@ -434,7 +434,7 @@ static uint8_t tilt_ns_open;
 /* TILT-FM's own version (tools/build.py --release checks it); FELUCCA_VERSION stays the Felucca it is built on (the
  * web editor and the console still see that one) */
 #ifndef TILT_VERSION
-#define TILT_VERSION "0.2.0"
+#define TILT_VERSION "0.2.1"
 #endif
 #define TILT_START 3u                                   /* (tilt_ns_open: the start screen, tilt.c) */
 /* TILT-FM: the start screen's NEW SONG or LOAD chosen, nothing changed since: a project loaded, a NEW SONG started are
