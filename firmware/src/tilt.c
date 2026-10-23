@@ -9,13 +9,8 @@
  *   G3 STUCK     the selected track: COOK if it holds something (a NOTE step, a drum hit), else RANDOM: the SEQ TOOLS
  *                actions themselves (ui_tools.c), in the track's scale (ROOT, SCL), one undo each
  *   A3 TIMER     (below)
- *   B3 SOUNDS    the SONG's sounds: SCENE (each section's scene's own) or CURRENT (as they are: Felucca's), a setting
- *                (song_chain.c chain_snd); not while a song plays
- *   C4..F4       SCENE A..D (below, project.c): the music goes to that scene, the one it leaves stored first
- *   G4 NEXT      NEXT SCENE: the scene now copied to the next empty one, and the music goes there
- *   A4 ADD       ADD TO SONG: a SONG section at the end, the four tracks on the scene now, x1 */
-enum { TT_NEW, TT_STUCK, TT_TIMER, TT_SOUNDS, TT_SCENE = 4, TT_NEXT = TT_SCENE + 4, TT_ADD, TT_N };   /* the white keys from F3
-                                                         * (key_place) */
+ * The song's scenes have a layer of their own, ARP held (SCENE LAYER, below) */
+enum { TT_NEW, TT_STUCK, TT_TIMER, TT_N };              /* the white keys from F3 (key_place) */
 static uint8_t tilt_timer_min;                          /* the TIMER: 0 off, else its minutes */
 
 /* the selected track holds something to cook (as tl_do counts it) */
@@ -851,40 +846,7 @@ static void tilt_scene_go(uint32_t s, int drop)
     }
     ui.force = 1;
 }
-/* G4 NEXT SCENE: the scene now (edited: stored as it is, as leaving it stores it) copied to the next empty one after
- * it (round; in no scene: the first empty one), and the music is there: SCENE C, COPY OF B. None empty: SCENES FULL.
- * Stopped (a store's flash) */
-static void tilt_scene_next(void)
-{
-    uint32_t cur = scene_cur(), s = 0, i;
-    char b[24] = "SCENE A";
-    if (transport_busy()) {
-        ui_message("STOP TO COPY SCENE");
-        return;
-    }
-    for (i = 1; i <= 4u; i++)
-        if (!project_used(s = (cur == SCENE_NONE ? i - 1u : cur + i) & 3u))
-            break;
-    if (i > 4u) {
-        ui_message("SCENES FULL");
-        return;
-    }
-    if (cur != SCENE_NONE && scene_edited() && project_save_as(cur, 0))   /* (it said why) */
-        return;
-    if (project_save_as(s, 0))                          /* the copy: the music as it is, its baseline, its scene */
-        return;
-    tilt_start_pending = 0;
-    autosave_now();
-    b[6] = (char)('A' + s);
-    ui_message(b);
-    if (cur != SCENE_NONE) {
-        str_cpy(b, "COPY OF A", sizeof b);
-        b[8] = (char)('A' + cur);
-        str_cpy(ui.msg2, b, sizeof ui.msg2);
-    }
-    ui.force = 1;
-}
-/* A4 ADD TO SONG: a SONG section at the end with the four tracks on the scene now, x1 (core.h chain_row_t; the SONG
+/* G4 (the SCENE layer) ADD TO SONG: a SONG section at the end with the four tracks on the scene now, x1 (core.h chain_row_t; the SONG
  * page edits it as any): ADDED: SECTION 3. The song plays a scene as stored: one edited (or never stored) is stored
  * first, stopped (playing: STOP TO STORE SCENE, nothing added). In no scene: NO SCENE TO ADD; sixteen sections:
  * SONG FULL; a song playing: STOP TO EDIT, as the SONG page */
@@ -953,10 +915,12 @@ static void tilt_scene_follow(void)
     if (!transport_busy())
         scene_flush();
 }
+static void scene_keys_poll(void);
 static void tilt_scene_poll(void)
 {
     uint32_t v = scene_cur() < 4u ? scene_cur() + 1u : 0u;
     tilt_scene_follow();
+    scene_keys_poll();
     if (tilt_ns_open == TILT_START || ((ui_prefs3 >> PREF_SCENE_SH) & 7u) == v)
         return;
     ui_prefs3 = (uint8_t)((ui_prefs3 & ~(7u << PREF_SCENE_SH)) | v << PREF_SCENE_SH);
@@ -967,19 +931,7 @@ static void tilt_key(uint32_t k, uint32_t p)
 {
     if (key_black(k))
         return;
-    if (p == TT_SOUNDS && chain_busy()) {
-        ui_message("STOP TO EDIT");
-    } else if (p == TT_SOUNDS) {
-        ui_prefs3 ^= PREF_SONG_SCENE;
-        settings_save();
-        ui_message(ui_prefs3 & PREF_SONG_SCENE ? "SONG SOUNDS: SCENE" : "SONG SOUNDS: CURRENT");
-    } else if (p >= TT_SCENE && p < TT_SCENE + 4u)
-        tilt_scene_go(p - TT_SCENE, 0);
-    else if (p == TT_NEXT)
-        tilt_scene_next();
-    else if (p == TT_ADD)
-        tilt_scene_add();
-    else if (p == TT_NEW)
+    if (p == TT_NEW)
         tilt_ns_show();
     else if (p == TT_STUCK)
         tilt_stuck();
@@ -992,49 +944,15 @@ static void tilt_knob(uint32_t k, int32_t s)            /* KNOB 1: the TIMER */
         tilt_timer_set(TM_STEPS[(uint32_t)clamp((int32_t)tm_step_of(tilt_timer_min) + (s > 0 ? 1 : -1), 0,
                                                 (int32_t)sizeof TM_STEPS - 1)]);
 }
-static int tilt_free(void)                              /* an empty scene for NEXT (the strip's, graph_project_used) */
+static uint32_t tilt_can(uint32_t k, uint32_t p)
 {
-    uint32_t s;
-    for (s = 0; s < 4u; s++)
-        if (!graph_project_used(s))
-            return 1;
-    return 0;
+    return !key_black(k) && (((p == TT_NEW || p == TT_STUCK) && !chain_busy()) || p == TT_TIMER);
 }
-static int tilt_addable(void) { return scene_cur() != SCENE_NONE && chain_config.count < CHAIN_ROWS && !chain_busy(); }
-static uint32_t tilt_can(uint32_t k, uint32_t p)       /* (C4..F4: only the cued one breathes) */
-{
-    return !key_black(k) && (((p == TT_NEW || p == TT_STUCK || p == TT_SOUNDS) && !chain_busy()) || p == TT_TIMER ||
-                             (p == TT_NEXT && tilt_free()) || (p == TT_ADD && tilt_addable()) ||
-                             (p >= TT_SCENE && p < TT_SCENE + 4u && p - TT_SCENE == tsc.cue));
-}
-static uint32_t tilt_on(uint32_t k, uint32_t p)
-{
-    return !key_black(k) && ((p == TT_TIMER && tilt_timer_min) || (p == TT_SOUNDS && (ui_prefs3 & PREF_SONG_SCENE)) || (p >= TT_SCENE && p < TT_SCENE + 4u && p - TT_SCENE == scene_cur()));
-}
-/* the keys at the mid level: the stored scenes (not the one now: lit) */
-static uint32_t tilt_mid(void)
-{
-    uint32_t k, m = 0, p;
-    for (k = 0; k < 27u; k++)
-        if (!key_black(k) && (p = key_place(k)) >= TT_SCENE && p < TT_SCENE + 4u && p - TT_SCENE != scene_cur() &&
-            p - TT_SCENE != tsc.cue && graph_project_used(p - TT_SCENE))
-            m |= 1u << k;
-    return m;
-}
-static uint32_t tilt_scenes_sig(void)                   /* (the strip: which are stored, the one now, edited) */
-{
-    uint32_t s, h = scene_cur() * 3u + (uint32_t)scene_edited() * 5u + chain_config.count * 11u + tsc.cue * 13u;
-    for (s = 0; s < 4u; s++)
-        h = h * 7u + (uint32_t)graph_project_used(s);
-    return h;
-}
+static uint32_t tilt_on(uint32_t k, uint32_t p) { return !key_black(k) && p == TT_TIMER && tilt_timer_min; }
 static uint32_t tilt_sig(void)
 {
-    return (tilt_used(TSEL) != 0u) * 31u + (uint32_t)chain_busy() * 3u + song.sel * 977u + tilt_timer_min * 7919u +
-           (ui_prefs3 & PREF_SONG_SCENE) * 17u +
-           tilt_scenes_sig() * 104729u;
+    return (tilt_used(TSEL) != 0u) * 31u + (uint32_t)chain_busy() * 3u + song.sel * 977u + tilt_timer_min * 7919u;
 }
-
 static void tilt_cards(void)
 {
     char v[4];
@@ -1045,51 +963,232 @@ static void tilt_cards(void)
     for (c = 1; c < 4u; c++)
         draw_column(c, "", "", "", T_THEME, -1, ICON_NONE);
 }
-
-/* the map: on top the song's four scenes, the keys C4..F4 (the one now THEME, NOW, EDIT edited since; the cued one
- * ACCENT, NEXT; a stored one raised, USED; an empty one dim, FREE), then F3 NEW SONG, G3 STUCK, A3 TIMER; G4 NEXT, A4 ADD (dim when they cannot:
- * no scene free; no scene, the song full or playing) and what STUCK will do to the selected track */
-#define TS_Y 4                                          /* the scenes' row */
-#define TS_H 36
-#define TK_Y (TS_Y + TS_H + 4)                          /* F3 G3 A3 */
-#define TK_H 34
-#define TL_Y (TK_Y + TK_H + 4)                          /* the STUCK line's row */
+/* the map: F3 NEW SONG, G3 STUCK, A3 TIMER, and under them what STUCK will do to the selected track */
 static void layer_tilt(void)
 {
-    uint32_t st = chain_busy() ? LS_DIM : LS_OFF, s, cur = scene_cur();
+    uint32_t st = chain_busy() ? LS_DIM : LS_OFF;
     char n[3] = {'F', '3', 0}, b[24];
     uint16_t ink, fill;
-    for (s = 0; s < 4u; s++) {                          /* C4 D4 E4 F4: the scenes A B C D */
-        static const char NOTE[4] = {'C', 'D', 'E', 'F'};
-        uint32_t used = (uint32_t)graph_project_used(s), now = s == cur, next = s == tsc.cue, idle;
-        char l[2] = {(char)('A' + s), 0}, kn[3] = {NOTE[s], '4', 0};
-        fill = lc_box(LC_X(s), TS_Y, LC_W, TS_H, lc_fill(now ? LS_SEL : next ? LS_HELD : used ? LS_OFF : LS_DIM, &ink));
-        idle = !now && !next;
-        cv_text_on(LC_X(s) + 5, TS_Y + 3, &AF_S, kn, idle ? T_MID : ink, fill);
-        cv_text_on(LC_X(s) + 6, TS_Y + TS_H - 4 - AF_M_CAP_H - AF_M_CAP_Y, &AF_M, l, ink, fill);
-        cv_text_r(LC_X(s) + LC_W - 5, TS_Y + TS_H - 4 - AF_S_CAP_H - AF_S_CAP_Y, &AF_S,
-                  now ? (scene_edited() ? "EDIT" : "NOW") : next ? "NEXT" : used ? "USED" : "FREE",
-                  ink, fill);
-    }
-    lcell(LC_X(TT_NEW), TK_Y, TK_H, n, ICON_STEPS, 0, "NEW", st, 0);   /* (NEW SONG: wider than a cell) */
+    lcell(LC_X(TT_NEW), 4, LC_H, n, ICON_STEPS, 0, "NEW", st, 0);   /* (NEW SONG: wider than a cell) */
     n[0] = 'G';
-    lcell(LC_X(TT_STUCK), TK_Y, TK_H, n, ICON_PROB, 0, "STUCK", st, 0);
+    lcell(LC_X(TT_STUCK), 4, LC_H, n, ICON_PROB, 0, "STUCK", st, 0);
     n[0] = 'A';
-    lcell(LC_X(TT_TIMER), TK_Y, TK_H, n, ICON_TIME, 0, "TIMER", tilt_timer_min ? LS_SEL : LS_OFF, 0);
-    n[0] = 'B';                                         /* B3: the SONG's sounds, SCENE lit */
-    lcell(LC_X(TT_SOUNDS), TK_Y, TK_H, n, ICON_VOICE, 0, ui_prefs3 & PREF_SONG_SCENE ? "SCENE" : "CURRENT",
-          chain_busy() ? LS_DIM : ui_prefs3 & PREF_SONG_SCENE ? LS_SEL : LS_OFF, 0);
-    n[0] = 'G';
-    n[1] = '4';
-    lcell(LC_X(0), TL_Y, TK_H, n, ICON_X_PATTERN, 0, "NEXT", tilt_free() ? LS_OFF : LS_DIM, 0);
-    n[0] = 'A';
-    lcell(LC_X(1), TL_Y, TK_H, n, ICON_ORDER, 0, "ADD", tilt_addable() ? LS_OFF : LS_DIM, 0);
+    lcell(LC_X(TT_TIMER), 4, LC_H, n, ICON_TIME, 0, "TIMER", tilt_timer_min ? LS_SEL : LS_OFF, 0);
     b[0] = 'T';
     b[1] = (char)('1' + song.sel);
     str_cpy(b + 2, chain_busy() ? ": STOP TO EDIT" : tilt_used(TSEL) ? ": COOK IT" : ": RANDOM", sizeof b - 2);
-    fill = lc_box(LC_X(2), TL_Y, 2 * LC_W + 4, TK_H, lc_fill(st, &ink));
-    GFX_HOOK_ALIGN(LC_X(2), TL_Y, LC_X(2) + 2 * LC_W + 4, TL_Y + TK_H, AL_HV, "tilt layer stuck line centred");
-    cv_text_in(LC_X(2), TL_Y + CAP_IN(S, TK_H), 2 * LC_W + 4, &AF_S, b, ink, fill);
+    fill = lc_box(6, 100, 228, 18, lc_fill(st, &ink));
+    GFX_HOOK_ALIGN(6, 100, 234, 118, AL_HV, "tilt layer stuck line centred");
+    cv_text_in(6, 100 + CAP_IN(S, 18), 228, &AF_S, b, ink, fill);
+}
+
+/* ------------------------------------------------------- SCENE LAYER --- */
+/* ARP held (its tap is still ARP's pages; a double tap locks it), a SET layer of the song's scenes:
+ *   C4..F4         a tap: go to scene A..D (tilt_scene_go: stopped at once, playing at the bar's end). It goes when the
+ *                  key is let go, if nothing else was done with it held:
+ *   hold + C4..F4  the held scene copied into the pressed one (the held one the scene now: its live state, stored
+ *                  first); a used one: OVERWRITE C? first (CF_SCENE_OVR, NO picked); "A > C COPIED"
+ *   hold + OCT-    the held scene cleared: CLEAR C? (USED IN SONG when a section plays it; CF_SCENE_CLR, NO picked);
+ *                  the scene now: GO TO ANOTHER SCENE (as a copy into it)
+ *   G4             ADD TO SONG (tilt_scene_add)
+ *   OCT- alone     the last copy or clear undone (one level: project.c scene_undo)
+ * A copy, a clear and its undo write flash: stopped only. The map: SCENES C4-F4 over the four boxes, each its key and
+ * letter (the scene now THEME, a dot after the letter when edited; a stored one outlined; an empty one dim, dashed; the
+ * cued one blinking), G4 ADD under them. LEDs: the scene now lit, a stored one at the mid level, the cued one
+ * breathing, an empty one dark; G4 breathes when it can add */
+#define SK_SCENE 4u                                     /* C4: the white key place of scene A */
+#define SK_ADD 8u                                       /* G4 */
+static struct { uint8_t held, k, used; } skh = {SCENE_NONE, 0, 0};
+static void scene_copy_ui(uint32_t src, uint32_t dst, int sure)
+{
+    char b[24] = "A > C COPIED";
+    src &= 3u;
+    dst &= 3u;
+    if (transport_busy()) {
+        ui_message("STOP TO COPY SCENE");
+        return;
+    }
+    if (dst == scene_cur()) {
+        ui_message("GO TO ANOTHER SCENE");
+        return;
+    }
+    if (src == scene_cur() && (scene_edited() || !project_used(src)) && project_save_as(src, 0))
+        return;                                         /* (its live state first; it said why not) */
+    if (!project_used(src)) {
+        str_cpy(b, "A IS EMPTY", sizeof b);
+        b[0] = (char)('A' + src);
+        ui_message(b);
+        return;
+    }
+    if (project_used(dst) && !sure) {
+        confirm_open(CF_SCENE_OVR, src << 2 | dst);
+        return;
+    }
+    if (scene_copy(src, dst))
+        return;
+    b[0] = (char)('A' + src);
+    b[4] = (char)('A' + dst);
+    ui_message(b);
+    ui.force = 1;
+}
+static int scene_in_song(uint32_t s)                    /* a SONG section plays scene s on some track */
+{
+    uint32_t r, k;
+    for (r = 0; r < chain_config.count && r < CHAIN_ROWS; r++)
+        for (k = 0; k < NTRK; k++)
+            if (chain_config.row[r].slot[k] == s)
+                return 1;
+    return 0;
+}
+static void scene_clear_ui(uint32_t s, int sure)
+{
+    char b[24] = "A CLEARED";
+    s &= 3u;
+    b[0] = (char)('A' + s);
+    if (transport_busy()) {
+        ui_message("STOP TO CLEAR SCENE");
+    } else if (s == scene_cur()) {
+        ui_message("GO TO ANOTHER SCENE");
+    } else if (!project_used(s)) {
+        str_cpy(b + 1, " IS EMPTY", sizeof b - 1);
+        ui_message(b);
+    } else if (!sure) {
+        confirm_open(CF_SCENE_CLR, s);
+    } else if (!scene_clear(s)) {
+        ui_message(b);
+        ui.force = 1;
+    }
+}
+static void scene_undo_ui(void)
+{
+    uint32_t s = scene_undo_slot();
+    char b[24] = "A PUT BACK";
+    if (transport_busy()) {
+        ui_message("STOP TO UNDO");
+    } else if (s == SCENE_NONE) {
+        ui_message("NOTHING TO UNDO");
+    } else if (s == scene_cur()) {
+        ui_message("GO TO ANOTHER SCENE");
+    } else if (!scene_undo()) {
+        b[0] = (char)('A' + s);
+        ui_message(b);
+        ui.force = 1;
+    }
+}
+static void scene_key(uint32_t k, uint32_t p)
+{
+    if (key_black(k))
+        return;
+    if (p == SK_ADD) {
+        tilt_scene_add();
+        return;
+    }
+    if (p < SK_SCENE || p >= SK_SCENE + 4u)
+        return;
+    p -= SK_SCENE;
+    if (skh.held != SCENE_NONE && skh.held != p && ((fm1_in.notes >> skh.k) & 1u)) {
+        skh.used = 1;                                   /* hold + another: copy */
+        scene_copy_ui(skh.held, p, 0);
+        return;
+    }
+    skh.held = (uint8_t)p;
+    skh.k = (uint8_t)k;
+    skh.used = 0;
+}
+/* the layer's OCT- (ui_layer.c layer_oct): a scene key held, clear it; alone, undo */
+static void scene_oct(void)
+{
+    if (skh.held != SCENE_NONE && ((fm1_in.notes >> skh.k) & 1u)) {
+        skh.used = 1;
+        scene_clear_ui(skh.held, 0);
+    } else {
+        scene_undo_ui();
+    }
+}
+/* each pass (tilt_scene_poll): the scene key held let go, nothing else done with it: go there */
+static void scene_keys_poll(void)
+{
+    if (skh.held == SCENE_NONE || ((fm1_in.notes >> skh.k) & 1u))
+        return;
+    if (!skh.used && !ui.confirm)
+        tilt_scene_go(skh.held, 0);
+    skh.held = SCENE_NONE;
+}
+static int tilt_addable(void) { return scene_cur() != SCENE_NONE && chain_config.count < CHAIN_ROWS && !chain_busy(); }
+static uint32_t scene_can(uint32_t k, uint32_t p)       /* (breathing: the cued scene, G4 when it can add) */
+{
+    return !key_black(k) && ((p == SK_ADD && tilt_addable()) || (p >= SK_SCENE && p < SK_SCENE + 4u && p - SK_SCENE == tsc.cue));
+}
+static uint32_t scene_on(uint32_t k, uint32_t p)
+{
+    return !key_black(k) && p >= SK_SCENE && p < SK_SCENE + 4u && p - SK_SCENE == scene_cur();
+}
+/* the keys at the mid level: the stored scenes (not the one now, lit, nor the cued one, breathing) */
+static uint32_t tilt_mid(void)
+{
+    uint32_t k, m = 0, p;
+    for (k = 0; k < 27u; k++)
+        if (!key_black(k) && (p = key_place(k)) >= SK_SCENE && p < SK_SCENE + 4u && p - SK_SCENE != scene_cur() &&
+            p - SK_SCENE != tsc.cue && graph_project_used(p - SK_SCENE))
+            m |= 1u << k;
+    return m;
+}
+static uint32_t scene_blink(void) { return tsc.cue != SCENE_NONE && ((ui.frame >> 3) & 1u); }
+static uint32_t scene_sig_ui(void)
+{
+    uint32_t s, h = scene_cur() * 3u + (uint32_t)scene_edited() * 5u + chain_config.count * 11u + tsc.cue * 13u +
+                    scene_blink() * 17u + (uint32_t)chain_busy() * 19u;
+    for (s = 0; s < 4u; s++)
+        h = h * 7u + (uint32_t)graph_project_used(s);
+    return h;
+}
+static void scene_cards(void)
+{
+    uint32_t c;
+    for (c = 0; c < 4u; c++)
+        draw_column(c, "", "", "", T_THEME, -1, ICON_NONE);
+}
+static void scene_dash(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c)   /* a dashed 1 px outline */
+{
+    int32_t i;
+    for (i = 2; i + 3 <= w - 2; i += 6) {
+        cv_rect(x + i, y, 3, 1, c);
+        cv_rect(x + i, y + h - 1, 3, 1, c);
+    }
+    for (i = 2; i + 3 <= h - 2; i += 6) {
+        cv_rect(x, y + i, 1, 3, c);
+        cv_rect(x + w - 1, y + i, 1, 3, c);
+    }
+}
+#define SB_Y 18                                         /* the boxes, under their label */
+#define SB_H 44
+static void layer_scene(void)
+{
+    uint32_t s, cur = scene_cur();
+    char n[3] = {'G', '4', 0};
+    cv_text_on(LC_X(0), 4, &AF_S, "SCENES  C4-F4", T_MID, T_SURF);
+    for (s = 0; s < 4u; s++) {
+        static const char NOTE[4] = {'C', 'D', 'E', 'F'};
+        uint32_t used = (uint32_t)graph_project_used(s), now = s == cur, cued = s == tsc.cue;
+        int32_t x = LC_X(s), lx;
+        char l[2] = {(char)('A' + s), 0}, kn[3] = {NOTE[s], '4', 0};
+        uint16_t fill = T_SURF, ink = used ? T_THEME : T_DIM, key = T_MID;
+        if (now || (cued && scene_blink())) {           /* the scene now, the cued one lit in turn: filled */
+            fill = now ? T_THEME : T_ACCENT;
+            ink = key = now ? T_INK : T_BG;
+            cv_rrect(x, SB_Y, LC_W, SB_H, 4, fill, T_SURF);
+        } else if (used || cued) {                      /* stored (cued, dark in turn): outlined */
+            cv_rrect(x, SB_Y, LC_W, SB_H, 4, cued ? T_ACCENT : T_MID, T_SURF);
+            cv_rrect(x + 1, SB_Y + 1, LC_W - 2, SB_H - 2, 3, T_SURF, cued ? T_ACCENT : T_MID);
+        } else {                                        /* empty: dim, dashed */
+            scene_dash(x, SB_Y, LC_W, SB_H, T_DIM);
+        }
+        cv_text_on(x + 5, SB_Y + 4, &AF_S, kn, key, fill);
+        lx = cv_text_on(x + 6, SB_Y + SB_H - 5 - AF_M_CAP_H - AF_M_CAP_Y, &AF_M, l, ink, fill);
+        if (now && scene_edited())                      /* edited since stored: a dot after the letter */
+            cv_rect(lx + 2, SB_Y + SB_H - 5 - 4, 3, 3, ink);
+    }
+    lcell(LC_X(0), SB_Y + SB_H + 4, 34, n, ICON_ORDER, 0, "ADD", tilt_addable() ? LS_OFF : LS_DIM, 0);
 }
 
 /* -------------------------------------------------------- START SCREEN --- */

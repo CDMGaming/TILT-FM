@@ -3317,13 +3317,13 @@ static int test_layer(void)
             ok &= ui.home;
             btn_up(PB[i]); frame();
             ok &= !ui.home && cur_page()->fam == PF[i];
-            if (PB[i] == B_SCL || PB[i] == B_GLO || PB[i] == B_EDIT || PB[i] == B_ENV)
+            if (PB[i] == B_SCL || PB[i] == B_GLO || PB[i] == B_EDIT || PB[i] == B_ENV || PB[i] == B_ARP)
                 continue;                             /* (a layer of their own: held long is a peek; TILT-FM: ENV's */
-            ui_power_on();                            /* is the TILT layer) */
+            ui_power_on();                            /* is the TILT layer, ARP's the SCENE layer) */
             hold(PB[i]);                              /* (no layer of their own: a long press is a tap too) */
             ok &= !ui.home && cur_page()->fam == PF[i];
         }
-        bad += check("ENV LFO SCL ARP GLO EDIT act when let go, not on press (LFO ARP held long: the same)", ok);
+        bad += check("ENV LFO SCL ARP GLO EDIT act when let go, not on press (LFO held long: the same)", ok);
     }
     ui_power_on();
     go_page(GR_ROLL); my_steps(TSEL); ui.cursor = 0;
@@ -6662,6 +6662,7 @@ static int test_layer_knob_race(void)
                         continue;
                     if (mode == 2u && LB[l] == B_EDIT && pg < NPAGES &&   /* (EDIT's tap acts there: no lock) */
                         (PAGES[pg].graph == GR_USER || PAGES[pg].graph == GR_SLOTS || PAGES[pg].graph == GR_ROLL ||
+                         PAGES[pg].graph == GR_SONG ||        /* (TILT-FM: SONG's EDIT, the SOUNDS) */
                          PAGES[pg].graph == GR_EVENTS))
                         continue;
                     rc_run(LB[l], mode, k, pg, 0, &a0, &b0);
@@ -9959,11 +9960,11 @@ static int test_tilt_scenes(void)
     ok &= scene_cur() == 1u && scene_edited();
     scene_based();
     bad += check("TILT-FM scenes: the settings remember the scene; a restore is in it again, counted as edited", ok);
-    ui.layer = LAYER_TILT;
+    ui.layer = LAYER_SCENE;
     lit = layer_leds(&br);
-    ok = ((lit >> key_at(0, TT_SCENE + 1u)) & 1u) && !((lit >> key_at(0, TT_SCENE)) & 1u) &&
-         ((tilt_mid() >> key_at(0, TT_SCENE)) & 1u) && !((tilt_mid() >> key_at(0, TT_SCENE + 2u)) & 1u) &&
-         !((br >> key_at(0, TT_SCENE)) & 1u);
+    ok = ((lit >> key_at(0, SK_SCENE + 1u)) & 1u) && !((lit >> key_at(0, SK_SCENE)) & 1u) &&
+         ((tilt_mid() >> key_at(0, SK_SCENE)) & 1u) && !((tilt_mid() >> key_at(0, SK_SCENE + 2u)) & 1u) &&
+         !((br >> key_at(0, SK_SCENE)) & 1u);
     ui.layer = 0;
     bad += check("TILT-FM scenes: LEDs: B now lit, A stored at the mid level, C empty dark", ok);
     tilt_scene_go(2, 0);                              /* (C and D stored too: all four full) */
@@ -9985,25 +9986,85 @@ static int test_tilt_scenes(void)
     tilt_scene_go(3, 0);
     ok = ui.confirm == 0u && scene_cur() == 3u;
     bad += check("TILT-FM scenes: in no scene, not edited: no dialog", ok);
-    /* G4 NEXT SCENE, A4 ADD TO SONG */
-    ui_power_on();
-    chain_defaults(&chain_config);
-    st_do(SO_BLANK);
-    sc_note(0, 0, 60);
-    tilt_scene_next();
-    ok = scene_cur() == 1u && project_used(0) && project_used(1) && !scene_edited() && trk[0].step[0].note[0] == 60;
-    ok &= str_eq(ui.msg, "SCENE B") && str_eq(ui.msg2, "COPY OF A");
-    sc_note(0, 1, 62);
-    tilt_scene_next();
-    ok &= scene_cur() == 2u && project_used(2) && trk[0].step[1].note[0] == 62;
-    tilt_scene_go(1, 0);
-    ok &= trk[0].step[1].time == ST_NOTE && trk[0].step[1].note[0] == 62;   /* (B kept its edit: stored on leaving) */
-    bad += check("TILT-FM NEXT SCENE: the scene now copied to the next empty one, the music there; the one left stored", ok);
-    tilt_scene_next();
-    ok = scene_cur() == 3u;
-    tilt_scene_next();
-    ok &= scene_cur() == 3u && str_eq(ui.msg, "SCENES FULL");
-    bad += check("TILT-FM NEXT SCENE: none empty: SCENES FULL", ok);
+    /* the SCENE layer (ARP held): hold + key copies, hold + OCT- clears, OCT- undoes, a tap goes; G4 ADD TO SONG */
+    {
+        uint32_t kA = key_at(0, SK_SCENE), kB = key_at(0, SK_SCENE + 1u), kC = key_at(0, SK_SCENE + 2u);
+        char qa[24], qb[24];
+        ui_power_on();
+        chain_defaults(&chain_config);
+        st_do(SO_BLANK);
+        sc_note(0, 0, 60);
+        fm1_in.notes |= 1u << kA;                     /* hold A, press C: A (the scene now, edited) stored, copied */
+        scene_key(kA, SK_SCENE);
+        scene_key(kC, SK_SCENE + 2u);
+        ok = project_used(0) && project_used(2) && !scene_edited() && str_eq(ui.msg, "A > C COPIED");
+        fm1_in.notes &= ~(1u << kA);
+        scene_keys_poll();
+        ok &= scene_cur() == 0u;                      /* (the held key let go after a copy: no go) */
+        bad += check("TILT-FM SCENE layer: hold A + C: the scene now (edited) stored and copied into the empty C", ok);
+        sc_note(0, 0, 61);                            /* A again, other notes: into C, used */
+        fm1_in.notes |= 1u << kA;
+        scene_key(kA, SK_SCENE);
+        scene_key(kC, SK_SCENE + 2u);
+        ok = ui.confirm == CF_SCENE_OVR;
+        confirm_text(qa, qb);
+        ok &= str_eq(qa, "OVERWRITE C?") && str_eq(qb, "WITH A");
+        ui.confirm = 0;                               /* (OCT-: cancelled) */
+        ok &= proj_import(&proj_scratch, &proj_slot[2], sizeof proj_slot[2]) && proj_scratch.t[0].step[0].note[0] == 60;
+        scene_copy_ui(ui.confirm_trk >> 2, ui.confirm_trk & 3u, 1);   /* (OCT+, as the dialog's) */
+        ok &= proj_import(&proj_scratch, &proj_slot[2], sizeof proj_slot[2]) && proj_scratch.t[0].step[0].note[0] == 61;
+        fm1_in.notes &= ~(1u << kA);
+        scene_keys_poll();
+        bad += check("TILT-FM SCENE layer: into a used one: OVERWRITE C? WITH A first; cancel keeps it, YES copies", ok);
+        fm1_in.notes |= 1u << kC;                     /* into the scene now: refused */
+        scene_key(kC, SK_SCENE + 2u);
+        scene_key(kA, SK_SCENE);
+        ok = str_eq(ui.msg, "GO TO ANOTHER SCENE");
+        scene_oct();                                  /* hold C + OCT-: CLEAR C? (no section plays it) */
+        ok &= ui.confirm == CF_SCENE_CLR;
+        confirm_text(qa, qb);
+        ok &= str_eq(qa, "CLEAR C?") && !qb[0];
+        chain_config.count = 1;
+        chain_config.row[0] = chain_row_of(2, 1);
+        confirm_text(qa, qb);
+        ok &= str_eq(qb, "USED IN SONG");
+        chain_defaults(&chain_config);
+        ui.confirm = 0;
+        scene_clear_ui(2, 1);
+        ok &= !project_used(2) && str_eq(ui.msg, "C CLEARED");
+        fm1_in.notes &= ~(1u << kC);
+        scene_keys_poll();
+        fm1_in.notes |= 1u << kA;
+        scene_key(kA, SK_SCENE);
+        scene_oct();
+        ok &= ui.confirm == 0u && str_eq(ui.msg, "GO TO ANOTHER SCENE") && project_used(0);
+        fm1_in.notes &= ~(1u << kA);
+        scene_keys_poll();
+        bad += check("TILT-FM SCENE layer: hold + OCT-: CLEAR C? (USED IN SONG when a section plays it); the scene now "
+                     "refused, as a copy into it", ok);
+        scene_oct();                                  /* OCT- alone: the clear undone */
+        ok = project_used(2) && str_eq(ui.msg, "C PUT BACK");
+        fm1_in.notes |= 1u << kA;
+        scene_key(kA, SK_SCENE);
+        scene_key(kB, SK_SCENE + 1u);
+        ok &= project_used(1);
+        fm1_in.notes &= ~(1u << kA);
+        scene_keys_poll();
+        scene_oct();
+        ok &= !project_used(1) && str_eq(ui.msg, "B PUT BACK");
+        scene_oct();
+        ok &= str_eq(ui.msg, "NOTHING TO UNDO");
+        bad += check("TILT-FM SCENE layer: OCT- alone undoes the last clear, and the last copy (one level)", ok);
+        scene_key(kC, SK_SCENE + 2u);                 /* a tap: go there when let go */
+        fm1_in.notes |= 1u << kC;
+        scene_keys_poll();
+        ok = scene_cur() == 0u;
+        fm1_in.notes &= ~(1u << kC);
+        scene_keys_poll();
+        ok &= scene_cur() == 2u && trk[0].step[0].note[0] == 61;
+        bad += check("TILT-FM SCENE layer: a tap goes when let go", ok);
+        tilt_scene_go(3, 0);                          /* (D: for ADD TO SONG) */
+    }
     sc_note(0, 2, 65);
     ok = scene_edited();
     tilt_scene_add();
@@ -10239,6 +10300,28 @@ static int test_tilt_song_sounds(void)
     chain_defaults(&chain_config);
     return bad;
 }
+/* TILT-FM: ARP held is the SCENE layer, its tap still ARP's pages; SONG's EDIT turns the SONG's SOUNDS */
+static int test_scene_layer_buttons(void)
+{
+    int bad = 0, ok;
+    uint32_t i;
+    ui_power_on();
+    press(B_ARP);
+    ok = str_eq(cur_page()->title, "ARP") && !ui.layer;
+    bad += check("TILT-FM: an ARP tap still opens ARP's pages", ok);
+    for (i = 0; i < NPAGES && PAGES[i].graph != GR_SONG; i++)
+        ;
+    ui.home = 0;
+    ui.page = (uint8_t)i;
+    ui_prefs3 &= (uint8_t)~PREF_SONG_SCENE;
+    press(B_EDIT);
+    ok = (ui_prefs3 & PREF_SONG_SCENE) && str_eq(ui.msg, "SOUNDS: SCENE") && cur_page()->graph == GR_SONG;
+    press(B_EDIT);
+    ok &= !(ui_prefs3 & PREF_SONG_SCENE) && str_eq(ui.msg, "SOUNDS: CURRENT");
+    bad += check("TILT-FM SONG: EDIT turns SOUNDS SCENE / CURRENT (the page stays)", ok);
+    ui_power_on();
+    return bad;
+}
 static int test_tilt_review(void)
 {
     int bad = 0, ok;
@@ -10448,6 +10531,7 @@ int main(void)
     bad += test_tilt_scenes_live();
     bad += test_tilt_scenes_heard();
     bad += test_tilt_song_sounds();
+    bad += test_scene_layer_buttons();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

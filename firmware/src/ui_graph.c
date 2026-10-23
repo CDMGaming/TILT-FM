@@ -2224,8 +2224,10 @@ static void graph_song(void)
             cv_free_text(SG_X0, ly, fl, "SILENT", T_DIM, T_SURF, x0 - 10 - SG_X0);
         else if (!graph_project_used(s))
             cv_free_text(SG_X0, ly, fl, "NOT SAVED", T_DIM, T_SURF, x0 - 10 - SG_X0);
-        else if (graph_project_name(s)[0])
-            cv_free_text(SG_X0, ly, fl, graph_project_name(s), T_MID, T_SURF, x0 - 10 - SG_X0);
+        else                                           /* (TILT-FM: the SONG's SOUNDS, EDIT turns it) */
+            cv_free_hint(SG_X0, ly + AF_M_CAP_Y + AF_M_CAP_H - AF_S_CAP_Y - AF_S_CAP_H,
+                         ui_prefs3 & PREF_SONG_SCENE ? "[EDIT] SOUNDS: SCENE" : "[EDIT] SOUNDS: CURRENT", T_MID, T_SURF,
+                         x0 - 10 - SG_X0);
     } else {                                           /* + ADD: how */
         for (i = 0; i < 4u && !graph_project_used(i); i++)
             ;

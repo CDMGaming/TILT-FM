@@ -779,7 +779,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_TIMER, S_TIMER_LAST_MIN, S_TIMER_MSG, S_TIMER_LAYER, S_TIMER_OCT, S_TIMER_SONG,
        S_TIME, S_TIME_UNSAVED, S_TIME_KEEP,
        S_START, S_START_BLANK, S_START_NONE, S_START_CRASH,
-       S_TILT_SCENES, S_SCENE_DROP, S_TILT_CUED, S_SCENE_PEND, S_COUNT };
+       S_TILT_SCENES, S_SCENE_DROP, S_TILT_CUED, S_SCENE_PEND, S_SCENE_OVR, S_SCENE_CLR, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -815,7 +815,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "timer", "timer_last_min", "timer_msg", "timer_layer", "timer_oct", "timer_song",
     "time", "time_unsaved", "time_keep",
     "start", "start_blank", "start_none", "start_crash",
-    "tilt_scenes", "scene_drop", "tilt_cued", "scene_pending"};
+    "tilt_scenes", "scene_drop", "tilt_cued", "scene_pending", "scene_overwrite", "scene_clear"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1396,9 +1396,15 @@ static void setup(int s)
         project_save_as(0, "SCENES"); project_save_as(3, "SCENES"); project_save_as(1, "SCENES");
         ui.msg_t = 0; ui.frame++;                     /* (graph_project_used reads the slots again) */
         trk[0].step[5].time = ST_NOTE; trk[0].step[5].n = 1; trk[0].step[5].note[0] = 67;
-        ui.layer = LAYER_TILT;
+        ui.layer = LAYER_SCENE;
         break;
     case S_SCENE_DROP: song.playing = 0; go_home(); ui.confirm = CF_SCENE_DROP; ui.confirm_trk = 2; break;
+    case S_SCENE_OVR: song.playing = 0; go_home(); ui.confirm = CF_SCENE_OVR; ui.confirm_trk = 0u << 2 | 2u; break;
+    case S_SCENE_CLR:
+        song.playing = 0; go_home();
+        chain_config.count = 1; chain_config.row[0] = chain_row_of(2, 1);
+        ui.confirm = CF_SCENE_CLR; ui.confirm_trk = 2;
+        break;
     /* playing: C cued for the bar's end (NEXT), A stored in RAM, not in flash yet (the header's dot); the dot alone */
     case S_TILT_CUED: case S_SCENE_PEND:
         song.playing = 0; go_home();
@@ -1407,7 +1413,7 @@ static void setup(int s)
         ui.msg_t = 0; ui.frame++; ui.force = 1;
         tsc.pend = 1;
         song.playing = 1;
-        if (s == S_TILT_CUED) { tsc.cue = 2; scene_armed = 1; ui.layer = LAYER_TILT; }
+        if (s == S_TILT_CUED) { tsc.cue = 2; scene_armed = 1; ui.layer = LAYER_SCENE; }
         break;
     case S_TILT_LAYER_EMPTY: go_home(); song.sel = 2; track_defaults_steps(TSEL); ui.layer = LAYER_TILT; break;
     case S_NEWSONG: case S_NEWSONG_HELD: case S_NEWSONG_AGAIN:
@@ -2288,7 +2294,7 @@ int main(int argc, char **argv)
     const char *out = argc > 1 ? argv[1] : "build/ui_new";
     char path[600];
     uint32_t p, s;
-    static const char *const SHOW[] = {"GREY", "MONO", "GREEN", "PAPER", "NIGHT"};   /* (NIGHT: #50, to review) */
+    static const char *const SHOW[] = {"GREY", "MONO", "GREEN", "PAPER", "NIGHT", "AMBER"};   /* (NIGHT: #50, to review; TILT-FM: AMBER, its default) */
     snprintf(path, sizeof path, "%s/report.txt", out);
     rep = fopen(path, "w");
     if (!rep) { fprintf(stderr, "cannot write %s\n", path); return 1; }

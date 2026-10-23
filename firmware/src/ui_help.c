@@ -41,7 +41,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"VOICE", "[K1]POLY, MONO[K2]GLIDE"},
     {"VOICE 2", "[K2]DETUNE[K3]PAN[K4]MUTE"},
     {"VOICE 3", "[K1]STEREO SPREAD[EDIT]EDIT 1"},
-    {"SONG", "[K1]SECTION[KEYS]A-D, E: -[PLAY]SONG"},   /* (TILT-FM: E4 "-", silent) */
+    {"SONG", "[KEYS]A-D, E: -[EDIT]SOUNDS"},   /* (TILT-FM: E4 "-", silent; EDIT the SONG's SOUNDS) */
     {"USER", "[K1]SLOT[OCT+]SAVE[SAVE]PRESETS"},
     {"PRESETS", "[K2]ENGINE[K3]FAV[K4]LIST"},
     {"PHRASES", "[K1]PHRASE[OCT+]LOAD[SAVE]PROJECT"},
@@ -62,7 +62,8 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
 static const char *const HELP_LAYER[LAYER_N] = {
     "", "[KEYS]BLACK: MUTES[FX]2 TAPS: LOCK", "[KEYS]SOLO MUTE FILL TAP[K1-4]LEVELS", "[KEYS]ROOT[K1-4]ROOT SCL CHORD",
     "[K1]ENGINE[K2]SOUND[K3]FAV", "[K1]LENGTH[K3]SWING[K4]GATE", "[K1]CLICK[K2]COUNT-IN[K3]LEVEL",
-    "[KEYS]SCENES, SONG[ENV]2 TAPS: LOCK",             /* TILT-FM: the TILT layer (tilt.c) */
+    "[KEYS]SONG, STUCK[ENV]2 TAPS: LOCK",              /* TILT-FM: the TILT layer (tilt.c) */
+    "[HOLD]+OCT-: CLEAR[KEYS]G4: ADD",          /* TILT-FM: the SCENE layer (tilt.c) */
 };
 
 static const char H_EUCLID[] = "[K1]HITS[K2]STEPS[K3]ROTATE";   /* SEQ TOOLS' EUCLID open (1.5.5) */

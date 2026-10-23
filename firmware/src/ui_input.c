@@ -421,7 +421,7 @@ static void ui_leds(void)
     c = key_leds(&br);
     g = !keys_map ? 0u : grid_on() && !ui.layer && !name_on() ? grid_glow() : 0u;   /* (key_leds: the grid's map) */
     beat = g ? grid_beats() & ~c : 0u;                  /* (the grid's empty beat starts: brighter than the glow) */
-    if (ui.layer == LAYER_TILT && !name_on())           /* (TILT-FM: the TILT layer's stored scenes, tilt.c) */
+    if (ui.layer == LAYER_SCENE && !name_on())          /* (TILT-FM: the SCENE layer's stored scenes, tilt.c) */
         beat |= tilt_mid() & ~c & ~br;
     sc = keys_map ? 0u : scale_leds(&sr);               /* SCALE LEDS: the scale's keys glow, the root's brighter */
     for (k = 0; k < 27u; k++) {
@@ -1363,6 +1363,17 @@ static int page_tap(uint32_t b)
         ui_message("STEP CLEARED");
         return 1;
     }
+    if (b == B_EDIT && !ui.home && cur_page()->graph == GR_SONG) {     /* TILT-FM: SONG: EDIT the SONG's SOUNDS */
+        if (chain_busy()) {
+            ui_message("STOP TO EDIT");
+        } else {
+            ui_prefs3 ^= PREF_SONG_SCENE;
+            settings_save();
+            ui_message(ui_prefs3 & PREF_SONG_SCENE ? "SOUNDS: SCENE" : "SOUNDS: CURRENT");
+        }
+        ui.force = 1;
+        return 1;
+    }
     if (b == B_EDIT && !ui.home && cur_page()->graph == GR_EVENTS) {   /* AUTOMATION: EDIT deletes the row's record */
         ev_delete();
         return 1;
@@ -1637,6 +1648,10 @@ static void ui_input(void)
                 (void)project_erase(ui.confirm_trk & 3u);
             } else if (kind == CF_SCENE_DROP) {         /* (TILT-FM: the music in no scene left for scene n: tilt.c) */
                 tilt_scene_go(ui.confirm_trk & 3u, 1);
+            } else if (kind == CF_SCENE_OVR) {          /* (the SCENE layer's copy, its target used) */
+                scene_copy_ui(ui.confirm_trk >> 2, ui.confirm_trk & 3u, 1);
+            } else if (kind == CF_SCENE_CLR) {
+                scene_clear_ui(ui.confirm_trk & 3u, 1);
             } else if (kind == CF_LOAD_PAT) {
                 pat_load_ui(&trk[ui.confirm_trk % NTRK], pat_pick());
                 str_cpy(ui.msg2, "[SAVE] HOLD TO UNDO", sizeof ui.msg2);

@@ -1668,6 +1668,59 @@ static void scene_flush(void)
     tsc.pend = 0;
     autosave_now();
 }
+/* the SCENE layer's copy and clear (tilt.c), stopped: slot s written as SAVE > PROJECT writes it (v: a stored project;
+ * 0: empty, as SAVE > PROJECT ERASE). What was there kept first, for one undo (scene_undo) */
+static struct { uint8_t on, slot; project_store_t s; } scene_ubuf __attribute__((section(".pool")));
+static void scene_fill(uint32_t s)                      /* the RAM slot from flash, when it is not there */
+{
+#if FELUCCA_FLASH
+    if (flash_ok && !proj_import(&proj_scratch, &proj_slot[s & 3u], sizeof(project_store_t))) proj_fetch(s & 3u);
+#else
+    (void)s;
+#endif
+}
+static int scene_slot_write(uint32_t s, const project_store_t *v)
+{
+    s &= 3u;
+#if FELUCCA_FLASH
+    if (flash_ok && st_save(OBJ_PROJECT0 + s, v ? (const void *)v : (const void *)&proj_wire, v ? sizeof *v : 0u)) {
+        ui_message("SAVE ERROR");
+        return 2;
+    }
+#endif
+    if (v)
+        memcpy(&proj_slot[s], v, sizeof proj_slot[s]);
+    else
+        memset(&proj_slot[s], 0, sizeof proj_slot[s]);
+    return 0;
+}
+static void scene_keep(uint32_t s)
+{
+    scene_fill(s);
+    scene_ubuf.s = proj_slot[s & 3u];
+    scene_ubuf.slot = (uint8_t)(s & 3u);
+    scene_ubuf.on = 1;
+}
+static int scene_copy(uint32_t src, uint32_t dst)
+{
+    scene_fill(src);
+    scene_keep(dst);
+    return scene_slot_write(dst, &proj_slot[src & 3u]);
+}
+static int scene_clear(uint32_t s)
+{
+    scene_keep(s);
+    return scene_slot_write(s, 0);
+}
+static uint32_t scene_undo_slot(void) { return scene_ubuf.on ? scene_ubuf.slot : SCENE_NONE; }
+static int scene_undo(void)                             /* 0 put back, 1 none, 2 failed */
+{
+    if (!scene_ubuf.on)
+        return 1;
+    scene_ubuf.on = 0;
+    return scene_slot_write(scene_ubuf.slot,
+                            proj_import(&proj_scratch, &scene_ubuf.s, sizeof scene_ubuf.s) ? &scene_ubuf.s : 0);
+}
 /* an empty scene `slot` becomes the music: the sounds and the mix as they are, no steps, no automation */
 static void scene_blank(uint32_t slot)
 {

@@ -58,6 +58,13 @@ static uint32_t tilt_on(uint32_t k, uint32_t p);
 static void tilt_cards(void);
 static uint32_t tilt_sig(void);
 static void layer_tilt(void);
+static void scene_key(uint32_t k, uint32_t p);          /* TILT-FM: the SCENE layer (ARP held): tilt.c */
+static void scene_oct(void);
+static uint32_t scene_can(uint32_t k, uint32_t p);
+static uint32_t scene_on(uint32_t k, uint32_t p);
+static void scene_cards(void);
+static uint32_t scene_sig_ui(void);
+static void layer_scene(void);
 enum { LK_HOLD, LK_SET };
 typedef struct {
     uint8_t btn, kind, fam;            /* the button, HOLD / SET, the family whose first page KNOB 1..4 edit */
@@ -72,9 +79,10 @@ static const layer_t LAYERS[LAYER_N] = {
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] TOOLS", {{KC_KEYS, "TOOLS"}, {KC_OCTDN, "UNDO"}, {KC_SEQ, "DONE"}}},
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
-    {B_ENV, LK_SET, FAM_HOME, "[ENV] TILT", {{KC_KEYS, "SCENES, START"}, {KC_OCTDN, "UNDO"}, {KC_ENV, "DONE"}}},
+    {B_ENV, LK_SET, FAM_HOME, "[ENV] TILT", {{KC_KEYS, "QUICK START"}, {KC_OCTDN, "UNDO"}, {KC_ENV, "DONE"}}},
+    {B_ARP, LK_SET, FAM_HOME, "[ARP] SCENES", {{KC_KEYS, "GO"}, {KC_HOLD, "COPY"}, {KC_OCTDN, "UNDO"}}},
 };
-static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC, KC_ENV};
+static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC, KC_ENV, KC_ARP};
 /* SCL's knobs: the key and its chord (cur_page() while the layer edits or draws them: page_over) */
 static const page_t LY_SCL = {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_CHRD, P_VOIC}};
 /* SEQ TOOLS' knobs: LEN DIV SWING GATE (the length the tools work in; up to 1.1.5 the PATTERN page's) */
@@ -87,6 +95,15 @@ static const page_t *ly_page(uint32_t l) { return l == LAYER_SCL ? &LY_SCL : l =
 #define LY_CLEAN (LY_INIT + 1u)         /* .. and CLEAN INIT's, the next (1.5.5, #190: F5) */
 typedef char ly_init_fits[LY_CLEAN < 16u ? 1 : -1];   /* (a white key: F3 .. G5) */
 #define layer_seen (favorites.factory[15][31])   /* bit l: layer l opened once (a byte no engine uses) */
+/* (TILT-FM: the SCENE layer, the ninth, past the byte: ui_prefs3's PREF_SCENE_SEEN) */
+static uint32_t ly_seen(uint32_t l) { return l == LAYER_SCENE ? (ui_prefs3 & PREF_SCENE_SEEN) != 0u : (layer_seen >> l) & 1u; }
+static void ly_see(uint32_t l)
+{
+    if (l == LAYER_SCENE)
+        ui_prefs3 |= PREF_SCENE_SEEN;
+    else
+        layer_seen |= (uint8_t)(1u << l);
+}
 static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_K14, "MACROS"}, {KC_OCTDN, "ALL OFF"}};
 static const khint_t FX_KEY_FOOT[3] = {{KC_PRESETS, "ASSIGN"}, {KC_EDIT, "DEFAULT"}, {KC_K14, "MACROS"}};   /* (a key held) */
 static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}, {0, 0}};   /* (locked: PLAY plays, #183) */
@@ -240,8 +257,8 @@ static void layer_lock(uint32_t l, uint32_t now)
 static void layer_opened(uint32_t l)
 {
     uint32_t k;
-    if (!((layer_seen >> l) & 1u)) {
-        layer_seen |= (uint8_t)(1u << l);
+    if (!ly_seen(l)) {
+        ly_see(l);
         settings_save();                                /* (deferred while playing) */
     }
     lys.l = (uint8_t)l;
@@ -336,7 +353,7 @@ static void layer_tap(uint32_t l)
         acted = page_tap(LAYERS[l].btn);
     }
     lys.dt_hint = 0;
-    if (!((layer_seen >> l) & 1u) && ui.msg_t == m && !name_on() && !ui.confirm && !ui.menu) {
+    if (!ly_seen(l) && ui.msg_t == m && !name_on() && !ui.confirm && !ui.menu) {
         ui_say("HOLD [", KC[LY_KC[l]].label);
         str_cpy(ui.msg + str_len(ui.msg), "] QUICK", sizeof ui.msg - str_len(ui.msg));
         ui.msg_t = 90;                                  /* ~1.5 s */
@@ -679,6 +696,8 @@ static void layer_key(uint32_t l, uint32_t k)
             rec_key(p);
     } else if (l == LAYER_TILT) {
         tilt_key(k, p);                                 /* (TILT-FM: tilt.c) */
+    } else if (l == LAYER_SCENE) {
+        scene_key(k, p);
     } else if (l == LAYER_SEQ) {
         if (!key_black(k))
             tools_key(p);
@@ -789,7 +808,9 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
         mine = 0;
     }
     if (mine & 1u) {                                    /* OCT-: back to when it opened */
-        if (lys.l == LAYER_FX) {                        /* (FX LATCH) every effect and macro off */
+        if (lys.l == LAYER_SCENE) {                     /* (TILT-FM: a scene held cleared, else the last undone) */
+            scene_oct();
+        } else if (lys.l == LAYER_FX) {                        /* (FX LATCH) every effect and macro off */
             perf_latched = 0;
             perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
             ui_message("FX ALL OFF");
@@ -878,6 +899,9 @@ static uint32_t layer_leds(uint32_t *br)
         } else if (l == LAYER_TILT) {                   /* (TILT-FM: tilt.c) */
             can = tilt_can(k, p);
             on = tilt_on(k, p);
+        } else if (l == LAYER_SCENE) {
+            can = scene_can(k, p);
+            on = scene_on(k, p);
         } else if (l == LAYER_REC && !b && p < 4u) {    /* a setting on (LEVEL: the click on) lit, the rest breathe; */
             on = p == 1u ? rp_get(RP_CLICK) != 0u : p == 2u ? rp_get(RP_COUNTIN) != 0u :   /* CLEAR: something to */
                  p == 3u && rp_get(RP_CLICK) != 0u;    /* clear, not while a song plays */
@@ -1223,6 +1247,8 @@ static void layer_cards(uint32_t l)
             draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
     } else if (l == LAYER_TILT) {                       /* (TILT-FM: tilt.c) */
         tilt_cards();
+    } else if (l == LAYER_SCENE) {
+        scene_cards();
     } else if (l == LAYER_REC) {                        /* CLICK COUNT-IN LEVEL, an empty card */
         for (c = 0; c < 3u; c++) {
             uint32_t v = rp_get(RL_F[c]);
@@ -1265,6 +1291,8 @@ static void draw_layer(void)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
     else if (l == LAYER_TILT)
         sig += tilt_sig();
+    else if (l == LAYER_SCENE)
+        sig += scene_sig_ui();
     else if (l == LAYER_REC)
         sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)chain_busy() * 3u + (uint32_t)rec_clearable() * 5u + song.sel * 977u;
     else if (l == LAYER_SEQ)
@@ -1290,6 +1318,8 @@ static void draw_layer(void)
             layer_rec();
         else if (l == LAYER_TILT)
             layer_tilt();
+        else if (l == LAYER_SCENE)
+            layer_scene();
         else
             layer_edit();
         cv_blit(0, Y_GRAPH);

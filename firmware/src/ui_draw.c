@@ -396,8 +396,10 @@ static void draw_head(void)
             cv_rect(rx + 2, H_HEAD / 2 - 1, 3, 3, T_ACCENT);
             rx += 5;
         }
-        if (sl[1])                                     /* edited since: the mark, up by the letter's top */
-            rx = cv_text(rx, HEAD_MY, &AF_M, "*", T_MID);
+        if (sl[1]) {                                   /* edited since: a dot after the letter (TILT-FM) */
+            cv_rect(rx + 2, H_HEAD / 2 + 2, 3, 3, T_THEME);
+            rx += 5;
+        }
         rx += 1;                                       /* (the REC mark's cell after it, its ink 3 px on) */
     }
     draw_rec_mark(rx, T_BG);
@@ -1490,6 +1492,18 @@ static void confirm_text(char *a, char *b)
     case CF_INIT_SOUND:
         str_cpy(a, "INITIALIZE SOUND?", 24);
         break;
+    case CF_SCENE_OVR:                               /* TILT-FM: the SCENE layer's copy into a used one */
+        str_cpy(a, "OVERWRITE C?", 24);
+        a[10] = (char)('A' + (k & 3u));
+        str_cpy(b, "WITH A", 24);
+        b[5] = (char)('A' + ((k >> 2) & 3u));
+        break;
+    case CF_SCENE_CLR:                               /* .. its clear */
+        str_cpy(a, "CLEAR C?", 24);
+        a[6] = (char)('A' + (k & 3u));
+        if (scene_in_song(k & 3u))
+            str_cpy(b, "USED IN SONG", 24);
+        break;
     case CF_SCENE_DROP:                              /* TILT-FM: the music in no scene, edited (tilt.c) */
         str_cpy(a, "LEAVE THIS MUSIC?", 24);
         str_cpy(b, "NO SCENE WAS FREE", 24);
@@ -1554,6 +1568,18 @@ static void draw_confirm(void)
         text_fit(f, sizeof f, b, &AF_M, DLG_W - 16);    /* a name: free text (M: what is selected, as the question) */
         GFX_HOOK_ALIGN(0, 0, DLG_W, 0, AL_H, "dialog detail centred");
         cv_text_flags(ink_in(&AF_M, f, DLG_W), 55, &AF_M, f, T_MID, T_SURF, 8u | (f[str_len(f) - 1u] == ELLIPSIS));
+    }
+    if (ui.confirm == CF_SCENE_OVR || ui.confirm == CF_SCENE_CLR) {   /* (TILT-FM: NO picked, YES raised) */
+        int32_t x = 10 + HALF_UP(90 - kh_ink(KC_OCTDN, "NO"));
+        cv_rrect(10, 80, 90, 26, 6, T_THEME, T_SURF);
+        GFX_HOOK_ALIGN(10, 80, 100, 106, AL_HV | AL_N(2), "dialog button NO");
+        x = cv_keycap(x, 80 + HALF_UP(26 - KC_H), KC_OCTDN, T_INK, T_THEME, T_THEME);
+        cv_text_on(x + KH_GAP, 80 + HALF_UP(26 - KC_H) - 1, &AF_S, "NO", T_INK, T_THEME);
+        cv_rrect(108, 80, 90, 26, 6, T_RAISE, T_SURF);
+        GFX_HOOK_ALIGN(108, 80, 198, 106, AL_HV | AL_N(2), "dialog button YES");
+        cv_key_hint(108 + HALF_UP(90 - kh_ink(KC_OCTUP, "YES")), 80 + HALF_UP(26 - KC_H), KC_OCTUP, "YES", 1, T_RAISE);
+        cv_blit(DLG_X, DLG_Y);
+        return;
     }
     cv_rrect(10, 80, 90, 26, 6, T_RAISE, T_SURF);     /* OCT-: NO */
     GFX_HOOK_ALIGN(10, 80, 100, 106, AL_HV | AL_N(2), "dialog button NO");

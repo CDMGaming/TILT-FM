@@ -78,6 +78,7 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 #define ui_prefs3 (favorites.factory[15][13])
 #define PREF_T 0xFF000000u                     /* (menu_items.c MENU_FLAGS: a bit of ui_prefs3, << 24) */
 #define PREF_START_OFF (0x01u << 24)
+#define PREF_SCENE_SEEN 0x20u                  /* TILT-FM: bit 5 of ui_prefs3: the SCENE layer opened once (ui_layer.c) */
 #define PREF_SONG_SCENE 0x10u                  /* TILT-FM: bit 4 of ui_prefs3: SOUNDS SCENE (song_chain.c chain_snd); 0
                                                 * CURRENT, every older setting (the TILT layer's B3) */
 #define PREF_SCENE_SH 1u                       /* TILT-FM: bits 1..3 of ui_prefs3, the scene the music is in: 0 none, 1..4 A..D
@@ -236,7 +237,7 @@ static struct {
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
        CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
-       CF_SCENE_DROP };                                 /* (TILT-FM: the music in no scene, edited, leaves: tilt.c) */
+       CF_SCENE_DROP, CF_SCENE_OVR, CF_SCENE_CLR };   /* (TILT-FM: the SCENE layer's copy, clear) */                                 /* (TILT-FM: the music in no scene, edited, leaves: tilt.c) */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot; a pattern over the user's steps;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
@@ -423,8 +424,9 @@ static int32_t ink_w(const aafont_t *f, const char *s)
 }
 
 /* the quick layers (ui_layer.c): a button held, the keys and KNOB 1..4 are its shortcuts, its map over the page */
-enum { LAYER_NONE, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ, LAYER_REC, LAYER_TILT, LAYER_N };
-/* (TILT-FM: LAYER_TILT, ENV held, tilt.c; its bit of layer_seen, 7, is the byte's last) */
+enum { LAYER_NONE, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ, LAYER_REC, LAYER_TILT, LAYER_SCENE, LAYER_N };
+/* (TILT-FM: LAYER_TILT, ENV held, tilt.c; its bit of layer_seen, 7, is the byte's last; LAYER_SCENE, ARP held: its
+ * seen bit is ui_prefs3's PREF_SCENE_SEEN) */
 /* TILT-FM: NEW SONG and TIME (tilt.c), screens of their own as NAME is: while one is open (tilt_ns_open 1 NEW SONG,
  * 2 TIME) name_on() is true (the keys silent, no layer, OCT- / OCT+ its own, the menu closes it), and the input, the
  * drawing and the key LEDs are its */
@@ -469,6 +471,13 @@ static int scene_store_ram(uint32_t slot);
 static void scene_flush(void);
 static int project_used(uint32_t slot);
 static void tilt_scene_go(uint32_t s, int drop);        /* (tilt.c: the dialog's OCT+) */
+static void scene_copy_ui(uint32_t src, uint32_t dst, int sure);
+static void scene_clear_ui(uint32_t s, int sure);
+static int scene_in_song(uint32_t s);
+static int scene_copy(uint32_t src, uint32_t dst);
+static int scene_clear(uint32_t s);
+static int scene_undo(void);
+static uint32_t scene_undo_slot(void);
 static uint32_t tilt_mid(void);                         /* (tilt.c: the TILT layer's keys at the mid level) */
 static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct);
 static void tilt_ns_draw(void);
