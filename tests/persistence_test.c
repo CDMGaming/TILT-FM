@@ -681,7 +681,7 @@ int main(void)
         before = erases;
         proj_cur = 0;
         pat_from[0] = 1; pat_from[1] = 2;
-        ok2 = project_erase(0) == 0 && !strcmp(ui.msg, "PROJECT A ERASED") && !project_used(0) && erases == before + 1u &&
+        ok2 = project_erase(0) == 0 && !strcmp(ui.msg, "SCENE A ERASED") && !project_used(0) && erases == before + 1u &&
               st_load(OBJ_PROJECT0, &got, sizeof got) == 0 && proj_cur == PROJ_NO_SLOT && !pat_from[0] && pat_from[1] == 2u;
         proj_fetch(0);
         ok2 &= !project_used(0) && project_used(1);           /* (read back from flash: empty; the next slot kept) */

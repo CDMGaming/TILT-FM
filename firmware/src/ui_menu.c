@@ -135,9 +135,10 @@ static int32_t menu_document(int32_t y, int draw)
         else y = menu_text(text, y, c->kind == MC_TITLE ? T_THEME : c->kind == MC_URL ? T_MID : T_TEXT, draw);
     }
     y = menu_text("TILT-FM " TILT_VERSION, y + 12, T_THEME, draw);   /* TILT-FM: what this build adds, whose it is */
-    y = menu_text("A fork of Felucca by CDM Gaming, 2026: the TILT layer (ENV held), NEW SONG, STUCK, the TIMER and "
-                  "TIME, the TILT splash. Felucca's work and credits above are unchanged; the changes are "
-                  "GPL-3.0-only as Felucca is.", y, T_TEXT, draw);
+    y = menu_text("A fork of Felucca by CDM Gaming, 2026: the start screen, the TILT layer (ENV held: NEW SONG, "
+                  "STUCK, the TIMER and TIME), the song's SCENES A-D and their layer (ARP held), the SAVE pages named "
+                  "MY SOUNDS, SOUNDS, STARTERS, SCENES and CLEAN UP, the TILT splash. Felucca's work and credits above "
+                  "are unchanged; the changes are GPL-3.0-only as Felucca is.", y, T_TEXT, draw);
     y = menu_text("LICENSES + SOURCE", y + 12, T_THEME, draw);
     y = menu_text("DRUM + own samples: GPL-3.0-only", y, T_TEXT, draw);
     y = menu_text("Fonts and icons: their licences travel with the source and the release files.", y, T_TEXT, draw);

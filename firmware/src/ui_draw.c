@@ -1327,6 +1327,11 @@ static void draw_columns(void)
     for (c = 0; c < 4u; c++) {
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
+        if (cur_page()->graph == GR_SLOTS && c == 0u) {   /* TILT-FM: SCENES' SLOT as SCENE A..D */
+            char l[2] = {(char)('A' + (song.g[G_SLOT] - 1) % 4), 0};
+            draw_column(0, "SCENE", l, "", VAL(0u), (song.g[G_SLOT] - 1) * 1000 / 3, ICON_AUTO);
+            continue;
+        }
         if (cur_page()->graph == GR_SLOTS && c == 1u) {   /* PROJECT: ERASE (1.5.5, #199) */
             draw_act_column(1, "ERASE", graph_project_used((uint32_t)song.g[G_SLOT] - 1u) ? T_THEME : T_DIM, ICON_AUTO);
             continue;
@@ -1478,8 +1483,8 @@ static void confirm_text(char *a, char *b)
         a[12] = (char)('1' + k % NTRK);
         break;
     case CF_OVR_PROJ:
-        str_cpy(a, "OVERWRITE PROJECT A?", 24);
-        a[18] = (char)('A' + (k & 3u));
+        str_cpy(a, "OVERWRITE SCENE A?", 24);     /* (TILT-FM: Felucca's PROJECT) */
+        a[16] = (char)('A' + (k & 3u));
         if (!project_name(k & 3u, b) || !b[0])          /* the project's name, else what SONG plays from it */
             str_cpy(b, "SONG PATTERN CHANGES", 24);
         break;
@@ -1522,8 +1527,8 @@ static void confirm_text(char *a, char *b)
         up_name(k, b);                               /* the sound stored there */
         break;
     case CF_ERASE_PROJ:                              /* 1.5.5 (#199): the project's name under it */
-        str_cpy(a, "ERASE PROJECT A?", 24);
-        a[14] = (char)('A' + (k & 3u));
+        str_cpy(a, "ERASE SCENE A?", 24);
+        a[12] = (char)('A' + (k & 3u));
         (void)project_name(k & 3u, b);
         break;
     case CF_ERASE_USER:

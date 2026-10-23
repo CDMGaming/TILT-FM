@@ -42,11 +42,11 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"VOICE 2", "[K2]DETUNE[K3]PAN[K4]MUTE"},
     {"VOICE 3", "[K1]STEREO SPREAD[EDIT]EDIT 1"},
     {"SONG", "[KEYS]A-D, E: -[EDIT]SOUNDS"},   /* (TILT-FM: E4 "-", silent; EDIT the SONG's SOUNDS) */
-    {"USER", "[K1]SLOT[OCT+]SAVE[SAVE]PRESETS"},
-    {"PRESETS", "[K2]ENGINE[K3]FAV[K4]LIST"},
-    {"PHRASES", "[K1]PHRASE[OCT+]LOAD[SAVE]PROJECT"},
-    {"PROJECT", "[K2]ERASE[K4]SAVE[EDIT]NAME"},   /* (1.5.5, #199: ERASE) */
-    {"TOOLS", "[K1]CLEAR[K2]INIT, CLEAN[OCT+]DO"},   /* (1.5.5, #190: KNOB 2 on, CLEAN INIT) */
+    {"MY SOUNDS", "[K1]SLOT[OCT+]SAVE[SAVE]SOUNDS"},   /* (TILT-FM: the SAVE pages' names) */
+    {"SOUNDS", "[K2]ENGINE[K3]FAV[K4]LIST"},
+    {"STARTERS", "[K1]STARTER[OCT+]LOAD[SAVE]SCENES"},
+    {"SCENES", "[K2]ERASE[K4]SAVE[EDIT]NAME"},   /* (1.5.5, #199: ERASE) */
+    {"CLEAN UP", "[K1]CLEAR[K2]INIT, CLEAN[OCT+]DO"},   /* (1.5.5, #190: KNOB 2 on, CLEAN INIT) */
     {"ARP", "[K1]MODE[KEYS]CHORD[ARP]ARP 2"},
     {"ARP 2", "[K3]LATCH[K4]ORDER[ARP]ARP"},
     {"STEP", "[KEYS]WRITE[K1]STEP[SEQ]RATCH"},   /* (1.5.1: SEQ to DETAIL) */

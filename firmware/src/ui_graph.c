@@ -1569,10 +1569,12 @@ static void graph_slots(void)
         int32_t y = 12 + (int32_t)i * 26;
         char b[4];
         int sel = (int32_t)i + 1 == song.g[G_SLOT], used = graph_project_used(i);
-        const char *n = graph_project_name(i);
-        b[0] = (char)('A' + i);
-        b[1] = 0;
-        list_row(y, sel, b, T_MID, !used ? "--" : n[0] ? n : "USED", used ? T_TEXT : T_DIM, 232);
+        char s[20] = "SCENE A";                         /* (TILT-FM: the slots are the song's scenes; its name is */
+        s[6] = (char)('A' + i);                         /* the song's, the same in each) */
+        (void)b;
+        if (!used)
+            str_cpy(s + 7, " - EMPTY", sizeof s - 7);
+        list_row(y, sel, s, used ? T_TEXT : T_DIM, "", T_DIM, 232);
     }
 }
 /* MIXER page: four SURF columns, one under each card: the track number on its cushion (in the accent:
@@ -2232,7 +2234,7 @@ static void graph_song(void)
         for (i = 0; i < 4u && !graph_project_used(i); i++)
             ;
         cv_free_hint(SG_X0, ly + AF_M_CAP_Y + AF_M_CAP_H - AF_S_CAP_Y - AF_S_CAP_H,   /* (a key hint: S) */
-                     i < 4u ? "[K3] ADD SECTION" : "[SAVE] PROJECT A-D", T_MID, T_SURF, x0 - 10 - SG_X0);
+                     i < 4u ? "[K3] ADD SECTION" : "[SAVE] SCENES A-D", T_MID, T_SURF, x0 - 10 - SG_X0);
     }
 }
 static void draw_graph(void)

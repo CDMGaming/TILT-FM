@@ -100,8 +100,8 @@ static void name_open(uint32_t kind, uint32_t slot)
             str_cpy(b, nm.ph, sizeof b);
         nm.cat = (uint8_t)(kind == NK_USER_RENAME ? up_cat(slot) : track_cat(TSEL));
     } else {
-        str_cpy(nm.ph, "PROJECT A", sizeof nm.ph);
-        nm.ph[8] = (char)('A' + (slot & 3u));
+        str_cpy(nm.ph, "SCENE A", sizeof nm.ph);      /* (TILT-FM: Felucca's PROJECT A) */
+        nm.ph[6] = (char)('A' + (slot & 3u));
         if (kind == NK_PROJ_RENAME)
             project_name(slot, b);
         else

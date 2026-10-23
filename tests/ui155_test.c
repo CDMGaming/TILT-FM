@@ -284,10 +284,10 @@ static int project_erase_ui(void)
     press(B_OCTUP);
     ok &= ui.confirm == CF_ERASE_PROJ && ui.confirm_trk == 1u;
     confirm_text(a, b);
-    ok &= str_eq(a, "ERASE PROJECT B?") && str_eq(b, "DUB SKETCH");
+    ok &= str_eq(a, "ERASE SCENE B?") && str_eq(b, "DUB SKETCH");
     press(B_OCTDN);
     ok &= !ui.confirm && project_used(1);
-    bad += check("SAVE > PROJECT (#199): KNOB 2 ERASE, OCT+ asks \"ERASE PROJECT B?\" with its name, OCT- keeps it", ok);
+    bad += check("SAVE > SCENES (#199): KNOB 2 ERASE, OCT+ asks \"ERASE SCENE B?\" with its name, OCT- keeps it", ok);
 
     turn(EN_K2, 1);
     press(B_OCTUP);

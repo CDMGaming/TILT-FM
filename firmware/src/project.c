@@ -1036,8 +1036,8 @@ static int project_erase(uint32_t slot)
             pat_from[k] = 0;
 #if FELUCCA_FLASH
     if (flash_ok) {
-        char b[20] = "PROJECT A ERASED";
-        b[8] = (char)('A' + slot);
+        char b[20] = "SCENE A ERASED";            /* (TILT-FM: Felucca's PROJECT A ERASED) */
+        b[6] = (char)('A' + slot);
         ui_message(b);
         return 0;
     }

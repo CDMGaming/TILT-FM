@@ -571,7 +571,7 @@ enum { TO_PLAY, TO_SAVE, TO_EXTRA, TO_KEEP, TO_N };
 #define TE_ROW_H 18
 #define TE_ROW_Y 124                                    /* 4 rows: 124 .. 196, the footer at 202 */
 static const char *const TO_NAME[TO_N] = {"PLAY IT BACK", "SAVE", "EXTRA BALL", "KEEP WORKING"};
-static const char *const TO_HINT[TO_N] = {"FROM THE TOP", "TO A PROJECT SLOT", "+5 MIN", "TIMER OFF"};
+static const char *const TO_HINT[TO_N] = {"FROM THE TOP", "TO A SCENE", "+5 MIN", "TIMER OFF"};
 static struct {
     uint8_t st, moved, pick, saved;
     uint32_t t, sig;
@@ -657,7 +657,7 @@ static void te_do(uint32_t o)
             ;
         ui.home = 0;
         ui.page = (uint8_t)i;
-        ui_message("A SLOT, THEN [K4] SAVE");
+        ui_message("A SCENE, THEN [K4] SAVE");
     } else if (o == TO_EXTRA) {
         tm.on = 1;
         tm.end = fm1_ms + 5u * TILT_MIN_MS;
@@ -1209,7 +1209,7 @@ static void layer_scene(void)
  * anything here: the keys are silent (name_on), no layer, no REC, no MENU (ui_input.c), the knobs only select */
 enum { SO_CONT, SO_BLANK, SO_NEW, SO_LOAD, SO_N };
 static const char *const SO_NAME[SO_N] = {"CONTINUE", "BLANK", "NEW SONG", "LOAD"};
-static const char *const SO_HINT[SO_N] = {"THE LAST SESSION", "EMPTY TRACKS", "ROLL ONE", "A SAVED PROJECT"};
+static const char *const SO_HINT[SO_N] = {"THE LAST SESSION", "EMPTY TRACKS", "ROLL ONE", "A SAVED SCENE"};
 static struct {
     uint8_t has, crash, pick;                           /* an autosave to continue; skipped after a crash; the selection */
     uint32_t sig;
@@ -1252,7 +1252,7 @@ static void st_do(uint32_t o)
             ;
         ui.home = 0;
         ui.page = (uint8_t)i;
-        ui_message("A SLOT, THEN [K3] LOAD");
+        ui_message("A SCENE, THEN [K3] LOAD");
     }
 }
 static void st_move(int32_t s)

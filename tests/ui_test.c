@@ -609,7 +609,7 @@ static int test_patterns(void)
     ui_power_on();
     go_page(GR_PATS);
     bad += check("1.2: PHRASES is a SAVE page (SAVE > PHRASES)", cur_page()->fam == FAM_SAVE &&
-                 str_eq(cur_page()->title, "PHRASES") && !song.seq_mode);
+                 str_eq(cur_page()->title, "STARTERS") && !song.seq_mode);
     before = *t;
     turn(EN_K2, 1);
     bad += check("KNOB 2 loads nothing (the knobs only pick)", seq_is_empty(t) && ui.confirm == CF_NONE);
@@ -934,8 +934,8 @@ static int test_save(void)
     stop_transport();
     turn(EN_K4, 1);
     press(B_OCTUP);
-    bad += check("stopped, an empty slot: OCT+ opens NAME (no name yet: PROJECT A)", name_on() && nm.kind == NK_PROJ_SAVE &&
-                 nm.len == 0u && str_eq(nm.ph, "PROJECT A") && !project_used(0));
+    bad += check("stopped, an empty slot: OCT+ opens NAME (no name yet: SCENE A)", name_on() && nm.kind == NK_PROJ_SAVE &&
+                 nm.len == 0u && str_eq(nm.ph, "SCENE A") && !project_used(0));
     press(B_OCTUP);
     bad += check("..OCT+ saves it unnamed, SAVE dropped", !name_on() && project_used(0) && msg_is("SAVED (RAM)") &&
                  ui.act == 0u);
@@ -1048,7 +1048,7 @@ static int test_actions(void)
     bad += check("PATTERNS: OCT- goes HOME (the octave stays)", ui.home && song.octave == 2);
     /* TOOLS: CLRSQ and INIT are picked, not done, by their knobs */
     my_steps(t);
-    go_title("TOOLS");
+    go_title("CLEAN UP");
     bad += check("TOOLS: nothing picked, OCT+ dark", act_cols() == 15u && act_col() == 0u && oct_leds_seen(0) == 1u);
     turn(EN_K1, 3);
     bad += check("KNOB 1 picks CLEAR, the steps stay; OCT+ breathes", ui.act == 1u && !seq_is_empty(t) &&
@@ -2509,7 +2509,7 @@ static int test_chain(void)
                  chain_config.row[0].repeat == 16);
     for (k = chain_config.count; k < CHAIN_ROWS; k++) { turn(EN_K1, 1); turn(EN_K3, 1); }
     bad += check("SONG append row stays bounded at 16", chain_config.count == CHAIN_ROWS && chain_valid(&chain_config));
-    go_title("TOOLS"); turn(EN_K4, 1); press(B_OCTUP);
+    go_title("CLEAN UP"); turn(EN_K4, 1); press(B_OCTUP);
     bad += check("CLEAR SONG requires explicit confirmation", ui.confirm == CF_CLEAR_SONG && chain_config.count == CHAIN_ROWS);
     press(B_OCTDN);
     bad += check("cancel preserves the full song", chain_config.count == CHAIN_ROWS);
@@ -2701,7 +2701,7 @@ static int steps_but(const track_t *t, const step_t *ref, uint32_t at, const ste
 static uint32_t auto_cur(void) { uint16_t rw[EV_ROWS]; return ev_cur(rw, 0); }
 static int test_page_cycles(void)
 {
-    static const char *const SAVE_CYC[6] = {"USER", "PRESETS", "PHRASES", "PROJECT", "TOOLS", "USER"};   /* (1.5, #173) */
+    static const char *const SAVE_CYC[6] = {"MY SOUNDS", "SOUNDS", "STARTERS", "SCENES", "CLEAN UP", "MY SOUNDS"};   /* (1.5, #173) */
     int bad = 0, ok = 1;
     uint32_t i, n0;
     step_t ref[NSTEP], want;
@@ -2757,7 +2757,7 @@ static int test_page_cycles(void)
     open_family(FAM_GLO); ok = str_eq(cur_page()->title, "SONG");
     open_family(FAM_SEQ); ok &= cur_page()->graph == GR_ROLL;
     open_family(FAM_ENV); ok &= str_eq(cur_page()->title, "ENV");
-    open_family(FAM_SAVE); ok &= str_eq(cur_page()->title, "USER");
+    open_family(FAM_SAVE); ok &= str_eq(cur_page()->title, "MY SOUNDS");
     open_family(FAM_GLO); open_family(FAM_GLO);          /* SONG again (its only page) */
     ok &= str_eq(cur_page()->title, "SONG");
     go_home(); open_family(FAM_GLO); ok &= str_eq(cur_page()->title, "SONG");
@@ -4297,7 +4297,7 @@ static int test_bughunt_ui(void)
     }
     /* 6: TOOLS: each column its own ready check; nothing to do says so (not STOP TO EDIT) */
     ui_power_on();
-    go_title("TOOLS"); frame();
+    go_title("CLEAN UP"); frame();
     chain_defaults(&chain_config);                      /* no song rows */
     turn(EN_K1 + 2, 1);                                 /* DELETE ROW */
     press(B_OCTUP);
