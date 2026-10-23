@@ -78,6 +78,8 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 #define ui_prefs3 (favorites.factory[15][13])
 #define PREF_T 0xFF000000u                     /* (menu_items.c MENU_FLAGS: a bit of ui_prefs3, << 24) */
 #define PREF_START_OFF (0x01u << 24)
+#define PREF_SONG_SCENE 0x10u                  /* TILT-FM: bit 4 of ui_prefs3: SOUNDS SCENE (song_chain.c chain_snd); 0
+                                                * CURRENT, every older setting (the TILT layer's B3) */
 #define PREF_SCENE_SH 1u                       /* TILT-FM: bits 1..3 of ui_prefs3, the scene the music is in: 0 none, 1..4 A..D
                                                 * (project.c scene_boot, tilt.c tilt_scene_poll; no MENU row) */
 #define PREF_X 0xFF0000u                       /* (menu_items.c MENU_FLAGS: a bit of ui_prefs2, << 16) */

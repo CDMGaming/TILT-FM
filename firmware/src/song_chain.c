@@ -40,6 +40,41 @@ static const step_t chain_silent[NSTEP] = {{{0}}};
 #define CHAIN_SIL_DIV 2                      /* 1/16 */
 
 static void seq_release(track_t *t);
+static void motion_rebase(track_t *t);
+/* TILT-FM: SOUNDS SCENE (the TILT layer's B3; ui.c PREF_SONG_SCENE, a settings bit: off, CURRENT, every older song).
+ * chain_prepare copies each slot the song uses its four tracks' sounds (their values, engine, preset, FM6 patch) and
+ * the sounds as PLAY finds them; at each section a track takes its scene's sound where it differs from the one
+ * playing (chain_sound_put: the values but the ones the song sets, LEN DIV SWING GATE QUANTIZE, and MUTE, which stays
+ * the performer's; the engine asked for, voice.c fading the old one out; the FM6 patch), and STOP puts the sounds of
+ * before back. CURRENT: as Felucca, every section with the sounds as they are */
+typedef struct {
+    int16_t p[NTRK][P_COUNT];
+    uint8_t eng[NTRK], preset[NTRK];
+    uint8_t fm6[NTRK][FP_SIZE + 1u];
+} chain_sound_t;
+static struct {
+    chain_sound_t src[4], live;
+    uint8_t on;
+} chain_snd __attribute__((section(".pool")));
+static int chain_owns(uint32_t id);
+static void chain_sound_put(track_t *t, const chain_sound_t *c, uint32_t k)
+{
+    uint32_t i, d = c->eng[k] != t->eng_req || memcmp(fm6_patch[k], c->fm6[k], sizeof fm6_patch[k]);
+    for (i = 0; i < P_COUNT && !d; i++)
+        d = !chain_owns(i) && i != P_MUTE && t->p[i] != c->p[k][i];
+    if (!d)
+        return;
+    for (i = 0; i < P_COUNT; i++)
+        if (!chain_owns(i) && i != P_MUTE)
+            t->p[i] = c->p[k][i];
+    t->eng_req = c->eng[k];
+    t->preset = c->preset[k];
+    if (memcmp(fm6_patch[k], c->fm6[k], sizeof fm6_patch[k])) {
+        memcpy(fm6_patch[k], c->fm6[k], sizeof fm6_patch[k]);
+        fm6_pgen[k]++;
+    }
+    motion_rebase(t);
+}
 static void seq_stop(void);
 static uint32_t div_samples(uint32_t div);
 static uint32_t step_samples(const track_t *t, uint32_t period, uint32_t idx);
@@ -145,6 +180,8 @@ static __attribute__((noinline)) void chain_apply(void)
         chain.lane[i] = (uint8_t)(s < 4u ? s : CHAIN_SILENT);
         seq_release(t);
         motion_restore(t);
+        if (s < 4u && chain_snd.on)
+            chain_sound_put(t, &chain_snd.src[s], i);   /* (TILT-FM: SOUNDS SCENE) */
         if (s < 4u) {
             memcpy(&t->p[P_SLEN], chain.source[s].timing[i], sizeof chain.timing[i]);
             t->p[P_SQNT] = chain.source[s].qnt[i];
@@ -184,9 +221,14 @@ static void chain_stop(void)
     if (!chain.running)
         return;
     for (i = 0; i < NTRK; i++) {
+        if (chain_snd.on) {                             /* (TILT-FM: SOUNDS SCENE: the sounds of before PLAY) */
+            motion_restore(&trk[i]);
+            chain_sound_put(&trk[i], &chain_snd.live, i);
+        }
         memcpy(&trk[i].p[P_SLEN], chain.timing[i], sizeof chain.timing[i]);
         trk[i].p[P_SQNT] = chain.qnt[i];
     }
+    chain_snd.on = 0;
     song.rec = chain.rec;
     chain.running = 0;
 }

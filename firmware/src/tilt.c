@@ -9,10 +9,12 @@
  *   G3 STUCK     the selected track: COOK if it holds something (a NOTE step, a drum hit), else RANDOM: the SEQ TOOLS
  *                actions themselves (ui_tools.c), in the track's scale (ROOT, SCL), one undo each
  *   A3 TIMER     (below)
+ *   B3 SOUNDS    the SONG's sounds: SCENE (each section's scene's own) or CURRENT (as they are: Felucca's), a setting
+ *                (song_chain.c chain_snd); not while a song plays
  *   C4..F4       SCENE A..D (below, project.c): the music goes to that scene, the one it leaves stored first
  *   G4 NEXT      NEXT SCENE: the scene now copied to the next empty one, and the music goes there
  *   A4 ADD       ADD TO SONG: a SONG section at the end, the four tracks on the scene now, x1 */
-enum { TT_NEW, TT_STUCK, TT_TIMER, TT_SCENE = 4, TT_NEXT = TT_SCENE + 4, TT_ADD, TT_N };   /* the white keys from F3
+enum { TT_NEW, TT_STUCK, TT_TIMER, TT_SOUNDS, TT_SCENE = 4, TT_NEXT = TT_SCENE + 4, TT_ADD, TT_N };   /* the white keys from F3
                                                          * (key_place) */
 static uint8_t tilt_timer_min;                          /* the TIMER: 0 off, else its minutes */
 
@@ -965,7 +967,13 @@ static void tilt_key(uint32_t k, uint32_t p)
 {
     if (key_black(k))
         return;
-    if (p >= TT_SCENE && p < TT_SCENE + 4u)
+    if (p == TT_SOUNDS && chain_busy()) {
+        ui_message("STOP TO EDIT");
+    } else if (p == TT_SOUNDS) {
+        ui_prefs3 ^= PREF_SONG_SCENE;
+        settings_save();
+        ui_message(ui_prefs3 & PREF_SONG_SCENE ? "SONG SOUNDS: SCENE" : "SONG SOUNDS: CURRENT");
+    } else if (p >= TT_SCENE && p < TT_SCENE + 4u)
         tilt_scene_go(p - TT_SCENE, 0);
     else if (p == TT_NEXT)
         tilt_scene_next();
@@ -995,13 +1003,13 @@ static int tilt_free(void)                              /* an empty scene for NE
 static int tilt_addable(void) { return scene_cur() != SCENE_NONE && chain_config.count < CHAIN_ROWS && !chain_busy(); }
 static uint32_t tilt_can(uint32_t k, uint32_t p)       /* (C4..F4: only the cued one breathes) */
 {
-    return !key_black(k) && (((p == TT_NEW || p == TT_STUCK) && !chain_busy()) || p == TT_TIMER ||
+    return !key_black(k) && (((p == TT_NEW || p == TT_STUCK || p == TT_SOUNDS) && !chain_busy()) || p == TT_TIMER ||
                              (p == TT_NEXT && tilt_free()) || (p == TT_ADD && tilt_addable()) ||
                              (p >= TT_SCENE && p < TT_SCENE + 4u && p - TT_SCENE == tsc.cue));
 }
 static uint32_t tilt_on(uint32_t k, uint32_t p)
 {
-    return !key_black(k) && ((p == TT_TIMER && tilt_timer_min) || (p >= TT_SCENE && p < TT_SCENE + 4u && p - TT_SCENE == scene_cur()));
+    return !key_black(k) && ((p == TT_TIMER && tilt_timer_min) || (p == TT_SOUNDS && (ui_prefs3 & PREF_SONG_SCENE)) || (p >= TT_SCENE && p < TT_SCENE + 4u && p - TT_SCENE == scene_cur()));
 }
 /* the keys at the mid level: the stored scenes (not the one now: lit) */
 static uint32_t tilt_mid(void)
@@ -1023,6 +1031,7 @@ static uint32_t tilt_scenes_sig(void)                   /* (the strip: which are
 static uint32_t tilt_sig(void)
 {
     return (tilt_used(TSEL) != 0u) * 31u + (uint32_t)chain_busy() * 3u + song.sel * 977u + tilt_timer_min * 7919u +
+           (ui_prefs3 & PREF_SONG_SCENE) * 17u +
            tilt_scenes_sig() * 104729u;
 }
 
@@ -1067,6 +1076,9 @@ static void layer_tilt(void)
     lcell(LC_X(TT_STUCK), TK_Y, TK_H, n, ICON_PROB, 0, "STUCK", st, 0);
     n[0] = 'A';
     lcell(LC_X(TT_TIMER), TK_Y, TK_H, n, ICON_TIME, 0, "TIMER", tilt_timer_min ? LS_SEL : LS_OFF, 0);
+    n[0] = 'B';                                         /* B3: the SONG's sounds, SCENE lit */
+    lcell(LC_X(TT_SOUNDS), TK_Y, TK_H, n, ICON_VOICE, 0, ui_prefs3 & PREF_SONG_SCENE ? "SCENE" : "CURRENT",
+          chain_busy() ? LS_DIM : ui_prefs3 & PREF_SONG_SCENE ? LS_SEL : LS_OFF, 0);
     n[0] = 'G';
     n[1] = '4';
     lcell(LC_X(0), TL_Y, TK_H, n, ICON_X_PATTERN, 0, "NEXT", tilt_free() ? LS_OFF : LS_DIM, 0);

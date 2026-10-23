@@ -10198,6 +10198,47 @@ static int test_tilt_scenes_heard(void)
     chain_defaults(&chain_config);
     return bad;
 }
+
+/* TILT-FM SOUNDS SCENE (the TILT layer's B3, song_chain.c chain_snd): a song of A then B, T1 a sound of its own in each
+ * (LEVEL, an engine): SCENE plays each section with its scene's; STOP puts the sounds of before back; CURRENT plays
+ * them as they are, as Felucca */
+static int test_tilt_song_sounds(void)
+{
+    int bad = 0, ok, r;
+    uint32_t n, k;
+    for (r = 0; r < 2; r++) {
+        ui_power_on();
+        chain_defaults(&chain_config);
+        memset(proj_slot, 0, sizeof proj_slot);
+        for (k = 0; k < NTRK; k++) { trk[k].p[P_SLEN] = 16; trk[k].p[P_SDIV] = 2; }
+        set_engine_of(&trk[0], 0);
+        sc_note(0, 0, 60);
+        trk[0].p[P_LEVEL] = 61;
+        project_save(0);
+        set_engine_of(&trk[0], ENGI_FM6);
+        trk[0].p[P_LEVEL] = 62;
+        project_save(1);
+        set_engine_of(&trk[0], 0);
+        trk[0].p[P_LEVEL] = 99;                       /* (the live sound) */
+        ui_prefs3 = (uint8_t)(r ? ui_prefs3 | PREF_SONG_SCENE : ui_prefs3 & ~PREF_SONG_SCENE);
+        chain_config.count = 2;
+        chain_config.row[0] = chain_row_of(0, 1);
+        chain_config.row[1] = chain_row_of(1, 1);
+        ok = chain_prepare() == 0;
+        events_block(32);
+        ok &= chain.running && trk[0].p[P_LEVEL] == (r ? 61 : 99) && trk[0].eng_req == 0u;
+        n = lanes_until(0, 8000);
+        ok &= chain.row == 1u && trk[0].p[P_LEVEL] == (r ? 62 : 99) && trk[0].eng_req == (r ? ENGI_FM6 : 0u);
+        seq_stop();
+        ok &= trk[0].p[P_LEVEL] == 99 && trk[0].eng_req == 0u && !chain_snd.on;
+        bad += check(r ? "TILT-FM SOUNDS SCENE: each section its scene's sound (LEVEL, the engine); STOP: the sounds of before"
+                       : "TILT-FM SOUNDS CURRENT: the sounds as they are, as Felucca", ok);
+    }
+    ui_prefs3 &= (uint8_t)~PREF_SONG_SCENE;
+    ui_power_on();
+    chain_defaults(&chain_config);
+    return bad;
+}
 static int test_tilt_review(void)
 {
     int bad = 0, ok;
@@ -10406,6 +10447,7 @@ int main(void)
     bad += test_tilt_scenes();
     bad += test_tilt_scenes_live();
     bad += test_tilt_scenes_heard();
+    bad += test_tilt_song_sounds();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

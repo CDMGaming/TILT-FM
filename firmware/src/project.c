@@ -1204,10 +1204,35 @@ static uint32_t chain_prepare(void)
             used |= 1u << s;
         }
     chain.config = chain_config;
+#ifdef PREF_SONG_SCENE
+    chain_snd.on = 0;
+    for (k = 0; k < NTRK; k++) {                        /* (TILT-FM: SOUNDS SCENE, the sounds as PLAY finds them) */
+        for (j = 0; j < P_COUNT; j++)
+            chain_snd.live.p[k][j] = motion_base_value(&trk[k], j);
+        chain_snd.live.eng[k] = trk[k].eng_req;
+        chain_snd.live.preset[k] = trk[k].preset;
+        memcpy(chain_snd.live.fm6[k], fm6_patch[k], sizeof chain_snd.live.fm6[k]);
+    }
+#endif
     for (i = 0; i < 4u; i++)
         if ((used >> i) & 1u) {
             project_t *p = &proj_scratch;
             if (!proj_import(p, &proj_slot[i], sizeof(project_store_t))) return 3u + i;
+#ifdef PREF_SONG_SCENE
+            if (ui_prefs3 & PREF_SONG_SCENE)            /* (each scene's sounds, as a load would make them) */
+                for (k = 0; k < NTRK; k++) {
+                    uint32_t e = p->t[k].engine < NENGINES ? p->t[k].engine : trk[k].eng_req;
+                    uint8_t v[FP_SIZE + 1u];
+                    for (j = 0; j < P_COUNT; j++)
+                        chain_snd.src[i].p[k][j] = (int16_t)param_fit(param_desc_of(e, j), p->t[k].p[j]);
+                    chain_snd.src[i].eng[k] = (uint8_t)e;
+                    chain_snd.src[i].preset[k] = (uint8_t)(ENGINES[e]->npresets ? p->t[k].preset % ENGINES[e]->npresets : 0u);
+                    fm6_unpack(p->fm6[k], v);
+                    fm6_sanitize(v);
+                    memcpy(chain_snd.src[i].fm6[k], v, sizeof chain_snd.src[i].fm6[k]);
+                    p->t[k].engine = (uint8_t)e;
+                }
+#endif
             chain.source[i].motion = p->motion;
             /* A song keeps its current instruments. Engine-specific motion from
              * another instrument would change a kit/wave/algorithm unexpectedly. */
@@ -1215,7 +1240,11 @@ static uint32_t chain_prepare(void)
                 motion_store_t *m = &chain.source[i].motion; uint32_t n = 0;
                 for (uint32_t e = 0; e < m->count; e++) {
                     const motion_event_t *v = &m->event[e]; uint32_t owner = v->place >> 6;
-                    if (MOTION_ID(v) >= P_FM1_ATK && p->t[owner].engine != trk[owner].eng_req) continue;
+                    if (MOTION_ID(v) >= P_FM1_ATK && p->t[owner].engine != trk[owner].eng_req
+#ifdef PREF_SONG_SCENE
+                        && !(ui_prefs3 & PREF_SONG_SCENE)       /* (SOUNDS SCENE: its own engine plays it) */
+#endif
+                        ) continue;
                     m->event[n++] = *v;
                 }
                 m->count = (uint8_t)n;
@@ -1229,6 +1258,9 @@ static uint32_t chain_prepare(void)
                         TP[P_SLEN + j].min, TP[P_SLEN + j].max);
             }
         }
+#ifdef PREF_SONG_SCENE
+    chain_snd.on = (uint8_t)((ui_prefs3 & PREF_SONG_SCENE) != 0u);
+#endif
     RING_PUBLISH();
     chain.armed = 1;
     transport_req = 1;
