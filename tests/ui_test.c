@@ -10702,9 +10702,9 @@ static int test_tfm_jam_menu(void)
         menu_put(MI_TSIG, 1);                           /* 3/4 */
         ok &= tfm_bar() == 12u && param_turn(d, 12, 1) == 24 && str_eq(menu_vname(MI_TSIG, 1), "3/4");
         menu_put(MI_TSIG, 0);
-        fm1_in.buttons |= 1u << panel.btn[B_OCTDN];
+        tfm_fine_on = 1;                                /* (OCT- held round the knobs: ui_input.c) */
         ok &= param_turn(d, 16, 1) == 17;
-        fm1_in.buttons &= ~(1u << panel.btn[B_OCTDN]);
+        tfm_fine_on = tfm_fine_used = 0;
         frame();
         bad += check("TFM LEN: bars first (TIME SIG 4/4 3/4 6/8 7/8), between two bars to the next, OCT- held single steps", ok);
     }

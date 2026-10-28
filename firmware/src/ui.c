@@ -87,6 +87,7 @@ static uint32_t up_gen;                      /* bumped on every user bank change
                                                 * setting), 3/4, 6/8, 7/8: the steps of a bar (tfm_bar: LEN in bars) */
 static uint32_t tfm_tsig(void) { return (ui_prefs3 >> PREF_TSIG_SH) & 3u; }
 static uint32_t tfm_bar(void) { static const uint8_t B[4] = {16, 12, 12, 14}; return B[tfm_tsig()]; }
+static uint32_t (*tfm_bar_fn)(void) = tfm_bar;          /* (params.c reads it so) */
 #define PREF_X 0xFF0000u                       /* (menu_items.c MENU_FLAGS: a bit of ui_prefs2, << 16) */
 #define PREF_SCOPE_MIX (0x01u << 16)
 #define PREF_PREVIEW (0x02u << 16)

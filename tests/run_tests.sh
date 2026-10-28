@@ -440,11 +440,11 @@ if [ -f build/gen/felucca_tables.h ]; then
     mkdir -p build/fm6_demo
     run "FM6: algorithms, envelopes, retrigger, DC, clipping, macros, patch formats, voices, cost, demos" "$OUT/fm6_test" build/fm6_demo
     # SLICE is in the standard build (firmware/src/core.h): its test always runs (after #22 by andreahaku)
-    if grep -q '^#define SLC_BREAK_BPM ' build/gen/felucca_samples.h; then
+    if grep -q '^#define SLC_BREAK_BPM ' build/gen_smp/felucca_samples.h; then   # (TFM: the header with the data)
         mkdir -p build/slice_demo
         python3 tests/slice_loop.py build/slice_demo/loop
         python3 tools/fm1_sample_upload.py build LOOP build/slice_demo/loop build/slice_demo/loop.wav:60 >/dev/null
-        $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/slice_test" tests/slice_test.c -lm
+        $CC -O2 -w $SMP -Ibuild/gen -Ifirmware/src -o "$OUT/slice_test" tests/slice_test.c -lm
         run "SLICE: tables, onsets, reverse, keys, modes, MAN slices and their store, demos" "$OUT/slice_test" \
             build/slice_demo/loop build/slice_demo
     else

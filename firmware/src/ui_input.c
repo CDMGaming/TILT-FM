@@ -1167,13 +1167,7 @@ static void oct_as_mod(uint32_t bit)
         song.octave = oct_pre;
     oct_mod |= (uint8_t)bit;
 }
-static int tfm_fine(void)
-{
-    if (!((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u))
-        return 0;
-    oct_as_mod(1u);
-    return 1;
-}
+
 static uint32_t oct_taps(uint32_t pressed, int here)
 {
     static uint8_t down, chord;
@@ -1840,6 +1834,7 @@ static void ui_input(void)
             continue;
         if (mom_down())                                 /* (LFO + a knob, MOMENTARY or not: LFO's release opens no page) */
             ui.pg_down &= (uint16_t)~(1u << panel.btn[B_LFO]);
+        tfm_fine_on = (uint8_t)((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u);   /* (TFM: LEN's single steps) */
         if (sheet_on()) {                               /* TFM: the STEP SHEET (tfm_sheet.c); OCT+'s release no tap */
             oct_as_mod(2u);
             sheet_turn(k, s);
@@ -1876,6 +1871,9 @@ static void ui_input(void)
         } else {
             edit_param(k, s);
         }
+        if (tfm_fine_used)                              /* (TFM: OCT- was LEN's fine) */
+            oct_as_mod(1u);
+        tfm_fine_on = tfm_fine_used = 0;
     }
     ui_notices();
 }
