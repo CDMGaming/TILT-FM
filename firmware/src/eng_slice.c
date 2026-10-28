@@ -636,7 +636,7 @@ static const engine_t ENG_SLICE = {
         {"TONE", F_INT, 0, 127, 127, 0, 0},
     },
     .presets = SLICE_PRESETS,
-    .npresets = NELEM(SLICE_PRESETS),
+    .npresets = SMP_BUILTIN ? NELEM(SLICE_PRESETS) : 0u,   /* (TFM: no BREAK, no factory presets: USR1..3) */
     .note_on = slice_note_on,
     .render = slice_render,
     .knob = {P_E0, P_E1, P_E3, P_E6},

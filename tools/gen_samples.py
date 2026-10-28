@@ -310,6 +310,18 @@ class Builder:
         self.zones += entries
         self.kinds[name] = kind
 
+    def stub_sets(self):
+        """TFM: every CC0 set's index and name with no data: one shared empty zone (n 0: eng_sample.c's missing set),
+        the aliases as they were; no factory presets (self.nopresets)"""
+        self.zones.append(dict(off=0, n=0, ls=0, le=0, looped=False, sr=TR, root16=960, pred=0, idx=0, lo=0, hi=127))
+        for name, kind in CC0_SETS:
+            if kind == "alias":
+                self.alias_set(name)
+            else:
+                self.sets.append((name, 0, 1))
+                self.kinds[name] = kind
+        self.nopresets = True
+
     def alias_set(self, name):
         """a retired set's index: the zones of the earlier set `name` (no data of its own)"""
         orig = next(i for i, (n, _, _) in enumerate(self.sets) if n == name)
@@ -353,7 +365,9 @@ class Builder:
         L.append(f"#define SMP_NSETS {max(1, len(sets))}")
         named = sets or [("NONE", 0, 0)]
         perc = PERC_SLOT if len(named) > PERC_SLOT else len(named)
-        L.append(f"#define SMP_NPRESETS {perc}")
+        stub = getattr(self, "nopresets", False)
+        L.append(f"#define SMP_NPRESETS {0 if stub else perc}")
+        L.append(f"#define SMP_BUILTIN {0 if stub else 1}   /* TFM: the built-in sample data is in (SAMPLE / SLICE presets) */")
         if len(named) > PERC_SLOT:
             L.append(f"#define SMP_PERC_SLOT {PERC_SLOT}   /* once PERC (the GM kit): an alias, its sounds load as DRUM */")
         L.append("/* the initializers from SMP_NPRESETS on (the retired PERC's alias) are outside factory browsing */")
@@ -369,7 +383,7 @@ class Builder:
         orig = [self.alias.get(i, i) for i in range(len(named))]
         L.append("/* SET i plays SMP_SET_ORIG[i]: != i for a retired set kept as an alias (its preset i too) */")
         L.append("static const uint8_t SMP_SET_ORIG[] = {" + ", ".join(map(str, orig)) + "};")
-        L.append(f"#define SMP_NALIAS {sum(1 for i, o in enumerate(orig) if o != i and i < perc)}   /* among the presets */")
+        L.append(f"#define SMP_NALIAS {0 if stub else sum(1 for i, o in enumerate(orig) if o != i and i < perc)}   /* among the presets */")
         names = ", ".join(f'"{n}"' for n, _, _ in named)
         L.append("#define SMP_SET_NAMES_INIT " + names)
         L.append("static const char *const SMP_SET_NAMES[] = {" + names + "};")
@@ -413,6 +427,14 @@ class Builder:
         return f"samples: {len(self.sets)} sets, {len(self.zones)} zones, {len(self.blob)} B ADPCM{brk}"
 
 
+def builtin_on():
+    """TFM (TILT-FM tfm-next): the built-in sample data (SAMPLE's PIANO / FLUTE / SAX, SLICE's BREAK) is left out to
+    make room; TFM_BUILTIN_SAMPLES=1 builds it as Felucca does. Without it the sets keep their places and names (stub
+    sets: one empty zone each, so a stored SET still names them and plays the missing-sample sine with NO SAMPLE),
+    SAMPLE and SLICE have no factory presets (browsing and NEW SONG skip them) and USR1..3 work as ever"""
+    return os.environ.get("TFM_BUILTIN_SAMPLES", "0") == "1"
+
+
 def slice_on():
     """the SLICE engine is built (src/core.h: on unless FELUCCA_SLICE=0)"""
     return os.environ.get("FELUCCA_SLICE", "1") != "0"
@@ -424,7 +446,7 @@ def input_key(have_cc0):
     here = Path(__file__).resolve().parent
     for p in (here / "gen_samples.py", here / "sampleio.py"):
         h.update(p.read_bytes())
-    h.update(repr((sys.version_info[:2], have_cc0, slice_on())).encode())   # sum() differs across versions
+    h.update(repr((sys.version_info[:2], have_cc0, slice_on(), builtin_on())).encode())   # sum() differs across versions
     files = sorted(GENDIR.glob("*.wav"))
     if have_cc0:
         files += sorted(CC0.glob("*/*.wav"))
@@ -435,6 +457,9 @@ def input_key(have_cc0):
 
 
 def main(out):
+    global CACHE
+    if builtin_on():                                # (TFM: the two headers keep caches of their own)
+        CACHE = CACHE.with_name("gen_samples_builtin.cache")
     subprocess.run([sys.executable, str(Path(__file__).with_name("gen_waves.py")), str(GENDIR)], check=True)
     have_cc0 = CC0.exists() and any(CC0.glob("*/*.wav"))
     if not have_cc0:
@@ -449,6 +474,14 @@ def main(out):
     except (OSError, ValueError):
         pass
     b = Builder()
+    if not builtin_on():                            # TFM: no built-in sample data (stub sets, no BREAK)
+        b.stub_sets()
+        text = b.header()
+        Path(out).write_text(text)
+        CACHE.parent.mkdir(parents=True, exist_ok=True)
+        CACHE.write_text(f"{key}\n{b.summary()}\n{text}")
+        print(b.summary())
+        return
     if have_cc0:
         for name, kind in CC0_SETS:
             if kind == "alias":
