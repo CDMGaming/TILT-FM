@@ -806,8 +806,8 @@ function fmtValue(d, v) {
 }
 
 /* ---------------------------------------------------------- user samples --- */
-/* A port of felucca/tools/sampleio.py (read_any_wav, resample, to_int16, ima_encode, user_slot),
-   byte for byte: felucca/web/test_web.mjs compares them. */
+/* A port of tools/sampleio.py (read_any_wav, resample, to_int16, ima_encode, user_slot),
+   byte for byte: web/test_web.mjs compares them. */
 const SMP = { SLOT_SIZE: 0x14000, DATA_OFF: 512, RATE: 22050, HDR_LEN: 32 + 16 * 28, MAX_ZONES: 16 };
 SMP.MAX_DATA = SMP.SLOT_SIZE - SMP.DATA_OFF;
 
@@ -1304,8 +1304,8 @@ const mixer = {
 };
 
 /* ------------------------------------------------------------ mock device --- */
-/* Implements the protocol like felucca/src/editor.c, with tables copied from params.c
-   and the engine sources (test_web.mjs checks them against the firmware's, felucca/host/descdump.c). Used with ?mock=1 (add &legacy=1 for a firmware without cmds 16..26).
+/* Implements the protocol like firmware/src/editor.c, with tables copied from params.c
+   and the engine sources (test_web.mjs checks them against the firmware's, tests/descdump.c). Used with ?mock=1 (add &legacy=1 for a firmware without cmds 16..26).
    opt: {legacy: no user bank / WATCH, v3: no TRACK_PARAM / TRACK_CHANGED (firmware 0.8),
          auto: false = no simulated knobs (tests drive sim.*),
          watchMs: how long WATCH lasts after the last request (3000), slots: user bank size (32)} */
@@ -2830,7 +2830,7 @@ function selfLoad(sound = false) {
 }
 const stepEdit = new Map(); /* index -> time of the last edit */
 
-/* parameter ids (felucca/src/core.h); used only when P_COUNT / G_COUNT match */
+/* parameter ids (firmware/src/core.h); used only when P_COUNT / G_COUNT match */
 const EXPECT = { pcount: 91, gcount: 27, pe0: 83 };
 /* the same layout without the chord keys (P_COUNT 89, P_E0 81), the FM operator ENVs too (69, 61) or the matrix
    (firmware 1.0: 57, 49) */
@@ -4218,7 +4218,7 @@ async function panOther(i, v) {
 /* ------------------------------------------------- live sync / polling --- */
 /* With WATCH (protocol v2) the device pushes CHANGED / RELOAD / STEP_CHANGED; the editor PINGs about
    once a second so the watch stays on (it ends 3 s after the last request), and DUMPs every 5 s as a
-   safety net. Older firmware: DUMP every 400 ms and two steps per round, as before. */
+   safety net. Older firmware: DUMP every 400 ms and two steps per round. */
 function onPush(f) {
   const d = dev;
   if (!d || !d.dump || !d.info) return;
