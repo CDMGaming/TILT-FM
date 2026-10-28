@@ -779,7 +779,8 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_TIMER, S_TIMER_LAST_MIN, S_TIMER_MSG, S_TIMER_LAYER, S_TIMER_OCT, S_TIMER_SONG,
        S_TIME, S_TIME_UNSAVED, S_TIME_KEEP,
        S_START, S_START_BLANK, S_START_NONE, S_START_CRASH,
-       S_TILT_SCENES, S_SCENE_DROP, S_TILT_CUED, S_SCENE_PEND, S_SCENE_OVR, S_SCENE_CLR, S_COUNT };
+       S_TILT_SCENES, S_SCENE_DROP, S_TILT_CUED, S_SCENE_PEND, S_SCENE_OVR, S_SCENE_CLR,
+       S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -815,7 +816,8 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "timer", "timer_last_min", "timer_msg", "timer_layer", "timer_oct", "timer_song",
     "time", "time_unsaved", "time_keep",
     "start", "start_blank", "start_none", "start_crash",
-    "tilt_scenes", "scene_drop", "tilt_cued", "scene_pending", "scene_overwrite", "scene_clear"};
+    "tilt_scenes", "scene_drop", "tilt_cued", "scene_pending", "scene_overwrite", "scene_clear",
+    "tfm_macros", "tfm_macros2", "tfm_presets"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1399,6 +1401,11 @@ static void setup(int s)
         ui.layer = LAYER_SCENE;
         break;
     case S_SCENE_DROP: song.playing = 0; go_home(); ui.confirm = CF_SCENE_DROP; ui.confirm_trk = 2; break;
+    /* TFM: an instrument's MACROS (SQUELCH SCREAMER), MACROS 2 (WOBBLER: RATE a switch, its value), PRESETS listing
+     * the instruments first */
+    case S_TFM_MACROS: song.playing = 0; tfm_load(TSEL, TI_SQUELCH, 2); go_page(GR_MACRO); break;
+    case S_TFM_MACROS2: song.playing = 0; tfm_load(TSEL, TI_WOBBLER, 0); go_page(GR_MACRO); ui.page++; break;
+    case S_TFM_PRESETS: song.playing = 0; tfm_load(TSEL, TI_SQUELCH, 1); go_page(GR_BROWSE); break;
     case S_SCENE_OVR: song.playing = 0; go_home(); ui.confirm = CF_SCENE_OVR; ui.confirm_trk = 0u << 2 | 2u; break;
     case S_SCENE_CLR:
         song.playing = 0; go_home();

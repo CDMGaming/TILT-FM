@@ -941,6 +941,7 @@ static void step_edit(uint32_t slot, int32_t steps)
     }
 }
 
+static void tfm_macro_turn(track_t *t, uint32_t m, int32_t steps);   /* TFM (tfm_instr.c) */
 static void edit_param(uint32_t slot, int32_t steps)
 {
     int16_t *vp;
@@ -949,6 +950,10 @@ static void edit_param(uint32_t slot, int32_t steps)
     int32_t v;
     if (pg->graph == GR_EVENTS) {                         /* AUTOMATION (ui_events.c) */
         ev_knob(slot, steps);
+        return;
+    }
+    if (pg->graph == GR_MACRO) {                      /* TFM: the instrument's macros (tfm_instr.c) */
+        tfm_macro_turn(TSEL, (str_eq(pg->title, "MACROS 2") ? 4u : 0u) + slot, steps);
         return;
     }
     if (pg->graph == GR_SONG) {                       /* KNOB 1 SECTION, 2 TRACK, 3 PAT (A..D, -), 4 REPS */

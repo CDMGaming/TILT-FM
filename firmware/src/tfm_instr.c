@@ -433,3 +433,109 @@ static void tfm_roll_track(tfm_rng_t *r, tfm_setup_t *s, uint32_t i, uint32_t mo
             break;
     }
 }
+
+/* ------------------------------------------------------------ the UI --- */
+/* PRESETS (ui.c preset_all_*): every instrument's sounds in order, as (engine, preset byte) */
+static uint32_t tfm_list_n(void)
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < TI_N; i++)
+        n += TFM_INS[i].nsnd;
+    return n;
+}
+static uint32_t tfm_list_at(uint32_t n, uint32_t *k)
+{
+    uint32_t i;
+    for (i = 0; i < TI_N && n >= TFM_INS[i].nsnd; i++)
+        n -= TFM_INS[i].nsnd;
+    i %= TI_N;
+    *k = TFM_PRE(i, n);
+    return TFM_INS[i].eng;
+}
+static uint32_t tfm_list_pos(const track_t *t)
+{
+    uint32_t i, n = 0, ins = tfm_ins_of(t);
+    if (ins == TI_NONE)
+        return 0;
+    for (i = 0; i < ins; i++)
+        n += TFM_INS[i].nsnd;
+    return n + tfm_snd_of(t);
+}
+static void tfm_load_byte(track_t *t, uint32_t k) { tfm_load(t, (k - TFM_PRE0) / 16u, (k - TFM_PRE0) % 16u); }
+static uint32_t tfm_base_pre(const track_t *t)
+{
+    uint32_t i = tfm_ins_of(t);
+    return i == TI_NONE ? t->preset : TFM_INS[i].snd[tfm_snd_of(t)].pre;
+}
+/* the list's row: a four-letter tag for the instrument, the sound's name */
+static void tfm_tag_name(uint32_t k, char *tag, char *nm)
+{
+    static const char *const TAG[TI_N] = {"THMP", "SQLC", "WOBL", "CHRD", "RAZR", "HAZE", "PIXL", "TINE",
+                                          "GLNT", "PLCK", "VOX", "WHEL"};   /* (4: the list's tag column) */
+    uint32_t i = (k - TFM_PRE0) / 16u % TI_N, s = (k - TFM_PRE0) % 16u;
+    str_cpy(tag, TAG[i], 6);
+    str_cpy(nm, TFM_INS[i].snd[s % TFM_INS[i].nsnd].name, 13);
+}
+static const char *tfm_ins_name(const track_t *t) { return TFM_INS[tfm_ins_of(t) % TI_N].name; }
+static void tfm_snd_label(const track_t *t, char *b)
+{
+    const tfm_instr_t *in = &TFM_INS[tfm_ins_of(t) % TI_N];
+    str_cpy(b, in->snd[tfm_snd_of(t) % in->nsnd].name, 16);
+}
+/* KNOB m: a turn moves its place; a stepped macro one step a detent (never stuck between two values) */
+static void tfm_macro_turn(track_t *t, uint32_t m, int32_t steps)
+{
+    uint32_t i = tfm_ins_of(t);
+    const tfm_macro_t *mc;
+    int32_t pos, span;
+    if (i == TI_NONE)
+        return;
+    mc = &TFM_INS[i].mac[m & 7u];
+    pos = tfm_macro_get(t, m);
+    if (mc->flags & TM_STEP) {
+        span = mc->t[0].hi - mc->t[0].lo;
+        span = span < 0 ? -span : span;
+        pos += steps * (span ? (127 + span - 1) / span : 127);
+    } else {
+        pos += accel(EN_K1 + (m & 3u), steps, 127);
+    }
+    tfm_macro_set(t, m, pos);
+}
+/* MACROS / MACROS 2: the four cards, each its label and its place (0..100; a switch: its first target's value) */
+static void tfm_macro_cards(uint32_t page)
+{
+    uint32_t c, i = tfm_ins_of(TSEL);
+    for (c = 0; c < 4u; c++) {
+        const tfm_macro_t *mc;
+        char val[12];
+        const char *unit = "";
+        int32_t pos;
+        if (i == TI_NONE) {
+            draw_column(c, "", "", "", T_THEME, -1, ICON_NONE);
+            continue;
+        }
+        mc = &TFM_INS[i].mac[page * 4u + c];
+        pos = tfm_macro_get(TSEL, page * 4u + c);
+        if (mc->flags & TM_STEP)
+            param_format(param_desc_of(TFM_INS[i].eng, mc->t[0].id), motion_base_value(TSEL, mc->t[0].id), val, &unit);
+        else
+            fmt_int(val, pos * 100 / 127);
+        draw_column(c, mc->name, val, unit, VAL(c), pos * 1000 / 127, ICON_AUTO);
+    }
+}
+/* the page: the instrument and its sound, big, and which half of the macros this is */
+static void graph_macro(void)
+{
+    uint32_t i = tfm_ins_of(TSEL);
+    char b[24];
+    if (i == TI_NONE)
+        return;
+    GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H, "macro page instrument centred");
+    cv_text_in(0, 30, 240, &AF_M, TFM_INS[i].name, T_THEME, T_BG);
+    tfm_snd_label(TSEL, b);
+    GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H, "macro page sound centred");
+    cv_text_in(0, 54, 240, &AF_S, b, T_TEXT, T_BG);
+    GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H, "macro page hint centred");
+    cv_text_in(0, 84, 240, &AF_S, str_eq(cur_page()->title, "MACROS 2") ? "MACROS 5-8  [EDIT] ENGINE" : "MACROS 1-4  [EDIT] 5-8",
+               T_DIM, T_BG);
+}

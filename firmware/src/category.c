@@ -36,8 +36,19 @@ static const char *const PRESET_CAT[16] = {
     "KUBLPUKU",                  /* 12 FM6: TINE EP, BELL, FM BASS, BRASS, PAD, MARIMBA, ORGAN, PLUCK */
     "DD",                        /* 13 SLICE: CHOP, STUTTER */
 };
+/* TFM: an instrument's sound's category (its preset byte 0x20 + 16 i + s, tfm_instr.c; TI_* order): drums DRUM, basses
+ * BASS, leads LEAD, the harmony ones by what they are */
+static uint32_t tfm_cat(uint32_t k)
+{
+    static const uint8_t C[12] = {CAT_DRUM, CAT_BASS, CAT_BASS, CAT_KEYS, CAT_LEAD, CAT_PAD, CAT_LEAD, CAT_KEYS,
+                                  CAT_PLUCK, CAT_PLUCK, CAT_PAD, CAT_KEYS};
+    uint32_t i = (k - 0x20u) / 16u;
+    return i < sizeof C ? C[i] : CAT_OTHER;
+}
 static uint32_t preset_cat(uint32_t e, uint32_t k)    /* factory preset k of engine e */
 {
+    if (k >= 0x20u)                                     /* (TFM: a preset byte from TFM_PRE0: an instrument's sound) */
+        return tfm_cat(k);
     static const char L[] = "?BLPUKDFO";               /* (a letter's index is its CAT_*) */
     const char *s = e < NELEM(PRESET_CAT) && PRESET_CAT[e] ? PRESET_CAT[e] : "";
     uint32_t i, c;

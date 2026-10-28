@@ -1338,6 +1338,8 @@ static void panel_alert(uint32_t id, const char *a)
     cv_text_on(x + bi[2] + PA_GAP - bt[0], y, &AF_M, a, T_TEXT, T_SURF);
 }
 
+static void tfm_tag_name(uint32_t k, char *tag, char *nm);   /* TFM (tfm_instr.c): "SQLCH", "RUBBER" */
+static void graph_macro(void);
 /* preset browser: the global list (every engine), the current one selected; tag DIM, name TEXT,
  * favourites starred (the accent), the selected row's suggested pattern at its right */
 static void graph_browse(void)
@@ -1367,6 +1369,8 @@ static void graph_browse(void)
         if (e == NENGINES) {                             /* user preset: "U07" and its name */
             up_slot_label(tag, k);
             up_name(k, nm);
+        } else if (k >= TFM_PRE0) {                     /* (TFM: an instrument's sound: the instrument, the sound) */
+            tfm_tag_name(k, tag, nm);
         } else {
             str_cpy(tag, eng_abbr(ENGINES[e]->name), sizeof tag);
             str_cpy(nm, ENGINES[e]->presets[k].name, sizeof nm);
@@ -2324,6 +2328,10 @@ static void draw_graph(void)
         case GR_SONG:
             cv_oy = 0;
             graph_song();
+            break;
+        case GR_MACRO:                                  /* (TFM: tfm_instr.c) */
+            cv_oy = 0;
+            graph_macro();
             break;
         case GR_PATS:
             cv_oy = 0;

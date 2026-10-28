@@ -498,8 +498,11 @@ static uint32_t layer_btn(void);
 /* FM operator pages belong to DIGITAL; they never appear on other instruments (without FELUCCA_FM4: never). SLICES:
  * a SLICE track's (ui_slice.c); LANES / LANES 2 a DRUM track's (its lane levels); FILTER an ANALOG track's; OPERATOR, OP ENV, OPERATOR 2 an FM6
  * track's (its patch's operators, ui_fm6op.c) */
+static uint32_t tfm_ins_of(const track_t *t);          /* TFM (tfm_instr.c): the track's instrument, TI_NONE none */
 static int page_visible(uint32_t i)
 {
+    if (PAGES[i].graph == GR_MACRO)                     /* TFM: MACROS, on an instrument's track */
+        return tfm_ins_of(TSEL) != 0xFFu;
     if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
     if (PAGES[i].id[0] == P_FTYPE)                    /* FILTER (1.5, #104): ANALOG's */
@@ -521,7 +524,7 @@ static uint32_t page_first(uint32_t fam)
 {
     uint32_t i;
     for (i = 0; i < NPAGES; i++)
-        if (PAGES[i].fam == fam)
+        if (PAGES[i].fam == fam && page_visible(i))   /* (TFM: EDIT starts on MACROS only on an instrument's track) */
             return i;
     return 0;
 }
@@ -1590,12 +1593,21 @@ static void select_engine(uint32_t e)
 
 /* the presets of every engine (in ENGINE_ORDER), then the used user presets, as one list (the PRESETS knob and the
  * PRESETS page browse it) */
+/* TFM: PRESETS lists the instruments' sounds first (tfm_instr.c: each an engine and a preset byte TFM_PRE), then
+ * Felucca's list as it was (every engine's factory sounds, then the used user presets); the raw engine sounds are in
+ * EDIT too (the layer's engine keys, KNOB 2) */
+static uint32_t tfm_base_pre(const track_t *t);         /* (the factory preset an instrument's sound starts from) */
+static uint32_t tfm_list_n(void);
+static uint32_t tfm_list_at(uint32_t n, uint32_t *k);   /* -> its engine, *k its preset byte */
+static uint32_t tfm_list_pos(const track_t *t);         /* (not an instrument's sound: 0) */
+static void tfm_load_byte(track_t *t, uint32_t k);
 static uint32_t preset_all_pos(uint32_t *total)          /* list index of the selected track's preset */
 {
-    uint32_t n = 0, cur = 0, e, r;
+    uint32_t n = tfm_list_n(), cur = tfm_list_pos(TSEL), e, r;
+    int tagged = TSEL->preset >= TFM_PRE0 && user_of(TSEL) >= UP_SLOTS;
     for (r = 0; r < NENG_SHOWN; r++) {                  /* (engines.c ENGINE_ORDER) */
         const engine_t *en = ENGINES[e = eng_vis(r)];
-        if (e == TSEL->eng_req)
+        if (e == TSEL->eng_req && !tagged)
             cur = n + preset_rank(en, preset_orig(en, TSEL->preset % (en->npresets ? en->npresets : 1u)));
         n += preset_shown(e);
     }
@@ -1609,6 +1621,9 @@ static uint32_t preset_all_pos(uint32_t *total)          /* list index of the se
 static uint32_t preset_all_at(uint32_t n, uint32_t *k)
 {
     uint32_t e = 0, i, r;
+    if (n < tfm_list_n())
+        return tfm_list_at(n, k);
+    n -= tfm_list_n();
     for (r = 0; r < NENG_SHOWN && n >= preset_shown(eng_vis(r)); r++)
         n -= preset_shown(eng_vis(r));
     if (r == NENG_SHOWN) {
@@ -1721,7 +1736,7 @@ static int32_t preset_pat_hint(void)
         return up_has_pat(u) ? (int32_t)(NPATTERNS + up_pat_rank(u)) : -1;
     if (!e->npresets)
         return -1;
-    u = e->presets[TSEL->preset % e->npresets].pat;
+    u = e->presets[tfm_base_pre(TSEL) % e->npresets].pat;   /* (TFM: an instrument's sound: its factory preset's) */
     return u && u <= NPATTERNS ? (int32_t)u - 1 : -1;
 }
 
@@ -1738,6 +1753,9 @@ static void preset_go(uint32_t n)                    /* load list index n into t
     uint32_t k, e = preset_at(n, &k);
     if (e == NENGINES) {
         up_load(k);
+    } else if (k >= TFM_PRE0) {                         /* (TFM: an instrument's sound) */
+        tfm_load_byte(TSEL, k);
+        sync_reload = 1;
     } else {
         if (e != TSEL->eng_req)
             select_engine(e);

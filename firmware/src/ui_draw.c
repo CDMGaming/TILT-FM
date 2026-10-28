@@ -831,12 +831,17 @@ static uint32_t foot_rename(void)
 }
 
 /* the sound's name on the track: a user preset or the engine's preset (b holds 16) */
+static void tfm_snd_label(const track_t *t, char *b);   /* TFM (tfm_instr.c): an instrument's sound's name */
+static const char *tfm_ins_name(const track_t *t);
+static void tfm_macro_cards(uint32_t page);
 static void sound_name(const track_t *t, char *b)
 {
     const engine_t *e = ENGINES[t->eng_req % NENGINES];
     b[0] = 0;
     if (user_of(t) < UP_SLOTS)
         up_name(user_of(t), b);
+    else if (tfm_ins_of(t) != 0xFFu)                    /* (TFM: an instrument's sound) */
+        tfm_snd_label(t, b);
     else if (e->npresets)
         str_cpy(b, e->presets[t->preset % e->npresets].name, 16);
 }
@@ -848,7 +853,7 @@ static void draw_foot(void)
     uint32_t sig;
     const page_t *pg = cur_page();
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
-    const char *ename = e->name, *help;
+    const char *ename = tfm_ins_of(t) != 0xFFu ? tfm_ins_name(t) : e->name, *help;   /* (TFM: the instrument) */
     int32_t x;
     sound_name(t, pn);
     if (ui.home)
@@ -998,6 +1003,10 @@ static void draw_columns(void)
             else
                 draw_column(c, d->label, val, unit, VAL(c), RATIO(d, enum_rank(d, *vp)), param_icon(d, *vp));
         }
+        return;
+    }
+    if (cur_page()->graph == GR_MACRO) {            /* TFM: the instrument's macros (tfm_instr.c) */
+        tfm_macro_cards(str_eq(cur_page()->title, "MACROS 2"));
         return;
     }
     if (cur_page()->graph == GR_SONG) {             /* SECTION, TRACK, its PAT (A..D, -), REPS (the section's) */

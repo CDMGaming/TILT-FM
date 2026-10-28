@@ -1436,7 +1436,8 @@ static int test_categories(void)
     }
     bad += check("categories: every factory preset of every engine has one (the table's strings == the preset counts)",
                  ok && preset_cat(0, 2) == CAT_BASS && preset_cat(ENGI_DRUM, 0) == CAT_DRUM && preset_cat(ENGI_FM6, 0) == CAT_KEYS &&
-                 preset_cat(ENGI_DRUM, 9) == CAT_DRUM && preset_cat(0, 99) == CAT_OTHER);
+                 preset_cat(ENGI_DRUM, 9) == CAT_DRUM && preset_cat(0, 30) == CAT_OTHER &&   /* (TFM: from 0x20 an instrument's) */
+                 preset_cat(0, TFM_PRE(TI_SQUELCH, 0)) == CAT_BASS);
     go_page(GR_BROWSE);
     select_engine(0);
     apply_preset(0);                                       /* ANALOG SAW LEAD */
@@ -1446,6 +1447,10 @@ static int test_categories(void)
     for (n = 0, e = 0; e < NENGINES; e++)
         for (k = 0; eng_ok(e) && k < preset_shown(e); k++)
             n += preset_cat(e, k) == CAT_BASS;
+    for (i = 0; i < tfm_list_n(); i++) {                   /* (TFM: the instruments' basses come first) */
+        tfm_list_at(i, &k);
+        n += tfm_cat(k) == CAT_BASS;
+    }
     bad += check("  KNOB 4: ALL, FAV, then BASS: the list holds the factory basses only, the sound not loaded",
                  list_mode() == 2u && str_eq(list_name(list_mode()), "BASS") && !favorites.filter && ui_lcat == CAT_BASS &&
                  total == n && n >= 6u && pos == total && TSEL->eng_req == 0u && TSEL->preset == 0u);
@@ -5071,7 +5076,8 @@ static int test_fm4_retired(void)
         for (i = 0; ok && i < NENG_SHOWN; i++)
             ok &= str_eq(ENGINES[eng_vis(i)]->name, ORDER[i]) && eng_rank(eng_vis(i)) == i && eng_ok(eng_vis(i));
         preset_all_pos(&total);
-        for (i = 0; i < total; i++) {                  /* the list's engines, each once, in that order */
+        for (i = tfm_list_n(); i < total; i++) {       /* the list's engines, each once, in that order (TFM: after the
+                                                        * instruments' sounds) */
             e = preset_all_at(i, &k);
             if (e >= NENGINES || e == last)
                 continue;
@@ -10528,6 +10534,89 @@ static int test_tfm_dice(void)
     return bad;
 }
 
+/* TFM instruments (tfm_instr.c): every sound loads on its engine with its changes and its mark; every macro's targets
+ * are the engine's or the track's values, inside their ranges, and a full turn moves its first target end to end; a
+ * stepped one moves a step a detent; MACROS / MACROS 2 show only on an instrument's track and their KNOBs turn the
+ * macros; PRESETS lists the instruments first and loads one; the bottom line names it */
+static int test_tfm_instruments(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t i, s, m, k, total;
+    ui_power_on();
+    for (i = 0; i < TI_N; i++)
+        for (s = 0; s < TFM_INS[i].nsnd; s++) {
+            tfm_load(&trk[0], i, s);
+            ok &= trk[0].eng_req == TFM_INS[i].eng && tfm_ins_of(&trk[0]) == i && tfm_snd_of(&trk[0]) == s;
+            for (k = 0; k < 6u && TFM_INS[i].snd[s].ov[k].id != 0xFFu; k++)
+                ok &= trk[0].p[TFM_INS[i].snd[s].ov[k].id] == TFM_INS[i].snd[s].ov[k].v;
+        }
+    bad += check("TFM instruments: every sound loads on its engine, its changes in, the track marked", ok);
+    ok = 1;
+    for (i = 0; i < TI_N; i++) {
+        tfm_load(&trk[0], i, 0);
+        for (m = 0; m < 8u; m++) {
+            const tfm_macro_t *mc = &TFM_INS[i].mac[m];
+            const param_desc_t *d;
+            ok &= mc->name && str_len(mc->name) <= 5u && mc->t[0].id != 0xFFu;
+            for (k = 0; k < 3u && mc->t[k].id != 0xFFu; k++) {
+                d = param_desc_of(TFM_INS[i].eng, mc->t[k].id);
+                ok &= mc->t[k].lo >= d->min && mc->t[k].lo <= d->max && mc->t[k].hi >= d->min && mc->t[k].hi <= d->max &&
+                      mc->t[k].lo != mc->t[k].hi;
+            }
+            tfm_macro_set(&trk[0], m, 0);
+            ok &= trk[0].p[mc->t[0].id] == mc->t[0].lo && tfm_macro_get(&trk[0], m) == 0;
+            tfm_macro_set(&trk[0], m, 127);
+            ok &= trk[0].p[mc->t[0].id] == mc->t[0].hi && tfm_macro_get(&trk[0], m) == 127;
+            if (mc->flags & TM_STEP) {                  /* a detent: the next value, never stuck */
+                int16_t v;
+                tfm_macro_set(&trk[0], m, 0);
+                v = trk[0].p[mc->t[0].id];
+                tfm_macro_turn(&trk[0], m, 1);
+                ok &= trk[0].p[mc->t[0].id] != v;
+            }
+            if (!ok) { printf("    %s macro %u %s\n", TFM_INS[i].name, m + 1u, mc->name); break; }
+        }
+    }
+    bad += check("TFM macros: targets inside their ranges, labels of 5, 0..127 end to end, a switch a step a detent", ok);
+    ui_power_on();
+    for (m = 0; m < NPAGES && PAGES[m].graph != GR_MACRO; m++)
+        ;
+    ok = !page_visible(m) && page_first(FAM_EDIT) != m; /* (no instrument on the power-on T1: no MACROS, EDIT 1 first) */
+    tfm_load(TSEL, TI_SQUELCH, 0);
+    ok &= page_visible(m) && page_first(FAM_EDIT) == m;
+    go_page(GR_MACRO);
+    ok &= cur_page()->graph == GR_MACRO && str_eq(cur_page()->title, "MACROS");
+    k = (uint32_t)TSEL->p[P_E4];
+    turn(EN_K1, 5);
+    ok &= TSEL->p[P_E4] > (int16_t)k;
+    press(B_EDIT);
+    ok &= str_eq(cur_page()->title, "MACROS 2");
+    k = (uint32_t)TSEL->p[P_GLIDE];
+    turn(EN_K4, 6);
+    ok &= TSEL->p[P_GLIDE] > (int16_t)k;
+    fm1_ms += 1000u;                                    /* (not a double tap: that locks the layer) */
+    frames(5);
+    press(B_EDIT);
+    ok &= str_eq(cur_page()->title, "EDIT 1");
+    bad += check("TFM MACROS: only on an instrument's track; KNOB 1 CUT, MACROS 2's KNOB 4 GLIDE; EDIT on to EDIT 1", ok);
+    ui_power_on();
+    preset_all_pos(&total);
+    tfm_list_at(0, &k);
+    ok = total > tfm_list_n() && k == TFM_PRE(0, 0);
+    preset_go(tfm_list_n() + 0u);                       /* (the first raw sound, as before: ANALOG SAW LEAD) */
+    ok &= TSEL->eng_req == 0u && TSEL->preset == 0u && tfm_ins_of(TSEL) == TI_NONE;
+    preset_go(TFM_INS[0].nsnd + 1u);                     /* (SQUELCH's second sound) */
+    ok &= tfm_ins_of(TSEL) == TI_SQUELCH && tfm_snd_of(TSEL) == 1u && preset_all_pos(&total) == TFM_INS[0].nsnd + 1u;
+    {
+        char b[16];
+        sound_name(TSEL, b);
+        ok &= str_eq(b, "RUBBER") && str_eq(tfm_ins_name(TSEL), "SQUELCH");
+    }
+    bad += check("TFM PRESETS: the instruments first, then Felucca's sounds; an instrument's sound loads and is named", ok);
+    ui_power_on();
+    return bad;
+}
+
 /* TFM: the shipping build has no built-in sample data (tools/gen_samples.py builtin_on): SAMPLE and SLICE offer no
  * factory sounds (PRESETS, NEW SONG, a program change find none); a sound or project that played PIANO / FLUTE / SAX
  * or the BREAK still loads, keeps its values, plays the missing-sample sine and says NO SAMPLE; USR1..3 stay */
@@ -10646,6 +10735,7 @@ int main(void)
     bad += test_tilt_song_sounds();
     bad += test_scene_layer_buttons();
     bad += test_tfm_dice();
+    bad += test_tfm_instruments();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

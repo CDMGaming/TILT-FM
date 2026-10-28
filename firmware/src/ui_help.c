@@ -29,6 +29,8 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"CHORUS", "[K1-4]ALL TRACKS[FX]FX"},
     {"SCL", "[K2]SCALE[K3]QUANTIZE[SCL]CHORDS"},
     {"CHORD", "[K1]CHORD[KEYS]ONE FINGER[SCL]SCL"},
+    {"MACROS", "[K1-4]MACROS[EDIT]MACROS 2"},          /* TFM: an instrument's (tfm_instr.c) */
+    {"MACROS 2", "[K1-4]MACROS[EDIT]ENGINE"},
     {"EDIT 1", H_EDIT},
     {"EDIT 2", H_EDIT},
     {"FILTER", "[K1]LP BP HP[K2]CUTOFF[EDIT]VOICE"},
