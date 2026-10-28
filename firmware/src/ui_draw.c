@@ -991,6 +991,10 @@ static void draw_columns(void)
     char val[12];
     const char *unit;
     (void)motion_mask(song.sel, card_mot_mask);       /* (PLAY OFF: no scan) */
+    if (sheet_on()) {                                 /* TFM: the STEP SHEET (tfm_sheet.c) */
+        sheet_cards();
+        return;
+    }
     if (home_jam()) {                                 /* TFM: HOME > JAM (tfm_jam.c) */
         jam_cards();
         return;

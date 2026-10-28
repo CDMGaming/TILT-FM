@@ -1677,7 +1677,7 @@ static int test_menu_tabs(void)
     bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 8 6 8 8 rows: 1.6.1 2ND CORE, TILT-FM START SCREEN, a FELUCCA_CPU2=0 build SYSTEM 7; 1.5.5: SELECT, T1..T4 CHANNEL, AUTO SELECT, SCREEN WAKE), 1..8 each in a run, fit the page; tab gaps "
                  "constant (S, LARGE)",
                  ok && MTAB_COUNT == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
-                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && MI_TAB[MI_SELECT] == MTAB_CONTROL && mtab_rows(MTAB_AUDIO) == 6u &&
+                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && MI_TAB[MI_SELECT] == MTAB_CONTROL && mtab_rows(MTAB_AUDIO) == 7u &&
                  mtab_rows(MTAB_MIDI) == 8u && MI_TAB[MI_MFOLLOW] == MTAB_MIDI && MI_TAB[MI_SCRWAKE] == MTAB_MIDI && MI_SCRWAKE + 1u == MI_LCLEAR && MI_TAB[MI_LCLEAR] == MTAB_MIDI && MI_TAB[MI_TCH4] == MTAB_MIDI && mtab_rows(MTAB_SYSTEM) == 7u + FELUCCA_CPU2 && MI_TAB[MI_START] == MTAB_SYSTEM &&
 #if FELUCCA_CPU2
                  MI_TAB[MI_CPU2] == MTAB_SYSTEM &&
@@ -8003,7 +8003,8 @@ static int test_click_menu(void)
     turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_COUNTIN;
     turn(EN_K4, 1); ok &= cin_bars == 1u;
     turn(EN_K4, 1); ok &= cin_bars == 2u;
-    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_TUNE;     /* (1.2: TUNE, AUDIO's last) */
+    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_TUNE;     /* (1.2: TUNE) */
+    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_TSIG;     /* (TFM: TIME SIG, AUDIO's last) */
     turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_LOWCUT;   /* (wraps within AUDIO) */
     press(B_HOME);
     ok &= !ui.menu;
@@ -10092,6 +10093,23 @@ static int test_tilt_scenes(void)
     tilt_scene_add();
     ok &= chain_config.count == 2u && chain_config.row[1].slot[0] == 0u && str_eq(ui.msg, "ADDED: SECTION 2");
     bad += check("TILT-FM ADD TO SONG: a section at the end, all four tracks on the scene now, x1; edited: stored first", ok);
+    {   /* TFM E2: QUICK CHAIN: G4 held, scene keys tapped: sections in order, the same again one more REPS */
+        uint32_t kG = key_at(0, SK_ADD), kA = key_at(0, SK_SCENE);
+        scene_key(kG, SK_ADD);
+        fm1_in.notes |= 1u << kG;
+        scene_key(kA, SK_SCENE);                         /* A: the song ends on A already (section 2): x2 */
+        scene_key(kA, SK_SCENE);                         /* A again: x3 */
+        scene_key(key_at(0, SK_SCENE + 3u), SK_SCENE + 3u);   /* D: section 3 */
+        fm1_in.notes &= ~(1u << kG);
+        scene_keys_poll();                               /* (G4 let go: no ADD, it chained) */
+        ok = chain_config.count == 3u && chain_config.row[1].slot[0] == 0u && chain_config.row[1].repeat == 3u &&
+             chain_config.row[2].slot[3] == 3u && chain_config.row[2].repeat == 1u && str_eq(ui.msg, "SONG: D Ax3 D");
+        scene_key(kG, SK_ADD);                           /* G4 alone: ADD on release */
+        fm1_in.notes |= 1u << kG; scene_keys_poll(); fm1_in.notes &= ~(1u << kG); scene_keys_poll();
+        ok &= chain_config.count == 4u;
+        chain_config.count = 2; chain_config.row[1].repeat = 1;
+        bad += check("TFM QUICK CHAIN: G4 held + scene keys append sections (again: REPS + 1); G4 alone ADDs on release", ok);
+    }
     chain_config.count = CHAIN_ROWS;
     tilt_scene_add();
     ok = chain_config.count == CHAIN_ROWS && str_eq(ui.msg, "SONG FULL");
@@ -10672,6 +10690,51 @@ static int test_tfm_jam_menu(void)
     ok &= ui.menu_sel - mw_first() < 4u && mw_first() > mtab_first(MTAB_DISPLAY);
     menu_close();
     bad += check("TFM MENU: a window of four rows, KNOB k its row k (then the selected one), SELECT moves it", ok);
+    {   /* TFM E1: LEN in bars (4/4: 16 steps, 3/4: 12), "2" BARS, "2+3" BARS; OCT- held: single steps */
+        const param_desc_t *d = &TP[P_SLEN];
+        char v[12];
+        const char *u;
+        ok = param_turn(d, 16, 1) == 32 && param_turn(d, 35, 1) == 48 && param_turn(d, 35, -1) == 32 &&
+             param_turn(d, 8, -2) == 6 && param_turn(d, 64, 1) == 64;
+        param_format(d, 32, v, &u); ok &= str_eq(v, "2") && str_eq(u, "BARS");
+        param_format(d, 35, v, &u); ok &= str_eq(v, "2+3") && str_eq(u, "BARS");
+        param_format(d, 7, v, &u); ok &= str_eq(v, "7") && str_eq(u, "STEP");
+        menu_put(MI_TSIG, 1);                           /* 3/4 */
+        ok &= tfm_bar() == 12u && param_turn(d, 12, 1) == 24 && str_eq(menu_vname(MI_TSIG, 1), "3/4");
+        menu_put(MI_TSIG, 0);
+        fm1_in.buttons |= 1u << panel.btn[B_OCTDN];
+        ok &= param_turn(d, 16, 1) == 17;
+        fm1_in.buttons &= ~(1u << panel.btn[B_OCTDN]);
+        frame();
+        bad += check("TFM LEN: bars first (TIME SIG 4/4 3/4 6/8 7/8), between two bars to the next, OCT- held single steps", ok);
+    }
+    {   /* TFM E3: the STEP SHEET: OCT+ held on STEP, KNOB 1 MOVE, 2 COPY, 3 NUDGE, 4 SLIDE; OCT+'s release no tap */
+        track_t *t;
+        int32_t oct;
+        ui_power_on();
+        stop_transport();
+        t = TSEL;
+        tfm_load(t, TI_SQUELCH, 0);
+        memset(t->step, 0, sizeof t->step);
+        t->p[P_SLEN] = 16;
+        t->step[2].time = ST_NOTE; t->step[2].n = 1; t->step[2].note[0] = 60; t->step[2].vel = 100;
+        go_title("STEP");
+        ui.cursor = 2;
+        oct = song.octave;
+        btn_down(B_OCTUP); frame();
+        ok = sheet_on();
+        turn(EN_K1, 1);                                 /* MOVE right: the note on step 4, the cursor with it */
+        ok &= t->step[3].n == 1u && t->step[3].note[0] == 60 && !t->step[2].n && ui.cursor == 3u;
+        turn(EN_K2, 1);                                 /* COPY right: step 5 too */
+        ok &= t->step[4].n == 1u && t->step[3].n == 1u && ui.cursor == 4u;
+        turn(EN_K3, 2);
+        ok &= step_nudge(&t->step[4]) == 2;
+        turn(EN_K4, 1);
+        ok &= (t->step[4].flags & SF_SLIDE) != 0u;
+        btn_up(B_OCTUP); frame(); frame();
+        ok &= song.octave == oct && !sheet_on();
+        bad += check("TFM STEP SHEET: OCT+ held on STEP, KNOB 1 MOVE, 2 COPY, 3 NUDGE, 4 SLIDE; its release no octave", ok);
+    }
     return bad;
 }
 static int test_tfm_nosample(void)

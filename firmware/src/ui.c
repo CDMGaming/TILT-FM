@@ -83,6 +83,10 @@ static uint32_t up_gen;                      /* bumped on every user bank change
                                                 * CURRENT, every older setting (the TILT layer's B3) */
 #define PREF_SCENE_SH 1u                       /* TILT-FM: bits 1..3 of ui_prefs3, the scene the music is in: 0 none, 1..4 A..D
                                                 * (project.c scene_boot, tilt.c tilt_scene_poll; no MENU row) */
+#define PREF_TSIG_SH 6u                        /* TFM: bits 6..7 of ui_prefs3, MENU > AUDIO > TIME SIG: 0 4/4 (every older
+                                                * setting), 3/4, 6/8, 7/8: the steps of a bar (tfm_bar: LEN in bars) */
+static uint32_t tfm_tsig(void) { return (ui_prefs3 >> PREF_TSIG_SH) & 3u; }
+static uint32_t tfm_bar(void) { static const uint8_t B[4] = {16, 12, 12, 14}; return B[tfm_tsig()]; }
 #define PREF_X 0xFF0000u                       /* (menu_items.c MENU_FLAGS: a bit of ui_prefs2, << 16) */
 #define PREF_SCOPE_MIX (0x01u << 16)
 #define PREF_PREVIEW (0x02u << 16)
@@ -120,6 +124,9 @@ static int home_jam(void);                              /* TFM (tfm_jam.c): HOME
 static void jam_cards(void);
 static void jam_turn(uint32_t k, int32_t s);
 static void graph_jam(void);
+static int sheet_on(void);                              /* TFM (tfm_sheet.c): the STEP SHEET (OCT+ held on STEP) */
+static void sheet_cards(void);
+static void sheet_turn(uint32_t k, int32_t d);
 /* TFM: the tracks' colours, T1 blue, T2 yellow, T3 pink, T4 green (JAM's bumpers, the menus' knob rows) */
 static const uint16_t TFM_TRK_COL[4] = {RGB(64, 150, 255), RGB(255, 210, 0), RGB(255, 84, 184), RGB(60, 220, 110)};
 static uint16_t tfm_trk_col(uint32_t c)                  /* (GREY, MONO: no hue, the theme's) */

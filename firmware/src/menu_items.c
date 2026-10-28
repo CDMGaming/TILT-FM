@@ -15,7 +15,7 @@
  * nothing of theirs is in the settings record (MI_PROJECT: menu_get / menu_put read and write song.g) */
 enum { MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_SCOPE, MI_HOME, MI_HOLD, MI_ACCEL, MI_LATCH, MI_BPMLOCK, MI_SCLLED,
        MI_PREVIEW, MI_CHADD, MI_SELECT, MI_LOWCUT, MI_USB,
-       MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_MIDIIN, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_MFOLLOW, MI_SCRWAKE, MI_LCLEAR, MI_SERIAL, MI_RESTORE, MI_HELP,
+       MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_TSIG, MI_MIDIIN, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_MFOLLOW, MI_SCRWAKE, MI_LCLEAR, MI_SERIAL, MI_RESTORE, MI_HELP,
        MI_START,                                       /* (TILT-FM: SYSTEM > START SCREEN) */
 #if FELUCCA_CPU2
        MI_CPU2,                                        /* (not in a FELUCCA_CPU2=0 build: core.h) */
@@ -39,7 +39,7 @@ static int menu_valued(uint32_t row) { return row < MI_VALUES && row != MI_LCLEA
 #define MI_TCH(row) ((row) >= MI_TCH1 && (row) <= MI_TCH4)   /* 1.5.5 (#202): T1..T4 CHANNEL, MIDI IN TRACK's */
 static const char *const MI_NAME[MI_COUNT] = {"COLOR", "STYLE", "LARGE", "ANIM", "LEDS", "SCREEN OFF", "SCOPE", "HOME", "HOLD", "KNOB ACCEL",
                                               "FX LATCH", "BPM LOCK", "SCALE LEDS", "STEP PREVIEW", "CHORD ENTRY", "SELECT",
-                                              "SPEAKER EQ", "USB LEVEL", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE",
+                                              "SPEAKER EQ", "USB LEVEL", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE", "TIME SIG",
                                               "MIDI IN", "T1 CHANNEL", "T2 CHANNEL", "T3 CHANNEL", "T4 CHANNEL",
                                               "AUTO SELECT", "SCREEN WAKE", "LEARN CLEAR", "USB SERIAL", "RESTORE LAST", "HELP",
                                               "START SCREEN",
@@ -69,6 +69,7 @@ static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO,             /* SPEAKER EQ, USB LEVEL, CLICK, CLICK LEVEL,
                                                                              * COUNT-IN */
     MTAB_AUDIO,                                                             /* TUNE (1.2) */
+    MTAB_AUDIO,                                                             /* TIME SIG (TFM) */
     MTAB_MIDI,                                                              /* MIDI IN (1.2) */
     MTAB_MIDI, MTAB_MIDI, MTAB_MIDI, MTAB_MIDI,                             /* T1..T4 CHANNEL (1.5.5) */
     MTAB_MIDI,                                                              /* AUTO SELECT (1.5.5) */
@@ -189,7 +190,7 @@ static uint32_t menu_n(uint32_t row)
     return row == MI_COLOR ? palette_n() : row == MI_LOWCUT || (row >= MI_CLICK && row <= MI_COUNTIN) ? 3u :
            row == MI_HOLD ? 4u : row == MI_LEDS ? LEDS_ROWS : row == MI_SCROFF ? NELEM(SCROFF_N) :
            row == MI_TUNE ? TUNE_N : row == MI_MIDIIN ? NELEM(N_ROUTE) : MI_TCH(row) ? MCH_N : row == MI_ANIM ? 3u : row == MI_HOME ? HV_COUNT :
-           row == MI_SELECT ? SEL_N : 2u;
+           row == MI_SELECT ? SEL_N : row == MI_TSIG ? 4u : 2u;
 }
 static uint32_t menu_get(uint32_t row)
 {
@@ -207,6 +208,7 @@ static uint32_t menu_get(uint32_t row)
     case MI_ANIM: return ui_prefs & PREF_ANIM_OFF ? 1u : (ui_idle & 1u) ? 2u : 0u;
     case MI_HOME: return ui_home_view < HV_COUNT ? ui_home_view : HV_SCOPE;
     case MI_SELECT: return sel_mode();
+    case MI_TSIG: return tfm_tsig();
     case MI_CLICK: case MI_CLKLVL: case MI_COUNTIN: return rp_get(row - MI_CLICK);
     case MI_TUNE: return (uint32_t)(clamp(song.g[G_TUNE], TUNE_MIN, TUNE_MIN + (int32_t)TUNE_N - 1) - TUNE_MIN);
     case MI_MIDIIN: return (uint32_t)clamp(song.g[G_ROUTE], 0, (int32_t)NELEM(N_ROUTE) - 1);
@@ -235,6 +237,7 @@ static const char *menu_vname(uint32_t row, uint32_t v)
     case MI_ANIM: return ANIM_N[v % 3u];
     case MI_HOME: return HOME_N[v % HV_COUNT];
     case MI_SELECT: return SELECT_N[v % SEL_N];
+    case MI_TSIG: { static const char *const TS_N[4] = {"4/4", "3/4", "6/8", "7/8"}; return TS_N[v & 3u]; }
     case MI_LEDS: return LEDS_ROW_N[v % LEDS_ROWS];
     case MI_MIDIIN: return N_ROUTE[v % NELEM(N_ROUTE)];
     case MI_TCH1: case MI_TCH2: case MI_TCH3: case MI_TCH4: {   /* "1".."16", OMNI, OFF */
@@ -295,6 +298,9 @@ static void menu_put(uint32_t row, uint32_t v)
     case MI_HOME:                                      /* (another look: HOME drawn anew) */
         ui_home_view = (uint8_t)(v < HV_COUNT ? v : HV_SCOPE);
         ui.force = 1;
+        break;
+    case MI_TSIG:                                      /* (TFM: LEN's bars, params.c) */
+        ui_prefs3 = (uint8_t)((ui_prefs3 & ~(3u << PREF_TSIG_SH)) | (v & 3u) << PREF_TSIG_SH);
         break;
     case MI_SELECT:                                    /* (1.5.5 PAGE bit 4; 1.5.6 MODW VEL bit 6 too: ui.c sel_mode) */
         ui_prefs2 = (uint8_t)((ui_prefs2 & ~((PREF_SEL_PAGE | PREF_SEL_HI) >> 16)) | (v & 1u) << 4 | (v & 2u) << 5);

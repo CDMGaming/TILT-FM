@@ -304,10 +304,17 @@ static int32_t enum_rank(const param_desc_t *d, int32_t v)   /* v's place in the
             break;
     return o ? r + d->min : v;
 }
+static uint32_t tfm_bar(void);                          /* TFM (ui.c): the steps of a bar (MENU > AUDIO > TIME SIG) */
+static int tfm_fine(void);                              /* TFM (ui_input.c): OCT- held, LEN in single steps */
 /* a knob turned `steps` (signed) from v: clamped, over the shown order, past aliases (enum_step) */
 static int32_t param_turn(const param_desc_t *d, int32_t v, int32_t steps)
 {
     const uint8_t *o = enum_order(d);
+    if (d->fmt == F_STEPS && !tfm_fine() && (v > (int32_t)tfm_bar() || (v == (int32_t)tfm_bar() && steps > 0))) {
+        /* TFM: LEN in whole bars from a bar up (from between two: to the next one); under a bar its single steps */
+        int32_t b = (int32_t)tfm_bar(), n = steps > 0 ? v / b + steps : (v + b - 1) / b + steps;
+        return clamp(n * b, b, d->max - d->max % b);
+    }
     if (o)
         return o[clamp(enum_rank(d, v) - d->min + steps, 0, d->max - d->min)] + d->min;
     if (d->names == ESYNC_NAMES) {                    /* ENV SYNC: a note value a step (the first value showing it) */
@@ -409,10 +416,21 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
     case F_ONOFF:
         str_cpy(val, N_ONOFF[v ? 1 : 0], 6);
         break;
-    case F_STEPS:
-        fmt_int(val, v);
-        *unit = "STEP";
+    case F_STEPS: {                                 /* TFM: in bars: "2" BARS, "2+3" BARS; under a bar its steps */
+        int32_t b = (int32_t)tfm_bar();
+        if (v < b) {
+            fmt_int(val, v);
+            *unit = "STEP";
+        } else {
+            fmt_int(val, v / b);
+            if (v % b) {
+                str_cpy(val + str_len(val), "+", 2);
+                fmt_int(val + str_len(val), v % b);
+            }
+            *unit = v == b ? "BAR" : "BARS";
+        }
         break;
+    }
     default:
         if (d->names) {                               /* F_INT with a 0-terminated name list: the range */
             uint32_t k = 0;                           /* split evenly over the names (engine desc hooks) */

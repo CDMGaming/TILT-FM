@@ -1157,6 +1157,23 @@ static void act_do(void)
 
 /* OCT- / OCT+ where they answer (the dialogs, the menu, action pages): on release, and only a press
  * that began there; both down together (UPDATE MODE, main.c) is no tap. Bit 0 OCT-, bit 1 OCT+ */
+/* TFM: OCT- held while LEN turns: single steps (params.c param_turn); OCT+ held on STEP: the STEP SHEET. Used so, its
+ * press's octave is taken back (oct_pre: the octave before it) and its release is no tap */
+static uint8_t oct_mod;
+static int8_t oct_pre;
+static void oct_as_mod(uint32_t bit)
+{
+    if (!(oct_mod & bit))
+        song.octave = oct_pre;
+    oct_mod |= (uint8_t)bit;
+}
+static int tfm_fine(void)
+{
+    if (!((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u))
+        return 0;
+    oct_as_mod(1u);
+    return 1;
+}
 static uint32_t oct_taps(uint32_t pressed, int here)
 {
     static uint8_t down, chord;
@@ -1171,6 +1188,10 @@ static uint32_t oct_taps(uint32_t pressed, int here)
     if (chord) {
         tap = 0;
         chord = now != 0u;
+    }
+    if (oct_mod) {                                      /* (TFM: OCT- was LEN's fine, OCT+ the STEP SHEET: no tap) */
+        tap &= ~(uint32_t)oct_mod;
+        oct_mod &= (uint8_t)now;
     }
     return tap;
 }
@@ -1735,6 +1756,7 @@ static void ui_input(void)
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
             if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-; */
                 break;                                  /* MIDI LEARN: clear / done (below) */
+            oct_pre = (int8_t)song.octave;             /* (TFM: OCT+ / OCT- then a modifier: oct_as_mod) */
             if ((fm1_in.buttons & both) == both)
                 song.octave = 0;
             else
@@ -1818,6 +1840,13 @@ static void ui_input(void)
             continue;
         if (mom_down())                                 /* (LFO + a knob, MOMENTARY or not: LFO's release opens no page) */
             ui.pg_down &= (uint16_t)~(1u << panel.btn[B_LFO]);
+        if (sheet_on()) {                               /* TFM: the STEP SHEET (tfm_sheet.c); OCT+'s release no tap */
+            oct_as_mod(2u);
+            sheet_turn(k, s);
+            ui.hot_col = (uint8_t)k;
+            ui.hot_t = 40;
+            continue;
+        }
         if ((held = lock_held()) != 0u) {               /* a step held on STEP: KNOB k locks (parameter locks) */
             lock_turn(k, s, held);
             ui.hot_col = (uint8_t)k;

@@ -58,6 +58,7 @@ enum { NS_KEY, NS_SCALE, NS_BPM, NS_LINEUP, NS_T1, NS_CODE = NS_T1 + NTRK, NS_RO
 #include "tfm_instr.c"                                  /* TFM: the instruments over the engines, their macros */
 #include "tfm_code.c"                                   /* TFM: TILT's setup codes */
 #include "tfm_jam.c"                                     /* TFM: HOME > JAM */
+#include "tfm_sheet.c"                                   /* TFM: the STEP SHEET (OCT+ held on STEP) */
 static struct {
     uint8_t row, rolled, lineup;                        /* the selected row; (rolled: once, the first open); LU_* */
     uint16_t hold;                                      /* bit r: row r held (NUDGE leaves it) */
@@ -1056,6 +1057,42 @@ static void layer_tilt(void)
 #define SK_SCENE 4u                                     /* C4: the white key place of scene A */
 #define SK_ADD 8u                                       /* G4 */
 static struct { uint8_t held, k, used; } skh = {SCENE_NONE, 0, 0};
+/* TFM: QUICK CHAIN: G4 held, the scene keys tapped in order: each tap a section of that scene at the song's end (the
+ * same scene again: one more REPS of the last section). G4 tapped alone: ADD as before (on its release) */
+static struct { uint8_t held, k, used; } qc;
+static void quick_chain(uint32_t s)
+{
+    chain_row_t *last = chain_config.count ? &chain_config.row[chain_config.count - 1u] : 0;
+    char b[24] = "SONG: ";
+    uint32_t i, n;
+    qc.used = 1;
+    if (chain_busy()) {
+        ui_message("STOP TO EDIT");
+        return;
+    }
+    if (!project_used(s)) {
+        ui_message("SCENE EMPTY");
+        return;
+    }
+    if (last && !memcmp(last->slot, chain_row_of(s, 1).slot, sizeof last->slot) && last->repeat < 16u) {
+        last->repeat++;
+    } else if (chain_config.count >= CHAIN_ROWS) {
+        ui_message("SONG FULL");
+        return;
+    } else {
+        chain_config.row[chain_config.count++] = chain_row_of(s, 1);
+    }
+    n = str_len(b);                                     /* the song's last sections, as letters ("A A B") */
+    for (i = chain_config.count > 4u ? chain_config.count - 4u : 0u; i < chain_config.count && n + 4u < sizeof b; i++) {
+        b[n++] = (char)('A' + chain_config.row[i].slot[0] % 4u);
+        if (chain_config.row[i].repeat > 1u)
+            b[n++] = 'x', b[n++] = (char)('0' + chain_config.row[i].repeat % 10u);
+        b[n++] = ' ';
+    }
+    b[n ? n - 1u : 0u] = 0;
+    ui_message(b);
+    ui.force = 1;
+}
 static void scene_copy_ui(uint32_t src, uint32_t dst, int sure)
 {
     char b[24] = "A > C COPIED";
@@ -1136,13 +1173,19 @@ static void scene_key(uint32_t k, uint32_t p)
 {
     if (key_black(k))
         return;
-    if (p == SK_ADD) {
-        tilt_scene_add();
+    if (p == SK_ADD) {                                  /* (TFM: on its release, unless the scenes were tapped) */
+        qc.held = 1;
+        qc.k = (uint8_t)k;
+        qc.used = 0;
         return;
     }
     if (p < SK_SCENE || p >= SK_SCENE + 4u)
         return;
     p -= SK_SCENE;
+    if (qc.held && ((fm1_in.notes >> qc.k) & 1u)) {     /* TFM: QUICK CHAIN */
+        quick_chain(p);
+        return;
+    }
     if (skh.held != SCENE_NONE && skh.held != p && ((fm1_in.notes >> skh.k) & 1u)) {
         skh.used = 1;                                   /* hold + another: copy */
         scene_copy_ui(skh.held, p, 0);
@@ -1165,6 +1208,11 @@ static void scene_oct(void)
 /* each pass (tilt_scene_poll): the scene key held let go, nothing else done with it: go there */
 static void scene_keys_poll(void)
 {
+    if (qc.held && !((fm1_in.notes >> qc.k) & 1u)) {    /* (TFM: G4 let go: ADD if it chained nothing) */
+        qc.held = 0;
+        if (!qc.used)
+            tilt_scene_add();
+    }
     if (skh.held == SCENE_NONE || ((fm1_in.notes >> skh.k) & 1u))
         return;
     if (!skh.used && !ui.confirm)
