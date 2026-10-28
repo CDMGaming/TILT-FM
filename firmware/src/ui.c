@@ -113,9 +113,19 @@ static uint32_t sel_mode(void) { return ((ui_prefs2 >> 4) & 1u) | ((ui_prefs2 >>
  * Saved with the settings; read only while LEDS is INV (menu_items.c leds_row) */
 #define ui_leds_inv (favorites.factory[15][25])
 static uint32_t leds_inv(void) { return settings_leds == LEDS_INV && ui_leds_inv - 1u < 2u ? ui_leds_inv : 0u; }
-enum { HV_SCOPE, HV_TRACKS, HV_LEVELS, HV_COUNT };
+enum { HV_SCOPE, HV_TRACKS, HV_LEVELS, HV_JAM, HV_COUNT };   /* (TFM: JAM, tfm_jam.c) */
 static int home_tracks(void) { return ui_home_view == HV_TRACKS || ui_home_view == HV_LEVELS; }
-static int home_levels(void) { return ui_home_view == HV_LEVELS; }
+static int home_levels(void) { return ui_home_view == HV_LEVELS || ui_home_view == HV_JAM; }   /* (JAM: per track) */
+static int home_jam(void);                              /* TFM (tfm_jam.c): HOME > JAM shown */
+static void jam_cards(void);
+static void jam_turn(uint32_t k, int32_t s);
+static void graph_jam(void);
+/* TFM: the tracks' colours, T1 blue, T2 yellow, T3 pink, T4 green (JAM's bumpers, the menus' knob rows) */
+static const uint16_t TFM_TRK_COL[4] = {RGB(64, 150, 255), RGB(255, 210, 0), RGB(255, 84, 184), RGB(60, 220, 110)};
+static uint16_t tfm_trk_col(uint32_t c)                  /* (GREY, MONO: no hue, the theme's) */
+{
+    return settings.palette == UI_GREY_INDEX || settings.palette == UI_BW_INDEX ? T_THEME : TFM_TRK_COL[c & 3u];
+}
 enum { RP_CLICK, RP_LEVEL, RP_COUNTIN };
 static uint32_t rp_get(uint32_t f)                     /* a field as the MENU steps it: 0..2 */
 {

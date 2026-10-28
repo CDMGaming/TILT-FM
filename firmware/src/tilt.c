@@ -57,6 +57,7 @@ enum { NS_KEY, NS_SCALE, NS_BPM, NS_LINEUP, NS_T1, NS_CODE = NS_T1 + NTRK, NS_RO
 #include "tfm_rng.c"                                    /* TFM: TILT's generator, its roll's tables, a setup */
 #include "tfm_instr.c"                                  /* TFM: the instruments over the engines, their macros */
 #include "tfm_code.c"                                   /* TFM: TILT's setup codes */
+#include "tfm_jam.c"                                     /* TFM: HOME > JAM */
 static struct {
     uint8_t row, rolled, lineup;                        /* the selected row; (rolled: once, the first open); LU_* */
     uint16_t hold;                                      /* bit r: row r held (NUDGE leaves it) */

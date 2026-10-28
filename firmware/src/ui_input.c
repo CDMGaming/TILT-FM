@@ -1836,7 +1836,9 @@ static void ui_input(void)
             ui.hot_col = (uint8_t)k;
             ui.hot_t = 40;
         }
-        if (ui.home) {
+        if (home_jam()) {                               /* TFM: HOME > JAM (tfm_jam.c) */
+            jam_turn(k, s);
+        } else if (ui.home) {
             int16_t *vp;
             const param_desc_t *d = home_param(k, &vp);
             *vp = (int16_t)param_turn(d, *vp, accel(EN_K1 + k, s, d->fmt == F_ENUM ? 0 : d->max - d->min));

@@ -468,12 +468,13 @@ static uint32_t tfm_base_pre(const track_t *t)
     return i == TI_NONE ? t->preset : TFM_INS[i].snd[tfm_snd_of(t)].pre;
 }
 /* the list's row: a four-letter tag for the instrument, the sound's name */
+static const char *const TFM_TAG[TI_N] = {"THMP", "SQLC", "WOBL", "CHRD", "RAZR", "HAZE", "PIXL", "TINE",
+                                         "GLNT", "PLCK", "VOX", "WHEL"};   /* (4: the list's tag column) */
+static const char *tfm_ins_tag(const track_t *t) { return TFM_TAG[tfm_ins_of(t) % TI_N]; }
 static void tfm_tag_name(uint32_t k, char *tag, char *nm)
 {
-    static const char *const TAG[TI_N] = {"THMP", "SQLC", "WOBL", "CHRD", "RAZR", "HAZE", "PIXL", "TINE",
-                                          "GLNT", "PLCK", "VOX", "WHEL"};   /* (4: the list's tag column) */
     uint32_t i = (k - TFM_PRE0) / 16u % TI_N, s = (k - TFM_PRE0) % 16u;
-    str_cpy(tag, TAG[i], 6);
+    str_cpy(tag, TFM_TAG[i], 6);
     str_cpy(nm, TFM_INS[i].snd[s % TFM_INS[i].nsnd].name, 13);
 }
 static const char *tfm_ins_name(const track_t *t) { return TFM_INS[tfm_ins_of(t) % TI_N].name; }
@@ -482,8 +483,9 @@ static void tfm_snd_label(const track_t *t, char *b)
     const tfm_instr_t *in = &TFM_INS[tfm_ins_of(t) % TI_N];
     str_cpy(b, in->snd[tfm_snd_of(t) % in->nsnd].name, 16);
 }
-/* KNOB m: a turn moves its place; a stepped macro one step a detent (never stuck between two values) */
-static void tfm_macro_turn(track_t *t, uint32_t m, int32_t steps)
+/* KNOB m: a turn moves its place; a stepped macro one step a detent (never stuck between two values); _k: turned
+ * on KNOB k (its acceleration's) */
+static void tfm_macro_turn_k(track_t *t, uint32_t m, uint32_t k, int32_t steps)
 {
     uint32_t i = tfm_ins_of(t);
     const tfm_macro_t *mc;
@@ -497,10 +499,11 @@ static void tfm_macro_turn(track_t *t, uint32_t m, int32_t steps)
         span = span < 0 ? -span : span;
         pos += steps * (span ? (127 + span - 1) / span : 127);
     } else {
-        pos += accel(EN_K1 + (m & 3u), steps, 127);
+        pos += accel(EN_K1 + (k & 3u), steps, 127);
     }
     tfm_macro_set(t, m, pos);
 }
+static void tfm_macro_turn(track_t *t, uint32_t m, int32_t steps) { tfm_macro_turn_k(t, m, m, steps); }
 /* MACROS / MACROS 2: the four cards, each its label and its place (0..100; a switch: its first target's value) */
 static void tfm_macro_cards(uint32_t page)
 {

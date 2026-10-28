@@ -285,8 +285,13 @@ static void hold(uint32_t label)                  /* held 0.8 s, then let go */
     fm1_in.buttons &= ~(1u << panel.btn[label]);
     frame();
 }
+/* TFM: in the MENU, KNOB k changes the window's row k (ui_menu.c mw_first); Felucca's checks turn "a knob" for the
+ * selected row: the selected row's knob turns for them (menu_raw: the knob as named, TFM's own checks) */
+static int menu_raw;
 static void turn(uint32_t role, int32_t s)
 {
+    if (ui.menu == 1 && !menu_raw && role >= EN_K1 && role <= EN_K1 + 3u && ui.menu_sel - mw_first() < 4u)
+        role = EN_K1 + (ui.menu_sel - mw_first());
     host_enc[panel.enc[role]] += s * panel.dir[role];
     frame();
     host_ticks += 200000u;                        /* (no knob acceleration between the turns) */
@@ -1599,10 +1604,13 @@ static int test_display_preferences(void)
                  settings.palette == 6 && T_BG == UI_PALETTES[6].bg && ux.light && ui.menu == 1 && !song.octave &&
                  memcmp(before, host_screen, sizeof before) && !memcmp(sounds, trk, sizeof sounds));
     turn(EN_K1, 1);
-    bad += check("COLOR KNOB 1 steps on to HI-CON, NIGHT (#50: true black), MONO (1.0.2: black and white), then wraps to GREY",
+    bad += check("COLOR KNOB 1 steps on to HI-CON, NIGHT (#50: true black), MONO (1.0.2: black and white), TFM's five, then "
+                 "wraps to GREY",
                  settings.palette == 7 && (turn(EN_K1, 1), settings.palette == 8u) && T_BG == 0u &&
                  str_eq(UI_PALETTES[8].name, "NIGHT") && (turn(EN_K1, 1), settings.palette == UI_BW_INDEX) &&
                  str_eq(UI_PALETTES[UI_BW_INDEX].name, "MONO") && T_BG == 0u && T_TEXT == 0xFFFFu &&
+                 (turn(EN_K1, 1), str_eq(UI_PALETTES[settings.palette].name, "PLASMA")) &&
+                 (turn(EN_K1, 1), turn(EN_K1, 1), turn(EN_K1, 1), turn(EN_K1, 1), str_eq(UI_PALETTES[settings.palette].name, "CHROME")) &&
                  (turn(EN_K1, 1), settings.palette == UI_GREY_INDEX) && str_eq(UI_PALETTES[UI_GREY_INDEX].name, "GREY"));
     settings.lowcut = 2;
     ui.menu_sel = MI_LOWCUT;
@@ -1648,9 +1656,9 @@ static int test_menu_tabs(void)
             ok &= (MI_TAB[i] == t) == (i >= f && i < f + n);
         ui.menu_sel = (uint8_t)f;
         ui_prefs = 0;
-        ok &= mr_y(n) - mr_gap() + MP_PAD <= MK_Y - 6;
+        ok &= mr_y(mw_n()) - mr_gap() + MP_PAD <= MK_Y - 6 && mw_n() == (n < 4u ? n : 4u);   /* (TFM: a window of 4) */
         ui_prefs = PREF_LARGE;
-        ok &= mr_y(n) - mr_gap() + MP_PAD <= MK_Y - 6;
+        ok &= mr_y(mw_n()) - mr_gap() + MP_PAD <= MK_Y - 6;
     }
     ok &= MP_Y + MP_PAD + (int32_t)MTAB_ROWS * 19 - 1 + MP_PAD <= MK_Y - 6;   /* (room for MTAB_ROWS: 18 px rows 1 px apart) */
     for (i = 0; i < MI_COUNT; i++) ok &= MI_TAB[i] < MTAB_COUNT;
@@ -9430,9 +9438,10 @@ static int test_home_tracks(void)
     int16_t v0;
     ui_power_on();
     memcpy(before, favorites.factory[15], 32);
-    ok = ui_home_view == 0u && !home_tracks() && menu_get(MI_HOME) == 0u && menu_n(MI_HOME) == 3u &&
+    ok = ui_home_view == 0u && !home_tracks() && menu_get(MI_HOME) == 0u && menu_n(MI_HOME) == 4u &&
          str_eq(MI_NAME[MI_HOME], "HOME") && str_eq(menu_vname(MI_HOME, 0), "SCOPE") &&
          str_eq(menu_vname(MI_HOME, 1), "TRACKS") && str_eq(menu_vname(MI_HOME, 2), "LEVELS") &&   /* (1.5: LEVELS) */
+         str_eq(menu_vname(MI_HOME, 3), "JAM") &&                                                   /* (TFM: JAM) */
          MI_TAB[MI_HOME] == MTAB_DISPLAY && MI_HOME < MI_VALUES;
     menu_put(MI_HOME, 1);
     ok &= ui_home_view == 1u && home_tracks() && menu_get(MI_HOME) == 1u;
@@ -9454,8 +9463,10 @@ static int test_home_tracks(void)
     for (i = 0; i < 7u; i++) turn(EN_PRESET, 1);
     ok = ui.menu == 1 && ui.menu_sel == MI_HOME;
     turn(EN_K1, 1); ok &= home_tracks() && !home_levels();
-    turn(EN_K3, 1); ok &= home_levels();               /* (1.5: LEVELS, the last) */
-    turn(EN_K3, 1); ok &= home_levels();               /* (stops there) */
+    turn(EN_K3, 1); ok &= home_levels() && ui_home_view == HV_LEVELS;   /* (1.5: LEVELS) */
+    turn(EN_K3, 1); ok &= ui_home_view == HV_JAM && !home_tracks();     /* (TFM: JAM, the last) */
+    turn(EN_K3, 1); ok &= ui_home_view == HV_JAM;      /* (stops there) */
+    press(B_OCTDN); ok &= ui_home_view == HV_LEVELS;
     press(B_OCTDN); ok &= home_tracks() && !home_levels();
     press(B_OCTDN); ok &= !home_tracks();
     press(B_OCTUP); ok &= home_tracks();
@@ -10620,6 +10631,49 @@ static int test_tfm_instruments(void)
 /* TFM: the shipping build has no built-in sample data (tools/gen_samples.py builtin_on): SAMPLE and SLICE offer no
  * factory sounds (PRESETS, NEW SONG, a program change find none); a sound or project that played PIANO / FLUTE / SAX
  * or the BREAK still loads, keeps its values, plays the missing-sample sine and says NO SAMPLE; USR1..3 stay */
+/* TFM D: HOME > JAM (KNOB k = track k's macro 1, LEVEL without an instrument, recorded by REC), the MENU's window of
+ * four rows (KNOB k its row k, SELECT moves it), the palettes */
+static int test_tfm_jam_menu(void)
+{
+    int bad = 0, ok = 1;
+    int32_t p0, l0;
+    uint32_t i;
+    ui_power_on();
+    go_home();
+    ui_home_view = HV_JAM;
+    tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[2], TI_HAZE, 0);
+    trk[1].preset = 0; trk[3].preset = 0;               /* (T2, T4: no instrument) */
+    ok &= tfm_ins_of(&trk[1]) == TI_NONE && tfm_ins_of(&trk[0]) == TI_SQUELCH;
+    p0 = tfm_macro_get(&trk[0], 0); l0 = trk[1].p[P_LEVEL];
+    turn(EN_K1, 10); frame();
+    ok &= tfm_macro_get(&trk[0], 0) > p0;               /* KNOB 1: T1's macro 1 */
+    p0 = tfm_macro_get(&trk[2], 0);
+    turn(EN_K3, -10); frame();
+    ok &= tfm_macro_get(&trk[2], 0) < p0 || p0 == 0;   /* KNOB 3: T3's */
+    turn(EN_K2, -5); frame();
+    ok &= trk[1].p[P_LEVEL] < l0;                       /* KNOB 2: T2's LEVEL (no instrument) */
+    ok &= home_jam() && str_eq(help_page(), H_JAM);
+    bad += check("TFM JAM: KNOB k is track k's macro 1 (no instrument: its LEVEL), the HOME view JAM", ok);
+
+    ok = 1;
+    ui_power_on();
+    hold(B_HOME);                                       /* MENU, DISPLAY: 8 rows, the window the first four */
+    ok &= ui.menu == 1 && menu_tab() == MTAB_DISPLAY;
+    ui.menu_sel = (uint8_t)mtab_first(MTAB_DISPLAY); frame();
+    ok &= mw_first() == mtab_first(MTAB_DISPLAY) && mw_n() == 4u;
+    {
+        uint32_t r = mtab_first(MTAB_DISPLAY) + 2u, v = menu_get(r);
+        menu_raw = 1;
+        turn(EN_K3, 1);                                 /* KNOB 3: the window's third row, now the selected one */
+        ok &= ui.menu_sel == r && (menu_get(r) != v || menu_step(r, 1) == v);
+        menu_raw = 0;
+    }
+    for (i = 0; i < 4u; i++) turn(EN_PRESET, 1);        /* SELECT down (row 7 of 8): the window follows */
+    ok &= ui.menu_sel - mw_first() < 4u && mw_first() > mtab_first(MTAB_DISPLAY);
+    menu_close();
+    bad += check("TFM MENU: a window of four rows, KNOB k its row k (then the selected one), SELECT moves it", ok);
+    return bad;
+}
 static int test_tfm_nosample(void)
 {
     int bad = 0, ok;
@@ -10736,6 +10790,7 @@ int main(void)
     bad += test_scene_layer_buttons();
     bad += test_tfm_dice();
     bad += test_tfm_instruments();
+    bad += test_tfm_jam_menu();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

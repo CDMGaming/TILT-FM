@@ -2268,14 +2268,18 @@ static void draw_graph(void)
         uint32_t k = strip_kind();
         cv_oy = k == SK_ADSR || k == SK_LFO ? 3 : 0;
         graph_ht = LG_H_GRAPH - 6;
-        if (k == SK_SCOPE) graph_scope(c);
+        if (k == SK_SCOPE && home_jam()) graph_jam();   /* (TFM: HOME > JAM) */
+        else if (k == SK_SCOPE) graph_scope(c);
         else if (k == SK_ADSR) graph_adsr(t, c);
         else if (k == SK_LFO) graph_lfo(t, c);
         else graph_title();
         graph_ht = 100;
     } else if (ui.home) {
         cv_oy = 0;
-        graph_scope(c);
+        if (home_jam())                              /* TFM: HOME > JAM (tfm_jam.c) */
+            graph_jam();
+        else
+            graph_scope(c);
     } else {
         switch (pg->graph) {
         case GR_ADSR:

@@ -215,12 +215,26 @@ static uint32_t menu_tab(void) { return MI_TAB[ui.menu_sel % MI_COUNT]; }
 /* the shown tab's rows: 24 px (LARGE 28, a tab of up to 5 rows), 2 px apart (a tab of 6: 1 px, its panel then ends
  * 6 px above the key hints as the others do; the rule between two rows is that gap row; 1.2, a tab of 7: 21 px rows
  * 1 px apart, its panel then ends 4 px lower, LARGE too; 1.3, a tab of 8: 18 px rows 1 px apart, the same end) */
-static int32_t mr_h(void)
+/* TFM (tfm-next): a window of four rows (MW_N) whatever the tab's length: PRESETS (SELECT) moves the row and the window
+ * follows it; KNOB k changes the window's row k (its label in track k's colour, a K1..K4 badge: TFM_TRK_COL), OCT+ /
+ * OCT- the selected row's. A tab of more: a scroll bar at the right */
+#define MW_N 4u
+static uint8_t mw_top[MTAB_COUNT];                      /* each tab's window: its first row, from the tab's first */
+static uint32_t mw_n(void) { uint32_t n = mtab_rows(menu_tab()); return n < MW_N ? n : MW_N; }
+static uint32_t mw_first(void)                         /* the window's first row (MI_*), the selected row in it */
 {
-    uint32_t n = mtab_rows(menu_tab());
-    return n > 7u ? 18 : n > 6u ? 21 : menu_large() && n <= 5u ? 28 : 24;
+    uint32_t t = menu_tab(), f = mtab_first(t), n = mtab_rows(t), k = ui.menu_sel - f, top = mw_top[t];
+    if (k < top)
+        top = k;
+    else if (k >= top + MW_N)
+        top = k - MW_N + 1u;
+    if (top + mw_n() > n)
+        top = n - mw_n();
+    mw_top[t] = (uint8_t)top;
+    return f + top;
 }
-static int32_t mr_gap(void) { return mtab_rows(menu_tab()) <= 5u ? 2 : 1; }
+static int32_t mr_h(void) { return menu_large() ? 32 : 28; }
+static int32_t mr_gap(void) { return 2; }
 static int32_t mr_y(uint32_t k) { return MP_Y + MP_PAD + (int32_t)k * (mr_h() + mr_gap()); }
 
 /* the tab bar's place: the tab shown at pos tab * MT_ONE; with ANIM ON it follows in halving steps, a frame each
@@ -309,8 +323,18 @@ static void menu_row(uint32_t k, uint32_t row)
         cv_rrect(MR_X, y, MR_W, h, 6, T_THEME, T_SURF);
     else if (k && row - 1u != ui.menu_sel)             /* a rule from the row above (none beside the selected one) */
         cv_rect(MR_X + 6, y - 1, MR_W - 12, 1, ux.style ? T_RULE : T_LINE);
-    GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row name centred up/down");
-    cv_text_on(MR_LX, vy, &AF_M, MI_NAME[row], fg, bg);
+    {   /* TFM: KNOB k's row: its badge in track k's colour, the label too (selected: on the THEME, as before) */
+        int32_t lx = MR_LX;
+        if (menu_valued(row)) {
+            uint16_t kc = tfm_trk_col(k);
+            GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row knob badge centred up/down");
+            lx = cv_keycap(MR_LX - 4, y + HALF_UP(h - KC_H), KC_K1 + k, sel ? T_INK : kc, sel ? T_THEME : T_BG, bg) + 6;
+            if (!sel)
+                fg = kc;
+        }
+        GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row name centred up/down");
+        cv_text_on(lx, vy, &AF_M, MI_NAME[row], fg, bg);
+    }
     if (row == MI_LCLEAR) {                            /* LEARN CLEAR (1.5): how many CCs are learned, "NONE" */
         char b[8] = "NONE";
         if (ml_count()) {
@@ -347,11 +371,11 @@ static void menu_row(uint32_t k, uint32_t row)
     {   /* COLOR: the palette's name and its five colours (BG SURF TEXT THEME ACCENT), live */
         uint32_t c;
         const uint16_t *tok = &T_BG;
-        int32_t x0 = MR_VR - 74, sy = y + HALF_UP(h - 12);
+        int32_t x0 = MR_VR - 54, sy = y + HALF_UP(h - 10);   /* (TFM: smaller, the badge before COLOR) */
         cv_text_r(x0 - 6, vy, &AF_M, v, val, bg);
         for (c = 0; c < 5u; c++) {
-            cv_rrect(x0 + (int32_t)c * 15, sy, 12, 12, -3, T_RAISE, bg);       /* a rim for the dark ones */
-            cv_rrect(x0 + 1 + (int32_t)c * 15, sy + 1, 10, 10, -2, tok[c], T_RAISE);
+            cv_rrect(x0 + (int32_t)c * 11, sy, 10, 10, -3, T_RAISE, bg);       /* a rim for the dark ones */
+            cv_rrect(x0 + 1 + (int32_t)c * 11, sy + 1, 8, 8, -2, tok[c], T_RAISE);
         }
     }
 }
@@ -424,6 +448,7 @@ static void draw_menu(void)
           ui_rec_prefs * 92821u + ui_scr * 131071u +          /* (#157: SCREEN OFF's value redraws its row) */
           ui_prefs2 * 524287u + ui_idle * 1048573u +      /* (1.2: ANIM IDLE's value redraws its row) */
           ui_home_view * 7340033u +    /* (1.3: HOME) */
+          (ui.menu == 1 ? mw_first() * 40503u : 0u) +   /* (TFM: the window) */
           (uint32_t)(song.g[G_TUNE] + 64) * 8191u + (uint32_t)song.g[G_ROUTE] * 27449u +   /* (1.2: the project's rows) */
           (song.mch[0] | (uint32_t)song.mch[1] << 8 | (uint32_t)song.mch[2] << 16 | (uint32_t)song.mch[3] << 24) *
           2246822519u +                                   /* (1.5.5: T1..T4 CHANNEL) */
@@ -472,8 +497,8 @@ static void draw_menu(void)
         cv_blit(0, H_HEAD + MENU_DOC_H);
         return;
     }
-    first = mtab_first(menu_tab());
-    n = mtab_rows(menu_tab());
+    first = mw_first();                               /* (TFM: the window's four) */
+    n = mw_n();
     split = menu_split(n);
     for (pass = 0; pass < 2u; pass++) {
         int32_t top_y = pass ? (int32_t)split : H_HEAD;
@@ -486,6 +511,12 @@ static void draw_menu(void)
         for (k = 0; k < n; k++)
             if (mr_y(k) + mr_h() > top_y && mr_y(k) - 1 < top_y + (int32_t)cv_h)
                 menu_row(k, first + k);
+        if (!pass && mtab_rows(menu_tab()) > MW_N) {  /* TFM: more rows than the window: where it is */
+            int32_t th = mr_y(n) - MP_Y, all = (int32_t)mtab_rows(menu_tab()), top = (int32_t)(first - mtab_first(menu_tab()));
+            int32_t bh = th * (int32_t)MW_N / all;
+            cv_rrect(235, MP_Y, 3, th, 1, T_LINE, T_BG);
+            cv_rrect(235, MP_Y + (th - bh) * top / (all - (int32_t)MW_N), 3, bh, 1, T_MID, T_LINE);
+        }
         if (pass)
             cv_key_row(8, 232, MK_Y, KEYS[ui.menu_sel == MI_LCLEAR ? 2 : !menu_valued(ui.menu_sel)], 3, 7u, T_BG);
         cv_oy = 0;
@@ -542,8 +573,15 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
         menu_move(s);
     if ((s = panel_enc(EN_ALGO)) != 0)
         menu_tab_go(s);
-    for (s = 0, k = 0; k < 4u; k++)                    /* KNOB 1..4, any of them */
-        s += panel_enc(EN_K1 + k);
+    {   /* TFM: KNOB k the window's row k (a row of no value: nothing); it becomes the selected row */
+        uint32_t f = mw_first(), n = mw_n();
+        for (k = 0; k < 4u; k++)
+            if ((s = panel_enc(EN_K1 + k)) != 0 && k < n && menu_valued(f + k)) {
+                ui.menu_sel = (uint8_t)(f + k);
+                menu_put(f + k, menu_step(f + k, s));
+            }
+        s = 0;
+    }
     if (menu_valued(ui.menu_sel)) {
         /* a step (OCT+ the next value, OCT- the previous); COLOR previews the palette, STYLE is drawn so from the next
          * frame (FX LATCH: the latched effects are off while the menu is up) */
