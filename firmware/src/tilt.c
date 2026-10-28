@@ -27,147 +27,77 @@ static uint32_t tilt_used(const track_t *t)
 static void tilt_stuck(void) { tools_key(tilt_used(TSEL) ? TL_COOK : TL_RANDOM); }
 
 /* ------------------------------------------------------------ NEW SONG --- */
-/* A screen of its own (ui.c tilt_ns_open: name_on() with it): KEY, SCALE, TEMPO and the four tracks' sounds (an engine
- * and one of its factory presets), a row each, F3 .. E4 the rows' keys:
- *   a white key F3 .. E4   HOLD its row (lit: held) and select it; again: let go
- *   SELECT                 the row; KNOB 1 its value (a track: any factory sound, in PRESETS order)
- *   OCT+  NUDGE            every row not held rolled again
- *   PLAY  START            the project made from it: the sounds loaded (as PRESETS does: one undo a track), every
- *                          track's ROOT and SCL, the tempo; T1..T3's QNT WHITE (the white keys walk the scale from
- *                          C4, the root; the black keys silent; SCALE LEDS shows them; T4's kit maps its own keys);
- *                          the transport starts. With the TIMER set the steps and the
- *                          automation of every track go too (a fresh project: PLAY twice when there was something
- *                          to clear); without it they stay, as a sound load leaves them
+/* A screen of its own (ui.c tilt_ns_open: name_on() with it), TFM's dice (tfm_rng.c, tfm_instr.c, tfm_code.c: TILT's
+ * roll and setup codes): KEY, SCALE, TEMPO (and swing), LINEUP, the four tracks' instruments and sounds, CODE; a row
+ * each, F3 .. A4 the rows' keys:
+ *   a white key F3 .. A4   HOLD its row (lit: held) and select it; again: let go
+ *   SELECT                 the row; KNOB 1 its value (TEMPO: KNOB 2 the swing; a track: KNOB 1 every instrument's
+ *                          sounds, KNOB 2 the instrument; CODE: KNOB 1 the character, KNOB 2 the place, KNOB 3 the length)
+ *   OCT+  NUDGE            every row not held rolled again: the key, scale, tempo and swing as TILT rolls them (its
+ *                          tempo bands, scale weights, generator), the tracks by the LINEUP:
+ *                            BAND      T1 a bass, T2 harmony, T3 a lead (or harmony), T4 drums (TILT's groups)
+ *                            WILD      any instrument on any track, the wildcards (VOX, WHEELHOUSE) too; the same one
+ *                                      twice is allowed, never with the same sound
+ *                            BAND + 1  BAND with one track (not held) wild
+ *                          a drum instrument keeps its drum grid wherever it lands (the grid is the DRUM engine's)
+ *   PLAY  START            the project made from it: each track's instrument and sound (tfm_load: as PRESETS loads a
+ *                          sound, one undo a track), every track's ROOT and SCL, the tempo and swing; the melodic
+ *                          tracks' QNT WHITE (the white keys walk the scale from C4, the root; SCALE LEDS shows them),
+ *                          a kit's keys its own; the transport starts. With the TIMER set the steps and the automation
+ *                          of every track go too (a fresh project: PLAY twice when there was something to clear)
  *   OCT-                   back, nothing changed
- * The rolls know the tracks' roles: T1 a bass, T2 and T3 a lead, pad, pluck or keys (not the same sound), T4 a drum kit
- * (DRUM, SLICE); the scale never chromatic; the tempo 75 .. 145. Factory presets only (a setup is then the same
- * everywhere: room for a short code later). The first open rolls everything; the values and the holds stay between
- * opens, and each open is a NUDGE */
-enum { NS_KEY, NS_SCALE, NS_BPM, NS_T1, NS_ROWS = NS_T1 + NTRK };
+ * CODE is the setup as TILT's share code (both ways: what TILT rolls, entered here, is the same song's start; what TFM
+ * rolls opens in TILT with the same key, scale, tempo, swing and instruments). The jam of the day: TILT's daily code,
+ * entered. The first open rolls everything; the values and the holds stay between opens, and each open is a NUDGE */
+enum { NS_KEY, NS_SCALE, NS_BPM, NS_LINEUP, NS_T1, NS_CODE = NS_T1 + NTRK, NS_ROWS };
 #define TILT_NS 1u                                      /* tilt_ns_open: NEW SONG; TIME (below) */
 #define TILT_TIME 2u
-#define NS_BPM_LO 75
-#define NS_BPM_HI 145
-#define NS_ROW_H 24                                     /* 7 rows from Y_LABEL: 28 .. 196, the footer at 202 */
+#define NS_ROW_H 19                                     /* 9 rows from Y_LABEL: 28 .. 199, the footer at 202 */
 #define NS_AGAIN_MS 3000u
+#include "tfm_rng.c"                                    /* TFM: TILT's generator, its roll's tables, a setup */
+#include "tfm_instr.c"                                  /* TFM: the instruments over the engines, their macros */
+#include "tfm_code.c"                                   /* TFM: TILT's setup codes */
 static struct {
-    uint8_t row, hold;                                  /* the selected row; bit r: row r held (NUDGE leaves it) */
-    uint8_t root, scale, rolled;                        /* (rolled: once, the first open) */
-    int16_t bpm;
-    uint8_t eng[NTRK], pre[NTRK];
+    uint8_t row, rolled, lineup;                        /* the selected row; (rolled: once, the first open); LU_* */
+    uint16_t hold;                                      /* bit r: row r held (NUDGE leaves it) */
+    tfm_setup_t s;
     uint8_t again;                                      /* START pressed once with steps to clear (timed) */
+    uint8_t cpos, cedit, cbad;                          /* CODE: the place (a symbol), being edited, not a code */
+    char code[TFM_CODE_MAX + 1u];
     uint32_t again_t, sig;
 } ns;
-static const char *const NS_ROLE[NTRK] = {"BASS", "MELODY", "MELODY", "DRUMS"};
 static uint8_t ns_from_start;                           /* (opened from the start screen: OCT- goes back there) */
-static const uint8_t NS_SCALES[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 12};   /* MAJ MIN DOR MIX PEN MPEN HARM PHRY LYD BLUES */
 
-/* sound (e, k) fits track t's role: T4 a kit of the engines that are kits (DRUM, SLICE: category.c cat_of_engine; not
- * PHYS's HAND DRUM, a DRUM-listed pitched sound with no grid) */
-static int ns_role_ok(uint32_t t, uint32_t e, uint32_t k)
+static void ns_encode(void)                             /* the code shown: the setup now (not while it is typed) */
 {
-    uint32_t cat = preset_cat(e, k);
-    if (t == NTRK - 1u)
-        return cat_of_engine(e) == CAT_DRUM;
-    if (cat_of_engine(e) == CAT_DRUM)
-        return 0;
-    if (t == 0u)
-        return cat == CAT_BASS;
-    return cat == CAT_LEAD || cat == CAT_PAD || cat == CAT_PLUCK || cat == CAT_KEYS;
-}
-/* the factory sounds in PRESETS order (engines.c ENGINE_ORDER, the aliases skipped), walked once each time (no table,
- * no RAM; each lookup one pass over the ~100 sounds, never a pass inside a pass): the n-th as *e, *k; 1 = found */
-static int ns_fact_at(uint32_t n, uint32_t *e, uint32_t *k)
-{
-    uint32_t r, i;
-    for (r = 0; r < NENG_SHOWN; r++) {
-        const engine_t *en = ENGINES[eng_vis(r)];
-        uint32_t shown = preset_shown(eng_vis(r));
-        if (n >= shown) {                               /* (a whole engine at a time) */
-            n -= shown;
-            continue;
-        }
-        for (i = 0; i < en->npresets; i++)
-            if (preset_orig(en, i) == i && !n--) {
-                *e = eng_vis(r);
-                *k = i;
-                return 1;
-            }
-        return 0;
-    }
-    return 0;
-}
-static uint32_t ns_fact_n(void)
-{
-    uint32_t r, n = 0;
-    for (r = 0; r < NENG_SHOWN; r++)
-        n += preset_shown(eng_vis(r));
-    return n;
-}
-static uint32_t ns_fact_pos(uint32_t e, uint32_t k)    /* (not in the list: 0) */
-{
-    uint32_t r, i, n = 0;
-    for (r = 0; r < NENG_SHOWN; r++) {
-        const engine_t *en = ENGINES[eng_vis(r)];
-        if (eng_vis(r) != e) {
-            n += preset_shown(eng_vis(r));
-            continue;
-        }
-        for (i = 0; i < en->npresets && i <= k; i++)
-            if (preset_orig(en, i) == i) {
-                if (i == k)
-                    return n;
-                n++;
-            }
-        return 0;
-    }
-    return 0;
-}
-/* track t's sound at random among its role's: one pass to count them, one to take the picked one */
-static void ns_roll_track(uint32_t t)
-{
-    uint32_t r, i, c = 0, pick, tries;
-    for (r = 0; r < NENG_SHOWN; r++) {
-        const engine_t *en = ENGINES[eng_vis(r)];
-        for (i = 0; i < en->npresets; i++)
-            c += preset_orig(en, i) == i && ns_role_ok(t, eng_vis(r), i);
-    }
-    for (tries = 0; c && tries < 4u; tries++) {
-        pick = rng() % c;
-        for (r = 0; r < NENG_SHOWN; r++) {
-            const engine_t *en = ENGINES[eng_vis(r)];
-            for (i = 0; i < en->npresets; i++)
-                if (preset_orig(en, i) == i && ns_role_ok(t, eng_vis(r), i) && !pick--) {
-                    ns.eng[t] = (uint8_t)eng_vis(r);
-                    ns.pre[t] = (uint8_t)i;
-                    r = NENG_SHOWN;                     /* (found: out of both loops) */
-                    break;
-                }
-        }
-        if (t != 2u || ns.eng[2] != ns.eng[1] || ns.pre[2] != ns.pre[1])   /* (T2, T3: two different sounds) */
-            break;
-    }
-}
-static void ns_roll(uint32_t r)
-{
-    if (r == NS_KEY)
-        ns.root = (uint8_t)(rng() % 12u);
-    else if (r == NS_SCALE)                             /* (the ten that start a song well: params.c N_SCALE, not CHR, */
-        ns.scale = NS_SCALES[rng() % sizeof NS_SCALES]; /* LOC, MEL, WHOLE and the diminished; KNOB 1 has all) */
-    else if (r == NS_BPM)
-        ns.bpm = (int16_t)(NS_BPM_LO + (int32_t)(rng() % (uint32_t)(NS_BPM_HI - NS_BPM_LO + 1)));
-    else if (r < NS_ROWS)
-        ns_roll_track(r - NS_T1);
+    if (!ns.cedit)
+        tfm_encode(&ns.s, ns.code);
+    ns.cbad = 0;
 }
 static void ns_nudge(void)
 {
-    uint32_t r;
-    for (r = 0; r < NS_ROWS; r++)
-        if (!((ns.hold >> r) & 1u))
-            ns_roll(r);
+    tfm_rng_t r;
+    uint32_t i, keep = 0, wild = NTRK, free = 0;
+    r.s = rng();
+    keep |= (ns.hold >> NS_KEY) & 1u ? 1u : 0u;
+    keep |= (ns.hold >> NS_SCALE) & 1u ? 2u : 0u;
+    keep |= (ns.hold >> NS_BPM) & 1u ? 12u : 0u;        /* (TEMPO holds the swing too) */
+    tfm_roll_feel(&r, &ns.s, keep);
+    for (i = 0; i < NTRK; i++)
+        free += !((ns.hold >> (NS_T1 + i)) & 1u);
+    if (ns.lineup == LU_BAND1 && free) {                /* BAND + 1: one track not held goes wild */
+        uint32_t k = tfm_pick(&r, free);
+        for (wild = 0; wild < NTRK; wild++)
+            if (!((ns.hold >> (NS_T1 + wild)) & 1u) && !k--)
+                break;
+    }
+    for (i = 0; i < NTRK; i++)
+        if (!((ns.hold >> (NS_T1 + i)) & 1u))
+            tfm_roll_track(&r, &ns.s, i, ns.lineup, wild);
     ns.again = 0;
+    ns.cedit = 0;
+    ns_encode();
 }
-
 static void tilt_ns_show(void)
 {
     if (chain_busy()) {
@@ -213,13 +143,11 @@ static void ns_start(void)
     ns.again = 0;
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
-        if (t->eng_req != ns.eng[i])
-            set_engine_of(t, ns.eng[i]);
-        apply_preset_to(t, ns.pre[i]);
-        t->p[P_ROOT] = ns.root;
-        t->p[P_SCALE] = ns.scale;
-        if (i != NTRK - 1u)                             /* (the melodic tracks: every white key in the scale; T4 a kit) */
-            t->p[P_QUANT] = QN_WHITE;
+        tfm_load(t, ns.s.ins[i], ns.s.pre[i]);
+        t->p[P_ROOT] = ns.s.key;
+        t->p[P_SCALE] = ns.s.scale;
+        if (!drum_track(t))                             /* (the melodic tracks: every white key in the scale; a kit */
+            t->p[P_QUANT] = QN_WHITE;                   /* maps its own keys) */
         if (timed) {                                    /* (as TRACK CLEAR and AUTOMATION CLEAR do) */
             load_begin(t, UNDO_PAT);
             track_defaults_steps(t);
@@ -229,15 +157,16 @@ static void ns_start(void)
             t->arp_phys = 0;
         }
     }
-    song.g[G_BPM] = ns.bpm;
+    song.g[G_BPM] = ns.s.bpm;
+    song.g[G_SWING] = ns.s.swing;
     tilt_ns_open = 0;
     go_home();
     ui.force = 1;
-    param_format(&TP[P_ROOT], ns.root, b, &unit);
+    param_format(&TP[P_ROOT], ns.s.key, b, &unit);
     str_cpy(b + str_len(b), " ", 2);
-    str_cpy(b + str_len(b), TP[P_SCALE].names[ns.scale], 8);
+    str_cpy(b + str_len(b), TP[P_SCALE].names[ns.s.scale], 8);
     str_cpy(b + str_len(b), " ", 2);
-    fmt_int(b + str_len(b), ns.bpm);
+    fmt_int(b + str_len(b), ns.s.bpm);
     ui_say("NEW SONG ", b);
     ui.msg_t = 120;                                     /* (~2 s: longer than a message, it says what was made) */
     if (!song.playing && !seq_counting() && transport_req != 1u)
@@ -249,26 +178,123 @@ static void ns_start(void)
     ns_from_start = 0;
 }
 
-static void ns_knob(int32_t s)
+/* every instrument's sounds in one list (instrument by instrument): track t's place there, and back */
+static uint32_t ns_snd_n(void)
 {
-    uint32_t r = ns.row, t, total, n, e, k;
-    if (r == NS_KEY) {
-        ns.root = (uint8_t)(((int32_t)ns.root + s % 12 + 12) % 12);
-    } else if (r == NS_SCALE) {
-        int32_t m = TP[P_SCALE].max + 1;
-        ns.scale = (uint8_t)(((int32_t)ns.scale + s % m + m) % m);
-    } else if (r == NS_BPM) {
-        ns.bpm = (int16_t)clamp(ns.bpm + accel(EN_K1, s, GP[G_BPM].max - GP[G_BPM].min), GP[G_BPM].min, GP[G_BPM].max);
+    uint32_t i, n = 0;
+    for (i = 0; i < TI_N; i++)
+        n += TFM_INS[i].nsnd;
+    return n;
+}
+static uint32_t ns_snd_pos(uint32_t t)
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < ns.s.ins[t] % TI_N; i++)
+        n += TFM_INS[i].nsnd;
+    return n + ns.s.pre[t];
+}
+static void ns_snd_at(uint32_t t, uint32_t n)
+{
+    uint32_t i;
+    for (i = 0; i < TI_N && n >= TFM_INS[i].nsnd; i++)
+        n -= TFM_INS[i].nsnd;
+    ns.s.ins[t] = (uint8_t)(i % TI_N);
+    ns.s.pre[t] = (uint8_t)n;
+}
+/* CODE: the symbols typed (dashes out); a change: decoded when it is a code (the setup then), "?" when not */
+static uint32_t ns_code_len(void)
+{
+    uint32_t i, n = 0;
+    for (i = 0; ns.code[i]; i++)
+        n += ns.code[i] != '-';
+    return n;
+}
+static char *ns_code_at(uint32_t k)                     /* symbol k (not a dash), 0 past the end */
+{
+    uint32_t i;
+    for (i = 0; ns.code[i]; i++)
+        if (ns.code[i] != '-' && !k--)
+            return &ns.code[i];
+    return 0;
+}
+static void ns_code_set(uint32_t len)                   /* the symbols again in groups of four, len of them */
+{
+    char raw[TFM_CODE_MAX + 1u], *p;
+    uint32_t i, o = 0;
+    for (i = 0; i < len && i < 32u; i++) {
+        p = ns_code_at(i);
+        raw[i] = p ? *p : '0';
+    }
+    for (i = 0; i < len && i < 32u; i++) {
+        if (i && !(i & 3u))
+            ns.code[o++] = '-';
+        ns.code[o++] = raw[i];
+    }
+    ns.code[o] = 0;
+}
+static void ns_code_try(void)
+{
+    tfm_setup_t s = ns.s;
+    ns.cedit = 1;
+    if (tfm_decode(ns.code, &s)) {
+        ns.s = s;
+        ns.cbad = 0;
+        ui_message("CODE OK");
     } else {
+        ns.cbad = 1;
+    }
+}
+static void ns_knob(uint32_t k, int32_t s)
+{
+    uint32_t r = ns.row, t, total, n;
+    if (r == NS_CODE) {
+        uint32_t len = ns_code_len();
+        char *p;
+        if (k == 0u && (p = ns_code_at(ns.cpos)) != 0) {
+            const char *q = TFM_B32;
+            uint32_t v = 0;
+            while (q[v] && q[v] != *p)
+                v++;
+            *p = TFM_B32[(v + (uint32_t)(s % 32 + 32)) % 32u];
+            ns_code_try();
+        } else if (k == 1u) {
+            ns.cpos = (uint8_t)clamp((int32_t)ns.cpos + s, 0, len ? (int32_t)len - 1 : 0);
+        } else if (k == 2u) {
+            ns_code_set((uint32_t)clamp((int32_t)len + s, 1, 32));
+            ns.cpos = (uint8_t)clamp(ns.cpos, 0, (int32_t)ns_code_len() - 1);
+            ns_code_try();
+        }
+        ns.again = 0;
+        return;
+    }
+    if (k > 1u)
+        return;
+    if (r == NS_KEY && !k) {
+        ns.s.key = (uint8_t)(((int32_t)ns.s.key + s % 12 + 12) % 12);
+    } else if (r == NS_SCALE && !k) {
+        int32_t m = TP[P_SCALE].max + 1;
+        ns.s.scale = (uint8_t)(((int32_t)ns.s.scale + s % m + m) % m);
+    } else if (r == NS_BPM) {
+        if (!k)
+            ns.s.bpm = (int16_t)clamp(ns.s.bpm + accel(EN_K1, s, GP[G_BPM].max - GP[G_BPM].min), GP[G_BPM].min, GP[G_BPM].max);
+        else
+            ns.s.swing = (uint8_t)clamp((int32_t)ns.s.swing + s, 0, 100);
+    } else if (r == NS_LINEUP && !k) {
+        ns.lineup = (uint8_t)(((int32_t)ns.lineup + s % LU_N + LU_N) % LU_N);
+    } else if (r >= NS_T1 && r < NS_CODE) {
         t = r - NS_T1;
-        total = ns_fact_n();
-        n = (ns_fact_pos(ns.eng[t], ns.pre[t]) + (uint32_t)(s % (int32_t)total + (int32_t)total)) % total;
-        if (ns_fact_at(n, &e, &k)) {
-            ns.eng[t] = (uint8_t)e;
-            ns.pre[t] = (uint8_t)k;
+        if (!k) {
+            total = ns_snd_n();
+            n = (ns_snd_pos(t) + (uint32_t)(s % (int32_t)total + (int32_t)total)) % total;
+            ns_snd_at(t, n);
+        } else {
+            ns.s.ins[t] = (uint8_t)(((int32_t)ns.s.ins[t] + s % TI_N + TI_N) % TI_N);
+            ns.s.pre[t] = 0;
         }
     }
     ns.again = 0;
+    ns.cedit = 0;
+    ns_encode();
 }
 
 static void te_input(uint32_t pressed, uint32_t notes, uint32_t oct);
@@ -290,13 +316,19 @@ static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct)
     song.grid = 2;                                      /* (silent keys: keys_mode, as NAME's) */
     for (k = 0; k < 27u; k++)
         if (((notes >> k) & 1u) && !key_black(k) && (p = key_place(k)) < NS_ROWS) {
-            ns.hold ^= (uint8_t)(1u << p);
+            if (p != NS_LINEUP && p != NS_CODE)         /* (LINEUP and CODE are never rolled: nothing to hold) */
+                ns.hold ^= (uint16_t)(1u << p);
             ns.row = (uint8_t)p;
         }
     if ((s = panel_enc(EN_SELECT)) != 0)
         ns.row = (uint8_t)clamp((int32_t)ns.row + s, 0, NS_ROWS - 1);
-    if ((s = panel_enc(EN_K1)) != 0)
-        ns_knob(s);
+    if (ns.row != NS_CODE && ns.cedit) {                /* (CODE left: it shows the setup again) */
+        ns.cedit = 0;
+        ns_encode();
+    }
+    for (k = 0; k < 3u; k++)
+        if ((s = panel_enc(EN_K1 + k)) != 0)
+            ns_knob(k, s);
     enc_drop();                                         /* the other knobs do nothing here */
     if (oct & 2u)
         ns_nudge();
@@ -320,53 +352,71 @@ static uint32_t tilt_ns_leds(void)                       /* the held rows' keys 
     if (tilt_ns_open == TILT_START)
         return st_leds();
     for (k = 0; k < 27u; k++)
-        if (!key_black(k) && key_place(k) < NS_ROWS && ((ns.hold >> key_place(k)) & 1u))
+        if (!key_black(k) && key_place(k) < NS_ROWS && ((ns.hold >> key_place(k)) & 1u))   /* (F3 .. A4) */
             m |= 1u << k;
     return m;
 }
 
 /* a row: its key ("F3"), the name, the value at the right; the selected row on SURF, a held one's value THEME with a
  * lock (THEME: amber on the AMBER palette) */
-static void ns_value(uint32_t r, char *b)              /* (b holds 28) */
+static void ns_value(uint32_t r, char *b)              /* (b holds 40) */
 {
     const char *unit;
     if (r == NS_KEY) {
-        param_format(&TP[P_ROOT], ns.root, b, &unit);
+        param_format(&TP[P_ROOT], ns.s.key, b, &unit);
     } else if (r == NS_SCALE) {
-        str_cpy(b, TP[P_SCALE].names[ns.scale], 8);
+        str_cpy(b, TP[P_SCALE].names[ns.s.scale], 8);
     } else if (r == NS_BPM) {
-        fmt_int(b, ns.bpm);
-        str_cpy(b + str_len(b), " BPM", 5);
+        fmt_int(b, ns.s.bpm);
+        str_cpy(b + str_len(b), ns.s.swing ? " BPM  SWG " : " BPM", 11);
+        if (ns.s.swing) {
+            fmt_int(b + str_len(b), ns.s.swing);
+            str_cpy(b + str_len(b), "%", 2);
+        }
+    } else if (r == NS_LINEUP) {
+        str_cpy(b, LU_NAME[ns.lineup % LU_N], 12);
+    } else if (r == NS_CODE) {
+        str_cpy(b, ns.code, 40);
+        if (ns.cbad)
+            str_cpy(b + str_len(b), " ?", 3);
     } else {
-        const engine_t *e = ENGINES[ns.eng[r - NS_T1] % NENGINES];
-        str_cpy(b, e->name, 12);
-        str_cpy(b + str_len(b), " ", 2);
-        if (e->npresets)
-            str_cpy(b + str_len(b), e->presets[ns.pre[r - NS_T1] % e->npresets].name, 16);
+        tfm_snd_name(ns.s.ins[r - NS_T1], ns.s.pre[r - NS_T1], b, 28);
     }
 }
 static void ns_draw_row(uint32_t r)
 {
-    static const char *const LBL[NS_T1] = {"KEY", "SCALE", "TEMPO"};
-    uint32_t sel = r == ns.row, held = (ns.hold >> r) & 1u;
+    static const char *const LBL[NS_T1] = {"KEY", "SCALE", "TEMPO", "LINEUP"};
+    uint32_t sel = r == ns.row, held = (ns.hold >> r) & 1u && r != NS_LINEUP && r != NS_CODE;
     uint16_t bg = sel ? T_SURF : T_BG;
-    int32_t y = CAP_IN(S, NS_ROW_H);
-    char n[3] = {W_NOTE[r], (char)(r < 4u ? '3' : '4'), 0}, b[28];
+    int32_t y = CAP_IN(S, NS_ROW_H), x;
+    char n[3] = {W_NOTE[r], (char)(r < 4u ? '3' : '4'), 0}, b[40];
     cv_begin(240, NS_ROW_H, T_BG);
     if (sel)
         cv_rrect(3, 1, 234, NS_ROW_H - 2, 4, T_SURF, T_BG);
     cv_text_on(9, y, &AF_S, n, held ? T_THEME : T_DIM, bg);
     if (r < NS_T1) {
         cv_text_on(31, y, &AF_S, LBL[r], T_MID, bg);
+    } else if (r == NS_CODE) {
+        cv_text_on(31, y, &AF_S, "CODE", T_MID, bg);
     } else {
         b[0] = 'T';
         b[1] = (char)('1' + r - NS_T1);
         b[2] = 0;
-        cv_text_on(31, y, &AF_S, b, T_MID, bg);
-        cv_text_on(48, y, &AF_S, NS_ROLE[r - NS_T1], T_DIM, bg);
+        cv_text_on(31, y, &AF_S, b, T_MID, bg);          /* (the role: the instrument's name says it; LINEUP the rule) */
     }
     ns_value(r, b);
-    cv_text_r(held ? 214 : 231, y, &AF_S, b, held ? T_THEME : sel ? T_TEXT : T_MID, bg);
+    x = held ? 214 : 231;
+    if (r == NS_CODE && sel && ns.cedit) {              /* (typing: the symbol at the place underlined) */
+        uint32_t i, k = 0;
+        int32_t w = text_w(&AF_S, b), cx = x - w;
+        for (i = 0; b[i]; i++) {
+            char c[2] = {b[i], 0};
+            if (b[i] != '-' && k++ == ns.cpos)
+                cv_rect(cx, y + AF_S_CAP_Y + AF_S_CAP_H + 2, text_w(&AF_S, c), 1, T_THEME);
+            cx += text_w(&AF_S, c);
+        }
+    }
+    cv_text_r(x, y, &AF_S, b, held ? T_THEME : r == NS_CODE && ns.cbad ? T_DIM : sel ? T_TEXT : T_MID, bg);
     if (held)
         cv_icon_on(219, (NS_ROW_H - 12) / 2, 12, ICON_X_LOCK, T_THEME, bg);
     cv_blit(0, Y_LABEL + r * NS_ROW_H);
@@ -377,9 +427,19 @@ static void ns_draw_foot(void)
     a[0] = (khint_t){KC_OCTUP, "NUDGE"};
     a[1] = (khint_t){KC_PLAY, ns.again ? "AGAIN: CLEAR" : "START"};
     a[2] = (khint_t){KC_OCTDN, "BACK"};
-    b[0] = (khint_t){KC_SELECT, "ROW"};
-    b[1] = (khint_t){KC_K1, "CHANGE"};
-    b[2] = (khint_t){KC_KEYS, "HOLD"};
+    if (ns.row == NS_CODE) {
+        b[0] = (khint_t){KC_K1, "CHAR"};
+        b[1] = (khint_t){KC_K2, "MOVE"};
+        b[2] = (khint_t){KC_K3, "LENGTH"};
+    } else if (ns.row == NS_BPM || ns.row >= NS_T1) {   /* (two knobs: both named; SELECT goes without saying) */
+        b[0] = (khint_t){KC_K1, ns.row == NS_BPM ? "BPM" : "SOUND"};
+        b[1] = (khint_t){KC_K2, ns.row == NS_BPM ? "SWING" : "INSTR"};
+        b[2] = (khint_t){KC_KEYS, "HOLD"};
+    } else {
+        b[0] = (khint_t){KC_SELECT, "ROW"};
+        b[1] = (khint_t){KC_K1, "CHANGE"};
+        b[2] = (khint_t){KC_KEYS, "HOLD"};
+    }
     cv_begin(240, H_FOOT, T_BG);
     cv_key_row(8, 232, 2, a, 3, 7u, T_BG);
     cv_key_row(8, 232, 21, b, 3, 7u, T_BG);
@@ -388,8 +448,8 @@ static void ns_draw_foot(void)
 static void te_draw(void);
 static void tilt_ns_draw(void)
 {
-    uint8_t st[8 + 2 * NTRK] = {ns.row, ns.hold, ns.root, ns.scale, (uint8_t)ns.bpm, (uint8_t)(ns.bpm >> 8), ns.again,
-                                tilt_timer_min};
+    uint8_t st[12] = {ns.row, (uint8_t)ns.hold, (uint8_t)(ns.hold >> 8), ns.lineup, ns.again, tilt_timer_min, ns.cpos,
+                      ns.cedit, ns.cbad};
     uint32_t r, sig;
     if (tilt_ns_open == TILT_TIME) {
         te_draw();
@@ -399,13 +459,9 @@ static void tilt_ns_draw(void)
         st_draw();
         return;
     }
-    for (r = 0; r < NTRK; r++) {
-        st[8 + r] = ns.eng[r];
-        st[8 + NTRK + r] = ns.pre[r];
-    }
     if (ns.again && fm1_ms - ns.again_t >= NS_AGAIN_MS)
         ns.again = 0;
-    sig = fnv(2166136261u, st, sizeof st) + ux.gen * 7919u;
+    sig = fnv(fnv(fnv(2166136261u, st, sizeof st), &ns.s, sizeof ns.s), ns.code, sizeof ns.code) + ux.gen * 7919u;
     if (ui.force) {                                     /* (no cards: no frame's gaps, LINE's dividers; the rows' band) */
         lcd_fill(0, H_HEAD, 240, Y_FOOT - H_HEAD, T_BG);
         ns.sig = ~sig;

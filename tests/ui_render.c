@@ -1419,14 +1419,17 @@ static void setup(int s)
     case S_NEWSONG: case S_NEWSONG_HELD: case S_NEWSONG_AGAIN:
         song.playing = 0; go_home(); ns.rolled = 1; ns.hold = 0; ns.row = 0; tilt_ns_show();
         if (s != S_NEWSONG) {
-            uint32_t n, e, k, w, best = 0;
-            ns.hold = 0x5D; ns.row = 4; ns.root = 1; ns.scale = 12; ns.bpm = 145;
-            for (n = 0; ns_fact_at(n, &e, &k); n++) {   /* (the longest "ENGINE PRESET" on T2: what must fit) */
-                const engine_t *en = ENGINES[e];
-                char b[28];
-                str_cpy(b, en->name, 12); str_cpy(b + str_len(b), " ", 2); str_cpy(b + str_len(b), en->presets[k].name, 16);
-                if ((w = (uint32_t)text_w(&AF_S, b)) > best) { best = w; ns.eng[1] = (uint8_t)e; ns.pre[1] = (uint8_t)k; }
-            }
+            uint32_t i, k, w, best = 0;
+            ns.hold = 0x5D; ns.row = 4; ns.s.key = 1; ns.s.scale = 12; ns.s.bpm = 145; ns.s.swing = 55;
+            for (i = 0; i < TI_N; i++)                  /* (TFM: the longest "INSTRUMENT SOUND" on T2: what must fit) */
+                for (k = 0; k < TFM_INS[i].nsnd; k++) {
+                    char b[40];
+                    tfm_snd_name(i, k, b, 28);
+                    if ((w = (uint32_t)text_w(&AF_S, b)) > best) { best = w; ns.s.ins[1] = (uint8_t)i; ns.s.pre[1] = (uint8_t)k; }
+                }
+            ns.lineup = LU_BAND1;
+            ns.cedit = 0;
+            ns_encode();
         }
         if (s == S_NEWSONG_AGAIN) { ns.again = 1; ns.again_t = fm1_ms; }
         break;

@@ -1084,7 +1084,8 @@ static int project_restore_runtime(const project_t *input)
             const param_desc_t *d = param_desc_of(e, i);
             t->p[i] = (int16_t)param_fit(d, s->p[i]);
         }
-        t->preset = (uint8_t)(ENGINES[e]->npresets ? (s->preset >= PROJ_DEF_KEEP ? 0u : s->preset) % ENGINES[e]->npresets : 0u);
+        t->preset = (uint8_t)(s->preset >= TFM_PRE0 && s->preset < PROJ_DEF_KEEP ? s->preset :   /* (TFM: an instrument's */
+                              ENGINES[e]->npresets ? (s->preset >= PROJ_DEF_KEEP ? 0u : s->preset) % ENGINES[e]->npresets : 0u);
         memcpy(t->step, s->step, sizeof t->step);
         proj_steps(t->step);
         {   /* the project's own FM6 patch, never reloaded from SLOT: F n if it is that factory patch, else OWN */
@@ -1623,7 +1624,8 @@ static int scene_stage_from(uint32_t slot)
         for (i = 0; i < P_COUNT; i++)
             scene_stage.p[k][i] = (int16_t)param_fit(param_desc_of(e, i), s->p[i]);
         scene_stage.eng[k] = (uint8_t)e;
-        scene_stage.preset[k] = (uint8_t)(ENGINES[e]->npresets ? s->preset % ENGINES[e]->npresets : 0u);
+        scene_stage.preset[k] = (uint8_t)(s->preset >= TFM_PRE0 ? s->preset :   /* (TFM: an instrument's sound, kept) */
+                                          ENGINES[e]->npresets ? s->preset % ENGINES[e]->npresets : 0u);
         memcpy(scene_stage.step[k], s->step, sizeof scene_stage.step[k]);
         proj_steps(scene_stage.step[k]);
         fm6_unpack(p->fm6[k], v);

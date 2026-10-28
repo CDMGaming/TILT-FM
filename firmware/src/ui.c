@@ -452,6 +452,7 @@ static int autosave_boot(int allowed);
 static void tilt_start_boot(int clean);                 /* (tilt.c: the start screen, from main.c's power-on) */
 /* TILT-FM: SCENES (project.c, tilt.c): the PROJECT slots are the song's scenes A..D */
 #define SCENE_NONE 4u
+#define TFM_PRE0 0x20u                                  /* TFM: a preset byte from here (tfm_instr.c): an instrument's sound */
 static struct {
     uint32_t sig;                                       /* project.c scene_sig as the scene was loaded, stored, begun */
     uint8_t pend;                                       /* bit s: scene s stored in RAM while playing, not in flash yet */
