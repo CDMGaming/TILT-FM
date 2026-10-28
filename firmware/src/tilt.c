@@ -58,6 +58,7 @@ enum { NS_KEY, NS_SCALE, NS_BPM, NS_LINEUP, NS_T1, NS_CODE = NS_T1 + NTRK, NS_RO
 #include "tfm_instr.c"                                  /* TFM: the instruments over the engines, their macros */
 #include "tfm_code.c"                                   /* TFM: TILT's setup codes */
 #include "tfm_jam.c"                                     /* TFM: HOME > JAM */
+#include "tfm_toys.c"                                    /* TFM: the instruments' pinball toys (MACROS) */
 #include "tfm_sheet.c"                                   /* TFM: the STEP SHEET (OCT+ held on STEP) */
 static struct {
     uint8_t row, rolled, lineup;                        /* the selected row; (rolled: once, the first open); LU_* */

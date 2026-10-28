@@ -526,19 +526,24 @@ static void tfm_macro_cards(uint32_t page)
         draw_column(c, mc->name, val, unit, VAL(c), pos * 1000 / 127, ICON_AUTO);
     }
 }
-/* the page: the instrument and its sound, big, and which half of the macros this is */
+static int toy_has(const track_t *t);                   /* (tfm_toys.c: the instrument's pinball toy) */
+static void graph_toy(const track_t *t, int32_t y0);
+/* the page: the instrument and its sound, big, and which half of the macros this is (a toy: between, tfm_toys.c) */
 static void graph_macro(void)
 {
     uint32_t i = tfm_ins_of(TSEL);
+    int toy_on = toy_has(TSEL);
     char b[24];
     if (i == TI_NONE)
         return;
     GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H, "macro page instrument centred");
-    cv_text_in(0, 30, 240, &AF_M, TFM_INS[i].name, T_THEME, T_BG);
+    cv_text_in(0, toy_on ? 2 : 30, 240, &AF_M, TFM_INS[i].name, T_THEME, T_BG);
     tfm_snd_label(TSEL, b);
     GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H, "macro page sound centred");
-    cv_text_in(0, 54, 240, &AF_S, b, T_TEXT, T_BG);
+    cv_text_in(0, toy_on ? 24 : 54, 240, &AF_S, b, T_TEXT, T_BG);
+    if (toy_on)
+        graph_toy(TSEL, 40);
     GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H, "macro page hint centred");
-    cv_text_in(0, 84, 240, &AF_S, str_eq(cur_page()->title, "MACROS 2") ? "MACROS 5-8  [EDIT] ENGINE" : "MACROS 1-4  [EDIT] 5-8",
+    cv_text_in(0, toy_on ? 90 : 84, 240, &AF_S, str_eq(cur_page()->title, "MACROS 2") ? "MACROS 5-8  [EDIT] ENGINE" : "MACROS 1-4  [EDIT] 5-8",
                T_DIM, T_BG);
 }
