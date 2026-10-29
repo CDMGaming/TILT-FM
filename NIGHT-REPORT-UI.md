@@ -97,7 +97,7 @@ One commit and one push per item, branch `tfm-ui`. Package to try: `tilt-fm-ui-r
    10 / 13 / 17 / 32); nothing under 11 px in TFM's own screens. All screens re-laid out: at most 3 footer hints
    everywhere (checked on every screen); what no longer fit moved into the screens' empty bands (JAM: REC, EDIT, SEQ, GLO,
    SAVE; DICE: PLAY, ENV; SONG: SELECT, PRESETS in the header; STEP: K1, SELECT); the FX chips fit the card; TIME no longer
-   leaves a black strip. **Flash cost: +6.4 KB** for the larger glyphs (480,476 -> 487,444 B), RAM unchanged. The
+   leaves a black strip. **Flash cost: +6.4 KB** for the larger glyphs (481,040 -> 487,444 B), RAM unchanged. The
    layout lint finds nothing on any of the 297 screens in the 16 palettes.
    *Not changed:* Felucca's own fonts (S 12 px and up; DEEP, the menu and the layers) already were 11 px or more.
 7. **TYPE rules.** The picks were right (every TYPE roll has its type's bit, tested for 6 types x 4 tracks). What was
