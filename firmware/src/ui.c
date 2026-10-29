@@ -138,7 +138,7 @@ static void tu_picker_key(uint32_t p);
 static void tu_picker_draw(void);
 static void tu_scenes_draw(void);
 static int tu_oct_ok(void);
-static int tfm_jam_accept(const uint8_t *a, uint32_t n);   /* (tilt.c: TODAY'S JAM) */
+static int (*tfm_jam_hook)(const uint8_t *a, uint32_t n);   /* (tilt.c sets it: TODAY'S JAM; a build without tilt.c: none) */
 static int tu_song_on(void);
 static int proj_slot_info(uint32_t slot, uint32_t *len16, uint32_t *parts);
 static int tu_deep_on(void);

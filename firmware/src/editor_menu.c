@@ -66,7 +66,7 @@ static int ed_menu_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
     uint32_t i, row, k;
     int32_t v, lo;
     if (cmd == ED_JAM) {                               /* TFM: today's jam: TILT's setup code (ASCII) -> rc 0, the START screen shows it */
-        ed_b(tfm_jam_accept(a, n) ? 0u : 1u);          /* (tilt.c: decodes it, START offers it) */
+        ed_b(tfm_jam_hook && tfm_jam_hook(a, n) ? 0u : 1u);   /* (tilt.c: decodes it, START offers it) */
         return 1;
     }
     if (cmd == ED_MENU_DESC) {                         /* index -> index, id, kind, value, min, max (v14), name, names,

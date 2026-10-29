@@ -65,7 +65,7 @@ static int st_prog(uint32_t off, const void *p, uint32_t n) { (void)off; (void)p
 static int st_erase(uint32_t off) { (void)off; return -1; }
 #include "../firmware/src/storage.c"
 static char jam_seen[48];
-static int tfm_jam_accept(const uint8_t *a, uint32_t n)   /* (the stub of tilt.c's: the code as it arrived; accepted when it is TILT's) */
+static int jam_stub(const uint8_t *a, uint32_t n)       /* (the stub of tilt.c's: the code as it arrived; accepted when it is TILT's) */
 {
     uint32_t i;
     for (i = 0; i < n && i < 47u && a[i]; i++)
@@ -984,6 +984,7 @@ static int menu_protocol(void)
         static const char good[] = "09VJ-2003-000H-00RC-1C";
         uint8_t c[40];
         jam_seen[0] = 0;
+        tfm_jam_hook = jam_stub;
         memcpy(c, good, sizeof good - 1u);
         ok = request(ED_JAM, c, (uint32_t)sizeof good - 1u) > 0u && !strcmp(jam_seen, good);   /* the code reaches tilt.c as sent */
         memcpy(c, "NOT-A-CODE", 10);
