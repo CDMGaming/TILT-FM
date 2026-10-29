@@ -60,11 +60,8 @@ static void jam_cards(void)
             continue;
         }
         mc = &TFM_INS[tfm_ins_of(t)].mac[0];
-        if (mc->flags & TM_STEP)
-            param_format(param_desc_of(TFM_INS[tfm_ins_of(t)].eng, mc->t[0].id), motion_base_value(t, mc->t[0].id), val, &unit);
-        else
-            fmt_int(val, pos * 100 / 127);
-        draw_column(c, mc->name, val, unit, col, pos * 1000 / 127, trk_icon(c, 1));
+        tfm_macro_text(t, 0, val, &unit);
+        { char lb[6]; str_cpy(lb, mc->name, 6); draw_column(c, lb, val, unit, col, pos * 1000 / 127, trk_icon(c, 1)); }
     }
 }
 static void jam_disc(int32_t cx, int32_t cy, int32_t r, uint16_t c)

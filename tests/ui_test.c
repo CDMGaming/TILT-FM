@@ -10557,7 +10557,7 @@ static int test_tfm_dice(void)
     ns_start();
     ok = tfm_ins_of(&trk[0]) == TI_THUMP && tfm_snd_of(&trk[0]) == 2u && drum_track(&trk[0]);
     ok &= tfm_ins_of(&trk[3]) == TI_SQUELCH && !drum_track(&trk[3]) && trk[3].p[P_QUANT] == QN_WHITE;
-    ok &= song.g[G_SWING] == 35 && trk[3].p[P_E4] == 40;   /* (RUBBER: CUT 40) */
+    ok &= song.g[G_SWING] == 35 && trk[3].p[P_E4] == tfm_tgt_val(&TFM_INS[TI_SQUELCH].mac[0].t[0], 70 * 127 / 100);   /* (ACID RAIN: CUTOFF at 70) */
     project_save(0);
     project_load(0);
     ok &= tfm_ins_of(&trk[0]) == TI_THUMP && tfm_ins_of(&trk[3]) == TI_SQUELCH && tfm_snd_of(&trk[3]) == 1u;
@@ -10575,41 +10575,62 @@ static int test_tfm_instruments(void)
     int bad = 0, ok = 1;
     uint32_t i, s, m, k, total;
     ui_power_on();
-    for (i = 0; i < TI_N; i++)
+    for (i = 0; i < TI_N; i++) {
+        ok &= TFM_INS[i].nsnd >= 5u && TFM_INS[i].nsnd <= 15u && TFM_INS[i].snd[0].hasmp && TFM_INS[i].snd[4].hasmp &&
+              !TFM_INS[i].snd[5].hasmp;                 /* (five named presets, then the older sounds) */
         for (s = 0; s < TFM_INS[i].nsnd; s++) {
             tfm_load(&trk[0], i, s);
             ok &= trk[0].eng_req == TFM_INS[i].eng && tfm_ins_of(&trk[0]) == i && tfm_snd_of(&trk[0]) == s;
-            for (k = 0; k < 6u && TFM_INS[i].snd[s].ov[k].id != 0xFFu; k++)
+            for (k = 0; !TFM_INS[i].snd[s].hasmp && k < 6u && TFM_INS[i].snd[s].ov[k].id != 0xFFu; k++)
                 ok &= trk[0].p[TFM_INS[i].snd[s].ov[k].id] == TFM_INS[i].snd[s].ov[k].v;
+            for (k = 0; k < 16u && TFM_INS[i].vo[k].id != 0xFFu; k++) {   /* (the voicing: in unless the sound changes it) */
+                uint32_t j, over = 0;
+                for (j = 0; j < 6u && TFM_INS[i].snd[s].ov[j].id != 0xFFu; j++)
+                    over |= TFM_INS[i].snd[s].ov[j].id == TFM_INS[i].vo[k].id;
+                if (!over && !TFM_INS[i].snd[s].hasmp)
+                    ok &= trk[0].p[TFM_INS[i].vo[k].id] == TFM_INS[i].vo[k].v;
+            }
         }
-    bad += check("TFM instruments: every sound loads on its engine, its changes in, the track marked", ok);
+        if (!ok) { printf("    %s\n", TFM_INS[i].name); break; }
+    }
+    bad += check("TFM instruments: every sound (5 named presets, then the older ones) loads on its engine, the voicing and the changes in, the track marked", ok);
     ok = 1;
     for (i = 0; i < TI_N; i++) {
         tfm_load(&trk[0], i, 0);
         for (m = 0; m < 8u; m++) {
             const tfm_macro_t *mc = &TFM_INS[i].mac[m];
             const param_desc_t *d;
-            ok &= mc->name && str_len(mc->name) <= 5u && mc->t[0].id != 0xFFu;
-            for (k = 0; k < 3u && mc->t[k].id != 0xFFu; k++) {
+            int32_t lo, hi;
+            ok &= mc->name && str_len(mc->name) <= 7u && mc->t[0].id != 0xFFu && strcmp(mc->name, "LEVEL") != 0;   /* (no LEVEL macro) */
+            for (k = 0; k < 4u && mc->t[k].id != 0xFFu; k++) {
                 d = param_desc_of(TFM_INS[i].eng, mc->t[k].id);
+                if (mc->nsw) {
+                    uint32_t q;
+                    for (q = 0; q < mc->nsw; q++)
+                        ok &= mc->sw[q] >= d->min && mc->sw[q] <= d->max;
+                    break;
+                }
                 ok &= mc->t[k].lo >= d->min && mc->t[k].lo <= d->max && mc->t[k].hi >= d->min && mc->t[k].hi <= d->max &&
                       mc->t[k].lo != mc->t[k].hi;
             }
+            lo = mc->nsw ? mc->sw[0] : mc->t[0].lo;
+            hi = mc->nsw ? mc->sw[mc->nsw - 1u] : mc->t[0].hi;
             tfm_macro_set(&trk[0], m, 0);
-            ok &= trk[0].p[mc->t[0].id] == mc->t[0].lo && tfm_macro_get(&trk[0], m) == 0;
+            ok &= trk[0].p[mc->t[0].id] == lo && tfm_macro_get(&trk[0], m) == 0;
             tfm_macro_set(&trk[0], m, 127);
-            ok &= trk[0].p[mc->t[0].id] == mc->t[0].hi && tfm_macro_get(&trk[0], m) == 127;
-            if (mc->flags & TM_STEP) {                  /* a detent: the next value, never stuck */
+            ok &= trk[0].p[mc->t[0].id] == hi && tfm_macro_get(&trk[0], m) == 127;
+            if (mc->nsw) {                              /* a detent: the next value, never stuck */
                 int16_t v;
                 tfm_macro_set(&trk[0], m, 0);
                 v = trk[0].p[mc->t[0].id];
                 tfm_macro_turn(&trk[0], m, 1);
-                ok &= trk[0].p[mc->t[0].id] != v;
+                ok &= trk[0].p[mc->t[0].id] != v && mc->nsw >= 2u;
             }
             if (!ok) { printf("    %s macro %u %s\n", TFM_INS[i].name, m + 1u, mc->name); break; }
         }
+        if (!ok) break;
     }
-    bad += check("TFM macros: targets inside their ranges, labels of 5, 0..127 end to end, a switch a step a detent", ok);
+    bad += check("TFM macros: targets inside their ranges, labels of 7, no LEVEL macro, 0..127 end to end, a switch a value a detent", ok);
     ui_power_on();
     for (m = 0; m < NPAGES && PAGES[m].graph != GR_MACRO; m++)
         ;
@@ -10642,7 +10663,7 @@ static int test_tfm_instruments(void)
     {
         char b[16];
         sound_name(TSEL, b);
-        ok &= str_eq(b, "RUBBER") && str_eq(tfm_ins_name(TSEL), "SQUELCH");
+        ok &= str_eq(b, "ACID RAIN") && str_eq(tfm_ins_name(TSEL), "SQUELCH");
     }
     bad += check("TFM PRESETS: the instruments first, then Felucca's sounds; an instrument's sound loads and is named", ok);
     ui_power_on();
