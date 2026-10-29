@@ -206,7 +206,7 @@ static void tsg_song_head(void)
     tu_timer_text(t);
     if (t[0])
         tu_text_c(120, 10, &AF_PS, t, TC_AMBER, TC_BG);
-    tu_text_r(231, 10, &AF_TS, chain.running ? "PLAYING" : "SELECT row · PRESETS reps", chain.running ? TC_GOOD : TC_QUIET, TC_BG);
+    tu_text_r(231, 10, &AF_TS, chain.running ? "PLAYING" : "SELECT row \xB7 PRESETS reps", chain.running ? TC_GOOD : TC_QUIET, TC_BG);
 }
 static void tu_song_draw(void)
 {
