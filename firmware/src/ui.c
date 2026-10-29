@@ -147,6 +147,7 @@ static void tu_draw(void);
 static void tu_tap(uint32_t b);
 static void tu_home_tap(void);
 static void tu_home_reset(void);
+static int tu_modal_home(void);
 static int sheet_on(void);                              /* TFM (tfm_sheet.c): the STEP SHEET (OCT+ held on STEP) */
 static void sheet_cards(void);
 static void sheet_turn(uint32_t k, int32_t d);

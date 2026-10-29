@@ -1636,6 +1636,8 @@ static void ui_input(void)
             menu_input(oct);
         return;
     }
+    if (home == BT_TAP && !ui.menu && tu_modal_home())  /* TFM-UI: one HOME tap out of a dialog, NAME, DICE, SETUP, START, TIME */
+        home = BT_NONE;
     if (name_on() && !ui.confirm) {                     /* NAME: the keys type, KNOB 1 / 2, OCT+ / OCT- (ui_name.c); */
         if (ui.save_t0)                                 /* SAVE does nothing */
             ui.save_t0 |= 2u;

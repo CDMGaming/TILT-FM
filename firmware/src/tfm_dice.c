@@ -407,13 +407,13 @@ static void tu_dice_draw(void)
         tu_zone(2, TU_HY, 100, TC_BG, ssig, tu_su_rows);       /* (a band is 124 rows at most: two) */
         tu_zone(5, TU_HY + 100, 77, TC_BG, ssig, tu_su_rows);
         tu_zone(3, 199, 16, TC_BG, 1u, tu_su_note);
-        tu_foot(3, "SELECT", "SCROLL", "K1-K4", "THE 4 LIT ROWS", "ENV", "BACK TO DICE", 0, 0, 0, 0);
+        tu_foot(3, "SELECT", "SCROLL", "K1-K4", "THE 4 LIT ROWS", "HOME", "BACK", 0, 0, 0, 0);
     } else {
         tu_zone(0, 0, TU_HY, TC_BG, sig, tu_head_dice);
         tu_zone(2, TU_HY, 54, TC_BG, sig, tu_dice_tiles);
         tu_zone(3, 76, 100, TC_BG, sig, tu_dice_rows);
         tu_zone(4, 176, 39, TC_BG, 1u, tu_dice_note);
-        tu_foot(4, "KEYS", "HOLD", "OCT+", "RE-ROLL", "ENV", "SETUP", "PLAY", "START", 0, 0);
+        tu_foot(5, "KEYS", "HOLD", "OCT+", "RE-ROLL", "ENV", "SETUP", "PLAY", "START", "HOME", "BACK");
     }
     ui.force = 0;
 }
@@ -442,11 +442,75 @@ static void tu_su_step(uint32_t row, int32_t s)
     }
     ui.force = 1;
 }
+/* DICE or SETUP closed, nothing changed (the rules are kept once SETUP is left); START, if it was opened from there */
+static void tu_dice_back(int to_start)
+{
+    if (tu_setup_on) {
+        tu_setup_on = 0;
+        settings_save();
+    }
+    name_close();
+    if (ns_from_start) {
+        ns_from_start = 0;
+        if (to_start)
+            tilt_ns_open = TILT_START;
+    }
+    ui.force = 1;
+}
+/* HOME tapped over anything that takes the screen (ui_input.c): one tap out, nothing changed. 1 = it was taken here.
+ * A dialog is cancelled; NAME is cancelled; SETUP goes back to DICE, DICE to where it was opened from (START, else the
+ * screen before), START and TIME to JAM */
+static int tu_modal_home(void)
+{
+    if (tu_classic())
+        return 0;
+    if (ui.confirm) {
+        ui.confirm = 0;
+        ui.force = 1;
+        return 1;
+    }
+    if (tilt_ns_open == TILT_NS) {
+        if (tu_setup_on) {
+            tu_setup_on = 0;
+            settings_save();
+            ui.force = 1;
+        } else {
+            tu_dice_back(1);
+        }
+        return 1;
+    }
+    if (tilt_ns_open == TILT_START) {
+        ns_from_start = 0;
+        name_close();
+        go_home();
+        return 1;
+    }
+    if (tilt_ns_open == TILT_TIME) {
+        te_do(TO_KEEP);
+        return 1;
+    }
+    if (nm.kind) {
+        name_close();
+        ui.force = 1;
+        return 1;
+    }
+    return 0;
+}
 static void tu_dice_input(uint32_t pressed, uint32_t notes, uint32_t oct)
 {
     uint32_t k, p;
     int32_t s;
     song.grid = 2;                                      /* (silent keys: keys_mode, as NAME's) */
+    {   /* a screen button closes DICE (SETUP) and opens its screen */
+        static const uint8_t SB[8] = {B_SEQ, B_EDIT, B_GLO, B_SAVE, B_FX, B_SCL, B_LFO, B_ARP};
+        for (k = 0; k < 8u; k++)
+            if ((pressed >> panel.btn[SB[k]]) & 1u) {
+                tu_dice_back(0);
+                tu_tap(SB[k]);
+                enc_drop();
+                return;
+            }
+    }
     if ((pressed >> panel.btn[B_ENV]) & 1u) {           /* ENV: SETUP, and back */
         tu_setup_on = (uint8_t)!tu_setup_on;
         if (!tu_setup_on)
