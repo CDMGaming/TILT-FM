@@ -398,10 +398,17 @@ static void tu_jam_body(void)                           /* y 22 .. 126: four bum
         tu_disc(cx, cy, 15, edge);
         tu_disc(cx, cy, 14, fillc);
         tu_ring(cx, cy, 5, 4, edge);
+        if (c == song.sel)                               /* the selected track: a bright outer ring */
+            tu_ring(cx, cy, 28, 26, tu_mix(col, TC_TEXT, 55));
         (void)ang;
         if (tu.flash[c])
             tu.flash[c]--;
-        tu_text_c(cx, 105, &AF_TS, ins ? tfm_ins_name(t) : tu_inst_name(t), TC_TEXT, TC_BG);
+        if (c == song.sel) {                             /* (its name and macro in reverse: filled in the track colour) */
+            tu_rrect(cx - 27, 98, 54, 28, 4, col, TC_BG);
+            tu_text_c(cx, 105, &AF_TS, ins ? tfm_ins_name(t) : tu_inst_name(t), TC_BG, col);
+        } else {
+            tu_text_c(cx, 105, &AF_TS, ins ? tfm_ins_name(t) : tu_inst_name(t), TC_TEXT, TC_BG);
+        }
         if (ins) {
             str_cpy(b, TFM_INS[tfm_ins_of(t)].mac[0].name, 12);
         } else {
@@ -410,7 +417,10 @@ static void tu_jam_body(void)                           /* y 22 .. 126: four bum
         fmt_int(v, pos * 100 / 127);
         str_cpy(b + str_len(b), " ", 2);
         str_cpy(b + str_len(b), v, 6);
-        tu_text_c(cx, 118, &AF_TS, b, mute ? TC_DIM : col, TC_BG);
+        if (c == song.sel)
+            tu_text_c(cx, 118, &AF_TS, b, TC_BG, col);
+        else
+            tu_text_c(cx, 118, &AF_TS, b, mute ? TC_DIM : col, TC_BG);
     }
 }
 static void tu_strip_draw(void)                         /* y 126 .. 170: the scene strip A..H */
@@ -430,7 +440,22 @@ static void tu_strip_draw(void)                         /* y 126 .. 170: the sce
         tu_text_c(tx + 12, 157, &AF_TL, b, is_cur ? TC_BG : used ? TC_TEXT : TC_DIM, is_cur ? TC_AMBER : TC_BG);
     }
 }
-static void tu_gap_draw(void) { tu_rect(0, 170, TU_W, 45, TC_BG); }
+static uint32_t tu_sel_until;                           /* ALGORITHM turned on JAM: the track's name shows big until then (fm1_ms) */
+static int tu_sel_big(void) { return tu_sel_until && (int32_t)(tu_sel_until - fm1_ms) > 0; }
+static void tu_gap_draw(void)
+{
+    tu_rect(0, 170, TU_W, 45, TC_BG);
+    if (tu_sel_big()) {
+        char b[24];
+        const track_t *t = &trk[song.sel % NTRK];
+        b[0] = 'T';
+        b[1] = (char)('1' + song.sel % NTRK);
+        b[2] = 0;
+        str_cpy(b + 2, " \xB7 ", 6);
+        str_cpy(b + str_len(b), tu_inst_name(t), 14);
+        tu_text_c(120, 192, &AF_PM, b, TU_TC[song.sel % NTRK], TC_BG);
+    }
+}
 static void tu_jam_draw(void)
 {
     char l[16], l2[16];
@@ -444,7 +469,23 @@ static void tu_jam_draw(void)
     str_cpy(l2 + str_len(l2), " of ", 5);
     fmt_int(l2 + str_len(l2), (int32_t)tot);
     l2[0] = '-';
-    tu_head(-1, l, l2, 0, 1);
+    {   /* the header: the selected track, "T2 \xB7 SQUELCH", then where the song is */
+        char tn[24];
+        tn[0] = 'T';
+        tn[1] = (char)('1' + song.sel % NTRK);
+        tn[2] = 0;
+        str_cpy(tn + 2, " \xB7 ", 6);
+        str_cpy(tn + str_len(tn), tu_inst_name(&trk[song.sel % NTRK]), 14);
+        {
+            static char hl[24], hl2[28];
+            str_cpy(hl, tn, sizeof hl);
+            str_cpy(hl2, l, 8);
+            str_cpy(hl2 + str_len(hl2), " ", 2);
+            str_cpy(hl2 + str_len(hl2), l2, 16);
+            tu_head(-1, hl, hl2, 0, 1);
+        }
+    }
+    sig = song.sel * 6151u + (uint32_t)tu_sel_big() * 3571u;
     for (i = 0; i < NTRK; i++)
         sig = sig * 131u + (uint32_t)jam_pos(&trk[i]) * 7u + (uint32_t)(trk[i].p[P_MUTE] != 0) * 3u + trk[i].eng_req +
               (uint32_t)tfm_ins_of(&trk[i]) * 257u + (uint32_t)tu.flash[i] * 1031u;
@@ -454,7 +495,7 @@ static void tu_jam_draw(void)
     tu_zone(2, TU_HY, 104, TC_BG, sig, tu_jam_body);
     tu_zone(3, 126, 44, TC_BG, cur * 977u + project_used(0) * 3u + project_used(1) * 5u + project_used(2) * 7u + project_used(3) * 11u,
             tu_strip_draw);
-    tu_zone(4, 170, 45, TC_BG, 1u, tu_gap_draw);
+    tu_zone(4, 170, 45, TC_BG, 1u + song.sel * 7u + (uint32_t)tu_sel_big() * 101u, tu_gap_draw);
     tu_foot(5, "K1-K4", "JAM", "REC", "RECORD", "EDIT", "SOUND", "SCL", "TEMPO", "ENV", "DICE");
 }
 
@@ -605,6 +646,7 @@ static void tu_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint32_t bu
     if (!busy && (s = panel_enc(EN_ALGO)) != 0) {       /* ALGORITHM: the track, everywhere */
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
         tq_adapt();
+        tu_sel_until = fm1_ms + 1000u;                  /* (JAM: the track's name big for about a second) */
     }
     if (!busy && tu.scr != TU_SOUND && tu.scr != TU_NOTES && tu.scr != TU_DRUMS && tu.scr != TU_SONG && (s = panel_enc(EN_PRESET)) != 0)
         tu_sound_step(s);                               /* PRESETS: the track's sound, everywhere it is not a list */

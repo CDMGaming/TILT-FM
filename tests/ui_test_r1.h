@@ -186,3 +186,41 @@ static int test_r1_home(void)
     bad += check("TFM-UI fix 3: one HOME tap gets out of every screen, DICE, SETUP, START, TIME, a dialog and NAME; a screen button leaves DICE", ok);
     return bad;
 }
+/* 4: JAM shows the selected track: a bright outer ring, its name and macro in reverse, "T2 . SQUELCH" in the header, ALGORITHM
+ * shows the track big for about a second, song.sel is in the redraw signature */
+static uint16_t r1_px(int32_t x, int32_t y) { return swap16(host_screen[(uint32_t)y * 240u + (uint32_t)x]); }
+static int test_r1_jam_sel(void)
+{
+    int bad = 0, ok = 1;
+    uint16_t bg;
+    ui_power_on();
+    tu_off = 0;
+    tu_goto(TU_JAM);
+    tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[1], TI_THUMP, 0);
+    frames(100);
+    bg = r1_px(2, 60);
+    R1(song.sel == 0u && r1_px(35, 73 - 27) != bg && r1_px(91, 73 - 27) == bg);       /* T1's ring bright, T2's not */
+    R1(tu_hd.l && tu_hd.l[0] == 'T' && tu_hd.l[1] == '1' && str_eq(tu_hd.l + 5, "SQUELCH"));
+    turn(EN_ALGO, 1); frames(40);
+    R1(song.sel == 1u && r1_px(91, 73 - 27) != bg && r1_px(35, 73 - 27) == bg);       /* the ring moved (song.sel in the signature) */
+    R1(tu_hd.l && tu_hd.l[1] == '2' && str_eq(tu_hd.l + 5, "THUMP LAB"));
+    R1(tu_sel_big());                                                                  /* the name big, in the band under the scenes */
+    {
+        uint32_t x, y, n = 0;
+        for (y = 175; y < 210u; y++)
+            for (x = 40; x < 200u; x++)
+                n += r1_px((int32_t)x, (int32_t)y) != bg;
+        R1(n > 100u);
+    }
+    fm1_ms += 1200u; frames(40);
+    R1(!tu_sel_big());
+    {
+        uint32_t x, y, n = 0;
+        for (y = 175; y < 210u; y++)
+            for (x = 40; x < 200u; x++)
+                n += r1_px((int32_t)x, (int32_t)y) != bg;
+        R1(n == 0u);                                                                   /* (and it is gone again) */
+    }
+    bad += check("TFM-UI fix 4: JAM rings and reverses the selected track, the header names it, ALGORITHM shows its name big for a second", ok);
+    return bad;
+}
