@@ -43,3 +43,82 @@ Because nothing changed, `web/fm1backup.js`, the editor's backup/restore and old
 
 ## Not tested
 Nothing was run on an FM-1. Audio behaviour of the new voicings and macros, the toys at real frame rates and the screens' redraw cost on the device are unverified; the redraw is zone-based and the toys redraw only their boxes, but `ui_render` has no timing for the TFM screens.
+
+## Round 1 fixes (from Felix's emulator test)
+
+One commit and one push per item, branch `tfm-ui`. Package to try: `tilt-fm-ui-r1-b594d9d.fwsc` (this folder).
+
+| # | Item | Commit |
+|---|------|--------|
+| 1 | NOTES and DRUMS cursor | cc36204 |
+| 2 | Tempo is easy to find | ef60559 |
+| 3 | No dead ends | dd1965c |
+| 4 | JAM shows the selected track | 7d584a4 |
+| 5 | Macro knobs smooth | df0cbab |
+| 7 | TYPE rules, RANDOM kits | 42b0fee |
+| 6 | Bigger text | f9042a4, b594d9d |
+
+### What changed
+
+1. **NOTES, DRUMS cursor.** SELECT moves the step cursor one step at a time through every step, empty or not, across
+   bars (the shown bar follows). PRESETS jumps a bar and puts the cursor on the same step in it. K1 is still
+   next/previous note. An empty step reads `STEP 7 · EMPTY · KEY ADDS`. Footer: `SELECT STEP · KEYS ADD · EDIT DELETE`.
+   Test: for 7, 32 and 64 steps, on NOTES and DRUMS, the cursor lands on every step 1..LEN going up and going down.
+   *Side effect:* PRESETS no longer changes the track's sound on DRUMS (it flips bars, as on NOTES); the sound is one
+   EDIT tap away on SOUND.
+2. **Tempo.** JAM's footer says `SCL TEMPO`. CLOCK opens with K1 TEMPO lit (a ring round its dial and its name in
+   reverse); the knob you turned last stays lit. SELECT never touches the BPM (tested).
+3. **No dead ends.** One HOME tap leaves a dialog, NAME, DICE (back to where it was opened from: START, else the screen
+   under it), SETUP (back to DICE), START and TIME (keep working). OCT- still does the same in DICE/SETUP. A screen
+   button (SEQ EDIT GLO SAVE FX SCL LFO ARP) pressed in DICE or SETUP closes it and opens that screen. DICE and SETUP
+   footers say `HOME BACK`. A test taps HOME on every screen, modal, dialog and NAME, and on a layer after its button
+   is let go: always out in one tap (JAM is the one screen HOME toggles: MIX and back).
+4. **JAM selection.** The selected bumper has a bright outer ring and its name and macro label filled in its track
+   colour; the header reads `T2 · SQUELCH` (then the scene and bar); turning ALGORITHM puts the track name big in the
+   bottom band for about a second. `song.sel` is in the JAM signature (it was missing: the old ring never moved).
+5. **Macros.**
+   - Each track keeps its eight macro places (0..127) in RAM (`tfm_mpos`, 4 x 8 B, plus 4 x 8 x 2 B of check values and
+     4 B of flags: about 100 B of RAM, no format change). A turn moves the stored place and applies every target
+     from it; the place is never read back from the first target while it is current. When a parameter is changed
+     elsewhere (DEEP, a load, undo, MIDI) the place is read from the first target once and kept again. A preset
+     load sets the places from the preset, or derives them once.
+   - A switch steps once per two detents (turning back restarts the count).
+   - JAM's knob turns each instrument's own continuous macro: THUMP PUNCH, SQUELCH CUTOFF, WOBBLER WOB, CHORDETTE WARM,
+     RAZOR CUT, HAZE BLOOM, PIXEL SWEEP, TINE BARK, GLINT METAL, PLUCK BRIGHT, VOX VOWEL, WHEELHOUSE DRIVE (the table
+     `TFM_JAMM` in `tfm_instr.c`). `TFM-INSTRUMENTS.md` (here and in `docs/`) and `MACROS-TO-TUNE.md` say so.
+   - Test: all 12 x 8 macros: continuous ones go 0 -> 127 -> 0 by exactly 1 a detent, every target monotone; the
+     switches step per two detents; JAM turns the named one.
+   - Responsiveness: JAM redraws only the zone whose picture changed: nothing when idle, at most the bumpers' band
+     (240 x 104 px) on a knob turn; header, scenes and footer are not redrawn (tested by the zone signatures).
+     **Not measured on a device**: the emulator and host harness have no meaningful frame time for the panel, so there is
+     no worst-frame figure to give. If the knobs still feel slow on the FM-1, the next step is to split the bumpers' band
+     into one zone per bumper (about a quarter of the pixels a turn).
+6. **Bigger text.** Barlow Condensed 11 / 13 / 16 / 24 px (was 8 / 10 / 12 / 19), Silkscreen 13 / 16 / 21 / 40 (was
+   10 / 13 / 17 / 32); nothing under 11 px in TFM's own screens. All screens re-laid out: at most 3 footer hints
+   everywhere (checked on every screen); what no longer fit moved into the screens' empty bands (JAM: REC, EDIT, SEQ, GLO,
+   SAVE; DICE: PLAY, ENV; SONG: SELECT, PRESETS in the header; STEP: K1, SELECT); the FX chips fit the card; TIME no longer
+   leaves a black strip. **Flash cost: +6.4 KB** for the larger glyphs (480,476 -> 487,444 B), RAM unchanged. The
+   layout lint finds nothing on any of the 297 screens in the 16 palettes.
+   *Not changed:* Felucca's own fonts (S 12 px and up; DEEP, the menu and the layers) already were 11 px or more.
+7. **TYPE rules.** The picks were right (every TYPE roll has its type's bit, tested for 6 types x 4 tracks). What was
+   wrong: a rule changed in SETUP did not roll that track, so DICE showed the old instrument under the new rule (LEAD
+   over HAZE). Now a rule changed in SETUP rolls that track at once (a held track keeps its instrument); a changed
+   key, scale or tempo range applies to the rolled setup as well. RANDOM never rolls a second drum kit: if another track
+   has one (rolled before it, held, or because its rule asks for DRUMS or THUMP LAB) RANDOM picks from the rest.
+
+### Tests, size
+- `tests/run_tests.sh`: ALL HOST TESTS PASSED, 5,973 ok lines, 0 FAIL (eight new checks, `tests/ui_test_r1.h`, run in all
+  three UI builds). `tests/target_budget.py`: 52 ok, 0 over. ui_render: 0 lint findings on every screen in the 16
+  palettes.
+- Size: app **487,308 B** (was 478,808 at the first report: +8.5 KB, of which the larger fonts +6.4 KB, the rest the
+  macro places, JAM's hints band and the new rules); RAM `.data+.bss` **61,928 B** of 73,728 (+192 B); pool 345,068 of
+  368,640 (unchanged). Fits the app region with room to spare.
+- The 33 AMBER renders are redone in `tfm-spec/built/` (here, and in the repo under `tfm-spec/built/`), with a new
+  `_contact-sheet.png`.
+
+### Not done, and why
+- The 8 scenes x 3 songs flash decision is still Felix's (the project format is unchanged: "keep as is").
+- No device frame time (item 5): no device run in this session.
+- Silkscreen's four sizes are my reading of "up the same way" (about x1.3); the Barlow sizes are as asked.
+- PRESETS on DRUMS flips bars now (item 1 asked for it on both screens); the SPEC's "PRESETS changes the sound
+  everywhere" now has two exceptions (NOTES and DRUMS).
