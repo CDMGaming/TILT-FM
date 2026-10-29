@@ -275,15 +275,22 @@ static void tq_notes_body(void)                         /* y 22 .. 215 */
                 if (i <= ui.cursor % NSTEP)
                     m = tot;
             }
-        str_cpy(b, "NOTE ", 8);
-        fmt_int(b + 5, (int32_t)m);
-        str_cpy(b + str_len(b), " of ", 5);
-        fmt_int(b + str_len(b), (int32_t)tot);
+        if (s->time == ST_NOTE && s->n) {
+            str_cpy(b, "NOTE ", 8);
+            fmt_int(b + 5, (int32_t)m);
+            str_cpy(b + str_len(b), " of ", 5);
+            fmt_int(b + str_len(b), (int32_t)tot);
+            str_cpy(l2, "step ", 8);
+            fmt_int(l2 + 5, (int32_t)(ui.cursor % NSTEP) + 1);
+            if (s->flags & SF_SLIDE)
+                str_cpy(l2 + str_len(l2), " \xB7 slide on", 14);
+        } else {                                        /* "STEP 7 \xB7 EMPTY \xB7 KEY ADDS" */
+            str_cpy(b, "STEP ", 8);
+            fmt_int(b + 5, (int32_t)(ui.cursor % NSTEP) + 1);
+            str_cpy(l2, s->time == ST_TIE ? "TIE" : "EMPTY", 8);
+            str_cpy(l2 + str_len(l2), " \xB7 KEY ADDS", 16);
+        }
         tu_text(9, 158, &AF_TM, b, TC_TEXT, TC_BG);
-        str_cpy(l2, "step ", 8);
-        fmt_int(l2 + 5, (int32_t)(ui.cursor % 16u) + 1);
-        if (s->flags & SF_SLIDE)
-            str_cpy(l2 + str_len(l2), " \xB7 slide on", 14);
         tu_text(9 + text_w(&AF_TM, b) + 5, 158, &AF_TL, l2, TC_MID, TC_BG);
         for (k = 0; k < 4u; k++) {
             static const char *const LB[4] = {"K1 NOTE", "K2 PITCH", "K3 LENGTH", "K4 VELO"};
@@ -341,7 +348,7 @@ static void tq_notes_draw(void)
     tu_zone(0, 0, TU_HY, TC_BG, sig, tq_notes_head);
     tu_zone(2, 22, 100, TC_BG, sig, tq_notes_body);
     tu_zone(3, 122, 93, TC_BG, sig, tq_notes_body);
-    tu_foot(4, "KEYS", "ADD AT STEP", "EDIT", "DELETE", "PRESETS", "BAR", "SEQ", "GRID", 0, 0);
+    tu_foot(3, "SELECT", "STEP", "KEYS", "ADD", "EDIT", "DELETE", 0, 0, 0, 0);
 }
 /* K1 the next note (a bar flips), K2 its pitch in the scale, K3 its length (ties), K4 its velocity */
 static void tq_notes_knob(uint32_t k, int32_t s)
@@ -480,7 +487,7 @@ static void tq_drums_draw(void)
     tu_zone(0, 0, TU_HY, TC_BG, sig, tq_drums_head);
     tu_zone(2, 22, 100, TC_BG, sig, tq_drums_body);
     tu_zone(3, 122, 93, TC_BG, sig, tq_drums_body);
-    tu_foot(3, "WHITE KEYS", "STEPS", "BLACK KEYS", "LANE", "HOLD OCT+", "STEP SHEET", 0, 0, 0, 0);
+    tu_foot(3, "SELECT", "STEP", "KEYS", "HIT", "K2", "LANE", 0, 0, 0, 0);
 }
 static void tq_drums_knob(uint32_t k, int32_t s)
 {
@@ -533,8 +540,17 @@ static void tq_input(uint32_t notes, uint32_t busy)
                         cursor_set((uint32_t)clamp((int32_t)ui.cursor + s, 0, (int32_t)tq_len(TSEL) - 1));
                 }
         }
-        if ((s = panel_enc(EN_PRESET)) != 0 && (tu.scr == TU_NOTES || tu.scr == TU_DRUMS))
-            tq_bar = (uint8_t)clamp((int32_t)tq_bar + (s > 0 ? 1 : -1), 0, (int32_t)(tq_len(TSEL) - 1u) / 16);
+        if ((s = panel_enc(EN_PRESET)) != 0 && (tu.scr == TU_NOTES || tu.scr == TU_DRUMS)) {
+            /* a bar on, and the cursor to the same step in it */
+            uint32_t nb = (uint32_t)clamp((int32_t)tq_bar + (s > 0 ? 1 : -1), 0, (int32_t)(tq_len(TSEL) - 1u) / 16);
+            uint32_t ni = nb * 16u + ui.cursor % 16u;
+            cursor_set(ni < tq_len(TSEL) ? ni : tq_len(TSEL) - 1u);
+            tq_bar = (uint8_t)(ui.cursor / 16u);
+        }
+        if ((s = panel_enc(EN_SELECT)) != 0 && (tu.scr == TU_NOTES || tu.scr == TU_DRUMS)) {
+            cursor_set((uint32_t)clamp((int32_t)ui.cursor + (s > 0 ? 1 : -1), 0, (int32_t)tq_len(TSEL) - 1));
+            tq_bar = (uint8_t)(ui.cursor / 16u);
+        }
         if ((s = panel_enc(EN_PRESET)) != 0 && tu.scr == TU_STEP)
             tu_sound_step(s);
         if ((s = panel_enc(EN_SELECT)) != 0 && tu.scr == TU_STEP)

@@ -606,7 +606,7 @@ static void tu_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint32_t bu
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
         tq_adapt();
     }
-    if (!busy && tu.scr != TU_SOUND && tu.scr != TU_NOTES && tu.scr != TU_SONG && (s = panel_enc(EN_PRESET)) != 0)
+    if (!busy && tu.scr != TU_SOUND && tu.scr != TU_NOTES && tu.scr != TU_DRUMS && tu.scr != TU_SONG && (s = panel_enc(EN_PRESET)) != 0)
         tu_sound_step(s);                               /* PRESETS: the track's sound, everywhere it is not a list */
     tu_screen_input(pressed, notes, oct, busy);
     enc_drop();                                         /* (the knobs nobody took) */

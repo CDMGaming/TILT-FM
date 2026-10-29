@@ -11128,6 +11128,7 @@ static int tfm_only(void)
 {
     return !tu_classic() && tu.scr != TU_DEEP && !ui.menu && (tu_on() || name_on());
 }
+#include "ui_test_r1.h"
 static int test_tfm_ui_acceptance(void)
 {
     int bad = 0, ok;
@@ -11302,6 +11303,7 @@ int main(void)
     bad += test_tfm_ui_song();
     bad += test_tfm_ui_pages();
     bad += test_tfm_ui_jam_day();
+    bad += test_r1_cursor();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4
