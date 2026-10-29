@@ -69,6 +69,8 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
     return 0;
 }
 static uint32_t irq_save(void) { return 0; }
+static uint32_t wdt_feeds;
+static void fm1_wdt_feed(void) { wdt_feeds++; }
 static void irq_restore(uint32_t f) { (void)f; }
 static uint32_t fl_jedec_ram(void) { return 0; }
 static void fl_plain_window_init(void) {}
@@ -650,6 +652,10 @@ static int scenes_round2(void)
     k = erases + progs;
     scn_boot();
     bad += check("round 2 migration: it runs once (the second boot writes nothing)", erases + progs == k && migrated_ok());
+    old_world();
+    wdt_feeds = 0;
+    scn_boot();
+    bad += check("round 2 migration: the watchdog is fed between the sector erases (a first boot may take seconds)", wdt_feeds >= 4u);
     /* a power cut at every erase / program call of it, and a torn one */
     old_world();
     scn_boot();
@@ -673,6 +679,41 @@ static int scenes_round2(void)
     erase_error = 0;
     bad += check("round 2 migration: a flash that cannot erase leaves the old scenes usable (A..D), E..H and the songs absent",
                  old_intact() && scn_used == 0xFu && !song_stored(0));
+
+    /* going back (round 2): an older firmware sees the sample slots at 0xA0000 / 0xB4000 / 0xC8000 and the four projects at
+     * 0x97000: no valid sample header, the projects as they were. Then an older firmware writes samples over the region: the
+     * next boot migrates again, or takes the scenes that survived; neither hangs nor loops */
+    {
+        uint32_t k, i, e0;
+        project_store_t keep4[4];
+        old_world();
+        scn_boot();                                            /* migrated: tag, song 1 */
+        for (g = 4; g < SCN_N; g++) {                          /* scenes in every slot of the region, songs 2 and 3 */
+            sng_cur = (uint8_t)(g / NSCN);
+            trk[0].step[0] = (step_t){{(uint8_t)(30u + g)}, 1, ST_NOTE, 0, 96, 0, 0};
+            project_save_as(g % NSCN, 0);
+        }
+        sng_cur = 1; song_save_named(1, "TWO"); sng_cur = 0;
+        ok = 1;
+        for (k = 0; k < 3u; k++) ok &= memcmp(nor + 0xA0000u + k * 0x14000u, "FSMP", 4) != 0;      /* (eng_sample.c's header magic) */
+        bad += check("round 2 going back: an older firmware finds no valid sample header in the three slots, the projects A..D as they were", ok && old_intact());
+        for (i = 0; i < 4u; i++) keep4[i] = old_img[i];
+        /* the old firmware uploaded a sample into slot 1 only (0xA0000..0xB3FFF) */
+        memset(nor + 0xA0000, 0x33, 0x14000); memcpy(nor + 0xA0000, "FSMP", 4);
+        e0 = erases;
+        scn_boot();
+        bad += check("round 2 going back: a sample over slot 1 only: the tag survives (no migration), the scenes there are empty, the rest and A..D kept",
+                     erases == e0 && old_intact() && !((scn_used >> 4) & 0x3FFu) && ((scn_used >> 14) & 0x3FFu) == 0x3FFu && song_stored(0) == 1);
+        /* ... and over the whole region (the three slots, the tag with them) */
+        for (k = 0; k < 3u; k++) { memset(nor + 0xA0000u + k * 0x14000u, 0x44, 0x14000); memcpy(nor + 0xA0000u + k * 0x14000u, "FSMP", 4); }
+        scn_boot();
+        bad += check("round 2 going back: samples in all three slots: the next boot migrates again (A..D and song 1 back, E..H and songs 2, 3 empty)",
+                     migrated_ok());
+        e0 = erases;
+        scn_boot();
+        bad += check("round 2 going back: ... and then it is quiet (no loop)", erases == e0 && migrated_ok());
+        (void)keep4;
+    }
 
     /* playing: a scene switch is read from flash and flips on the bar line; flash is never written meanwhile */
     {

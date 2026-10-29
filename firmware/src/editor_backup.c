@@ -106,7 +106,11 @@ static uint32_t ed_bk_commit(void)
         }
         if (ed_bk_id == 0u) {
             if (!ed_bk_len) return 2;
-            return project_restore_runtime(&proj_scratch) ? 2u : 0u;
+            if (project_restore_runtime(&proj_scratch)) return 2u;
+#ifdef TILT_START
+            scene_boot(1);                          /* (round 2: the music is in the song and scene the restored settings remember) */
+#endif
+            return 0;
         }
         if (scn_store(ed_bk_id - 64u, ed_bk_len ? (const project_store_t *)raw : 0)) return 4;
         if (proj_cur < NSCN && scn_g(proj_cur) == ed_bk_id - 64u)

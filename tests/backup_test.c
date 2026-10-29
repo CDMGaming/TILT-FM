@@ -452,6 +452,20 @@ int main(void)
     bad += check("the runtime object restores the tracks",
                  put_all(0, &st, sizeof st, st_crc32(&st, sizeof st)) == 0 && trk[2].step[5].note[0] == 67u &&
                  trk[2].p[P_LEVEL] == 77);
+    {   /* round 2: the restored settings remember the song and scene the music is in (SCN_MEM); the live music lands there */
+        persist_t px;
+        memset(&px, 0, sizeof px);
+        settings_export(&px);
+        px.favorites.factory[13][8] = (uint8_t)(2u | 4u | 3u << 4);       /* song 3, scene C */
+        bad += check("a settings object with the song and scene remembered, then the live music: the music is in song 3, scene C",
+                     put_all(1, &px, sizeof px, st_crc32(&px, sizeof px)) == 0 &&
+                     put_all(0, &st, sizeof st, st_crc32(&st, sizeof st)) == 0 && sng_cur == 2u && scene_cur() == 2u);
+        px.favorites.factory[13][8] = 0;                                  /* settings of before round 2 */
+        sng_cur = 1;
+        bad += check("settings without it (a v1 archive's), then the live music: song 1",
+                     put_all(1, &px, sizeof px, st_crc32(&px, sizeof px)) == 0 &&
+                     put_all(0, &st, sizeof st, st_crc32(&st, sizeof st)) == 0 && sng_cur == 0u);
+    }
 
     /* user preset banks: unknown record versions are kept as bytes */
     reset();

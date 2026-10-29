@@ -53,3 +53,12 @@ Scenes A..D are not touched. A power cut anywhere leaves them as they were and n
 Only the current scene is in RAM. A scene switch while playing is read from flash (read-only; no erase or program
 happens) and flips on the bar line. The scene left, if edited, waits in RAM (up to three scenes) and is written when the
 transport stops. A SONG that plays holds the patterns of the scenes it uses (up to eight) in the pool.
+
+## Going back
+
+An older firmware sees `0x97000..0x9EFFF` as its four project slots and `0xA0000 / 0xB4000 / 0xC8000` as its three user
+sample slots (an `FSMP` header at each); there is none, so they read as empty. A scene whose chain uses E..H does not
+load in an older build (the chain bytes 5..8 are not valid there); the data stays. An older build that uploads a sample
+overwrites whatever is in that slot's range: scenes / songs there read as empty here; when the tag (`0xCE000`, the third
+slot's range) goes the next boot migrates again from scenes A..D. The stock firmware does not use this region. See
+`docs/tilt/FLASHING-CHECKLIST.md` 4a.

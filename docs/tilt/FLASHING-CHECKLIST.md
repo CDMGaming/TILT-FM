@@ -83,3 +83,26 @@ The three user sample slots (`0xA0000..0xDBFFF`) are now the scenes' flash (`doc
 - [ ] After it: SCENES shows eight tiles (your A..D, E..H empty), SONGS three slots (song 1 = what you had, 2 and 3 empty).
 - [ ] The migration runs once. If the region ever loses its tag (another firmware wrote there), it runs again and wipes
       whatever is in the region: scenes E..H and songs 2 and 3 are gone, A..D and song 1's globals come back from A..D.
+
+### 4a. Going back from the 8 x 3 build (what an older build does with this flash)
+
+**Back up first in the editor** (it saves all 24 scenes and the 3 songs). Nothing below can brick the unit, loop it or
+touch the bootloader / update entry; what can happen to your data:
+
+- [ ] **Stock V15** (`FM-1.fwsc`) or the web installer's "Return to official V15": the installer rewrites only the app
+      (`0x4000..0x92FFF`). The scenes stay in flash; the stock firmware does not use `0x97000..0xDFFFF`. Coming back to
+      TILT-FM later finds them again.
+- [ ] **An older TILT-FM or Felucca** (`tfm-next`, TFM-UI round 1, Felucca 1.6.x) reads `0x97000..0x9EFFF` as its four
+      project slots: scenes A..D load as before, **except** one whose song chain uses scene E..H (the old build cannot read
+      that chain: the slot shows empty; the data is still in flash and comes back with this build). It reads
+      `0xA0000`, `0xB4000`, `0xC8000` as user sample slots: there is no `FSMP` header there, so all three are empty
+      (`tests/persistence_test.c` "going back"). Scenes E..H, songs 2 and 3 and the songs' records are invisible to it.
+- [ ] **If that older build uploads a sample** (the editor's sample page), it erases and writes inside the region:
+      only the scenes / songs in the slot it wrote are lost (they read as empty here); if it reaches the tag (the third
+      slot) the next boot of this build wipes the region and starts the migration again (scenes A..D and song 1's globals,
+      chain and name come back from A..D; E..H and songs 2 and 3 are empty). The migration finishes whatever state it
+      finds: no loop, no hang (tested).
+- [ ] The settings object keeps its size; the byte that remembers the song and scene (`favorites.factory[13][8]`) is
+      inert to older builds.
+- [ ] The first boot of this build after coming back may take a few seconds (the wipe, up to 60 sector erases); the
+      watchdog is fed meanwhile.

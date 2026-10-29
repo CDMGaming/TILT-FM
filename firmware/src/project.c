@@ -1336,6 +1336,7 @@ static int scn_flash_ok(uint32_t g)                   /* scene g is stored and l
     int n = st_load(st_scene_obj(g), &proj_slot[0], sizeof proj_slot[0]);
     return n > 0 && proj_import(&proj_scratch, &proj_slot[0], n);
 }
+static void fm1_wdt_feed(void);
 static int scn_wipe(void)                             /* every sector of the region blank (the ones that are blank are left) */
 {
     uint32_t off, i, j;
@@ -1350,6 +1351,7 @@ static int scn_wipe(void)                             /* every sector of the reg
         }
         if (!blank && st_erase(off))
             return -1;
+        fm1_wdt_feed();                               /* (up to 60 sector erases, seconds: the watchdog must not take the first boot) */
     }
     return 0;
 }
