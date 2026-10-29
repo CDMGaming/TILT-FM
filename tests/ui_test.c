@@ -10784,6 +10784,70 @@ static int test_tfm_ui_shell(void)
     bad += check("TFM-UI shell: a screen not built yet is Felucca's page in DEEP, HOME back to JAM", ok);
     return bad;
 }
+/* TFM-UI phase 2: START (F3 NEW SONG, G3 CONTINUE, B3 SONGS), DICE (keys hold a row, OCT+ re-rolls the rest, the rules of
+ * SETUP, no setup code), SETUP (ENV again; K1-K4 the lit rows, SELECT scrolls), PLAY starts the song on JAM */
+static int test_tfm_ui_dice(void)
+{
+    int bad = 0, ok;
+    uint32_t i, kF3 = key_at(0, 0), kG3 = key_at(0, 1), n;
+    ui_power_on();
+    tu_off = 0;
+    memset(&ns, 0, sizeof ns);
+    st.has = 1; st.crash = 0; st.pick = SO_CONT; tilt_ns_open = TILT_START; ui.force = 1;
+    ui_draw();
+    ok = so_shown(SO_NEW) && so_shown(SO_CONT) && !so_shown(SO_BLANK) && !so_shown(SO_JAM) && so_shown(SO_LOAD);
+    ok &= so_ord()[0] == SO_NEW && so_ord()[1] == SO_CONT && so_ord()[3] == SO_LOAD;
+    turn(EN_SELECT, -1); ok &= st.pick == SO_NEW;       /* NEW SONG is above CONTINUE */
+    tfm_jam_has = 1; ok &= so_shown(SO_JAM); turn(EN_SELECT, 1); turn(EN_SELECT, 1); ok &= st.pick == SO_JAM;
+    tfm_jam_has = 0;
+    st.pick = SO_CONT;
+    fm1_in.notes |= 1u << kF3; host_notes |= 1u << kF3; frame();           /* F3: NEW SONG: the dice open */
+    fm1_in.notes &= ~(1u << kF3); frame();
+    ok &= tilt_ns_open == TILT_NS && !tu_setup_on;
+    bad += check("TFM-UI START: F3 NEW SONG (G3 CONTINUE, B3 SONGS, A3 TODAY'S JAM only when TILT sent one), SELECT moves; F3 opens DICE", ok);
+    ok = 1;
+    memset(favorites.factory[13] + 16, 0, 16);
+    CFG(CF_RULE) = (uint8_t)(7 + TI_SQUELCH + 1);       /* T1 always SQUELCH */
+    CFG(CF_RULE + 1) = 2;                               /* T2 TYPE DRUMS (option 1) */
+    CFG(CF_KEY) = 10;                                   /* the key fixed: A */
+    CFG(CF_LO) = 100; CFG(CF_HI) = 100;                 /* the tempo fixed: 100 */
+    ns.hold = 0;
+    for (n = 0; n < 12u; n++) {
+        press(B_OCTUP);                                 /* OCT+: re-roll */
+        ok &= ns.s.ins[0] == TI_SQUELCH && ns.s.ins[1] == TI_THUMP && ns.s.key == 9u && ns.s.bpm == 100u;
+    }
+    {   /* a held row stays: hold T3 (D4 .. place 5), the key row (F3) */
+        uint8_t ins3 = ns.s.ins[2], pre3 = ns.s.pre[2], key = ns.s.key;
+        uint32_t kT3 = key_at(0, 5);
+        fm1_in.notes |= 1u << kT3; host_notes |= 1u << kT3; frame(); fm1_in.notes &= ~(1u << kT3); frame();
+        ok &= (ns.hold >> 5) & 1u;
+        for (n = 0; n < 8u; n++) { press(B_OCTUP); ok &= ns.s.ins[2] == ins3 && ns.s.pre[2] == pre3 && ns.s.key == key; }
+        ok &= (tilt_ns_leds() & (1u << kT3)) != 0u;
+    }
+    bad += check("TFM-UI DICE: OCT+ re-rolls what is not held (a held row stays); the rules (an instrument, a TYPE, a fixed key and tempo) rule the rolls", ok);
+    ok = 1;
+    press(B_ENV); ok &= tu_setup_on && tilt_ns_open == TILT_NS;
+    ok &= tu_su_top == 0u;
+    {
+        uint8_t r1 = CFG(CF_RULE + 0);
+        turn(EN_K1, 1); ok &= CFG(CF_RULE + 0) == r1 + 1u;
+        turn(EN_K1, -1); ok &= CFG(CF_RULE + 0) == r1;
+        turn(EN_SELECT, 1); turn(EN_SELECT, 1); turn(EN_SELECT, 1); turn(EN_SELECT, 1); ok &= tu_su_top == 4u;
+        turn(EN_K1, 1); ok &= CFG(CF_KEY) == 11u;       /* the window moved: K1 is the KEY row now */
+        turn(EN_K4, 1); ok &= CFG(CF_TIMER) == 1u && tilt_timer_min == 5u;   /* K4: TIMER */
+    }
+    press(B_ENV); ok &= !tu_setup_on;
+    bad += check("TFM-UI SETUP: ENV again from DICE; K1-K4 change the four lit rows, SELECT scrolls the window; ENV back", ok);
+    ok = 1;
+    for (i = 0; i < NTRK; i++) { ns.hold = 0; }
+    press(B_PLAY);                                      /* PLAY: the song starts, on JAM */
+    ok &= tilt_ns_open == 0 && tu_on() && tu.scr == TU_JAM;
+    for (i = 0; i < NTRK; i++)
+        ok &= tfm_ins_of(&trk[i]) == ns.s.ins[i];
+    bad += check("TFM-UI DICE: PLAY starts the song on JAM with the rolled instruments", ok);
+    (void)kG3;
+    return bad;
+}
 static int test_tfm_nosample(void)
 {
     int bad = 0, ok;
@@ -10902,6 +10966,7 @@ int main(void)
     bad += test_tfm_instruments();
     bad += test_tfm_jam_menu();
     bad += test_tfm_ui_shell();
+    bad += test_tfm_ui_dice();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

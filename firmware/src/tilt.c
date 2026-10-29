@@ -71,6 +71,15 @@ static struct {
     uint32_t again_t, sig;
 } ns;
 static uint8_t ns_from_start;                           /* (opened from the start screen: OCT- goes back there) */
+/* TFM-UI (tfm_dice.c): in TFM mode (not CLASSIC) the modal screens are drawn and driven by these */
+static uint8_t tfm_jam_has;                             /* TILT sent a jam over USB and it was not played yet */
+static void tu_dice_draw(void);
+static void tu_dice_input(uint32_t pressed, uint32_t notes, uint32_t oct);
+static void tu_dice_nudge(void);
+static void tu_start_draw(void);
+static void tu_time_draw(void);
+static uint8_t tu_setup_on;
+static uint8_t tfm_dice_timer(void);
 
 static void ns_encode(void)                             /* the code shown: the setup now (not while it is typed) */
 {
@@ -104,6 +113,8 @@ static void ns_nudge(void)
 }
 static void tilt_ns_show(void)
 {
+    if (!tu_classic())
+        tu_setup_on = 0;
     if (chain_busy()) {
         ui_message("STOP THE SONG FIRST");
         return;
@@ -113,7 +124,12 @@ static void tilt_ns_show(void)
         ns.rolled = 1;
         ns.hold = 0;
     }
-    ns_nudge();
+    if (tu_classic()) {
+        ns_nudge();
+    } else {
+        tu_dice_nudge();
+        tfm_dice_timer();
+    }
     tilt_ns_open = TILT_NS;
     ui.force = 1;
 }
@@ -317,6 +333,10 @@ static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct)
         st_input(pressed, notes, oct);
         return;
     }
+    if (!tu_classic()) {                                /* TFM-UI: DICE, SETUP (tfm_dice.c) */
+        tu_dice_input(pressed, notes, oct);
+        return;
+    }
     song.grid = 2;                                      /* (silent keys: keys_mode, as NAME's) */
     for (k = 0; k < 27u; k++)
         if (((notes >> k) & 1u) && !key_black(k) && (p = key_place(k)) < NS_ROWS) {
@@ -356,7 +376,7 @@ static uint32_t tilt_ns_leds(void)                       /* the held rows' keys 
     if (tilt_ns_open == TILT_START)
         return st_leds();
     for (k = 0; k < 27u; k++)
-        if (!key_black(k) && key_place(k) < NS_ROWS && ((ns.hold >> key_place(k)) & 1u))   /* (F3 .. A4) */
+        if (!key_black(k) && key_place(k) < (tu_classic() ? NS_ROWS : 7u) && ((ns.hold >> key_place(k)) & 1u))   /* (F3 .. A4) */
             m |= 1u << k;
     return m;
 }
@@ -461,6 +481,10 @@ static void tilt_ns_draw(void)
     }
     if (tilt_ns_open == TILT_START) {
         st_draw();
+        return;
+    }
+    if (!tu_classic()) {                                /* TFM-UI: DICE, SETUP (tfm_dice.c) */
+        tu_dice_draw();
         return;
     }
     if (ns.again && fm1_ms - ns.again_t >= NS_AGAIN_MS)
@@ -790,6 +814,10 @@ static void te_draw_rows(void)
 static void te_draw(void)
 {
     uint32_t sig = te.pick * 7u + te.saved * 3u + ux.gen * 7919u;
+    if (!tu_classic()) {                                /* TFM-UI: the drawing (tfm_dice.c) */
+        tu_time_draw();
+        return;
+    }
     if (ui.force) {
         lcd_fill(0, H_HEAD, 240, Y_FOOT - H_HEAD, T_BG);
         te_draw_word();
@@ -1314,20 +1342,29 @@ static void layer_scene(void)
  * baseline is the power-on set; NEW SONG's START and a LOAD while tilt_start_pending reset it to what they made
  * KNOB 1, SELECT or PRESETS move the selection, OCT+ takes it; a white key takes its own at once. Nothing else does
  * anything here: the keys are silent (name_on), no layer, no REC, no MENU (ui_input.c), the knobs only select */
-enum { SO_CONT, SO_BLANK, SO_NEW, SO_LOAD, SO_N };
-static const char *const SO_NAME[SO_N] = {"CONTINUE", "BLANK", "NEW SONG", "LOAD"};
-static const char *const SO_HINT[SO_N] = {"THE LAST SESSION", "EMPTY TRACKS", "ROLL ONE", "A SAVED SCENE"};
+enum { SO_CONT, SO_BLANK, SO_NEW, SO_LOAD, SO_JAM, SO_N };   /* (SO_JAM: TFM's TODAY'S JAM; not in CLASSIC) */
+static const char *const SO_NAME[SO_N] = {"CONTINUE", "BLANK", "NEW SONG", "LOAD", "TODAY'S JAM"};
+static const char *const SO_HINT[SO_N] = {"THE LAST SESSION", "EMPTY TRACKS", "ROLL ONE", "A SAVED SCENE", "SENT FROM TILT"};
+/* the options' places on F3 G3 A3 B3: CLASSIC CONTINUE BLANK NEW LOAD; TFM NEW CONTINUE TODAY'S JAM SONGS */
+static const uint8_t SO_ORD_C[4] = {SO_CONT, SO_BLANK, SO_NEW, SO_LOAD};
+static const uint8_t SO_ORD_T[4] = {SO_NEW, SO_CONT, SO_JAM, SO_LOAD};
+static const uint8_t *so_ord(void) { return tu_classic() ? SO_ORD_C : SO_ORD_T; }
 static struct {
     uint8_t has, crash, pick;                           /* an autosave to continue; skipped after a crash; the selection */
     uint32_t sig;
 } st;
 
-static int so_shown(uint32_t o) { return o == SO_CONT ? st.has && !st.crash : o < SO_N; }
+static int so_shown(uint32_t o)
+{
+    if (!tu_classic())                                  /* (TFM: no BLANK; TODAY'S JAM only when TILT sent one) */
+        return o == SO_CONT ? st.has && !st.crash : o == SO_JAM ? tfm_jam_has != 0u : o == SO_NEW || o == SO_LOAD;
+    return o == SO_CONT ? st.has && !st.crash : o < SO_JAM;
+}
 static void tilt_start_boot(int clean)
 {
     st.has = (uint8_t)autosave_peek(clean);             /* (after a crash: only that one is there, never parsed) */
     st.crash = (uint8_t)(!clean && st.has);
-    st.pick = so_shown(SO_CONT) ? SO_CONT : SO_BLANK;
+    st.pick = so_shown(SO_CONT) ? SO_CONT : tu_classic() ? SO_BLANK : SO_NEW;
     tilt_ns_open = TILT_START;
     ui.force = 1;
 }
@@ -1364,17 +1401,17 @@ static void st_do(uint32_t o)
 }
 static void st_move(int32_t s)
 {
-    uint32_t p = st.pick, i;
-    for (i = 0; i < SO_N; i++) {                        /* the next shown one that way (they stop at the ends) */
-        int32_t q = (int32_t)p + (s > 0 ? 1 : -1);
-        if (q < 0 || q >= SO_N)
-            return;
-        p = (uint32_t)q;
-        if (so_shown(p)) {
-            st.pick = (uint8_t)p;
+    const uint8_t *ord = so_ord();
+    uint32_t i, at = 0;
+    int32_t q;
+    for (i = 0; i < 4u; i++)
+        if (ord[i] == st.pick)
+            at = i;
+    for (q = (int32_t)at + (s > 0 ? 1 : -1); q >= 0 && q < 4; q += s > 0 ? 1 : -1)   /* the next shown one that way */
+        if (so_shown(ord[q])) {                         /* (they stop at the ends) */
+            st.pick = ord[q];
             return;
         }
-    }
 }
 static void st_input(uint32_t pressed, uint32_t notes, uint32_t oct)
 {
@@ -1383,9 +1420,9 @@ static void st_input(uint32_t pressed, uint32_t notes, uint32_t oct)
     (void)pressed;                                      /* (PLAY, REC, the page buttons: nothing here) */
     song.grid = 2;
     for (k = 0; k < 27u; k++)
-        if (((notes >> k) & 1u) && !key_black(k) && (p = key_place(k)) < SO_N && so_shown(p)) {
+        if (((notes >> k) & 1u) && !key_black(k) && (p = key_place(k)) < 4u && so_shown(so_ord()[p])) {
             enc_drop();
-            st_do(p);
+            st_do(so_ord()[p]);
             return;
         }
     if ((s = panel_enc(EN_SELECT)) != 0 || (s = panel_enc(EN_K1)) != 0 || (s = panel_enc(EN_PRESET)) != 0)
@@ -1398,8 +1435,8 @@ static uint32_t st_leds(void)                           /* the shown options' ke
 {
     uint32_t o, m = 0;
     static const uint8_t KEY[4] = {0, 2, 4, 6};         /* (F3 G3 A3 B3) */
-    for (o = 0; o < SO_N; o++)
-        if (so_shown(o))
+    for (o = 0; o < 4u; o++)
+        if (so_shown(so_ord()[o]))
             m |= 1u << KEY[o];
     return m;
 }
@@ -1437,6 +1474,10 @@ static void st_pointer(int32_t x, int32_t y, int right, uint16_t c)   /* a 4 x 7
 static void st_draw(void)
 {
     uint32_t blink = (fm1_ms / 250u) & 1u, o;
+    if (!tu_classic()) {                                /* TFM-UI: the drawing (tfm_dice.c) */
+        tu_start_draw();
+        return;
+    }
     uint32_t sig = st.pick * 7u + st.has * 3u + st.crash * 5u + blink * 11u + ux.gen * 7919u;
     uint16_t amber = st_grey() ? T_TEXT : SPL_AMBER;
     if (ui.force) {
@@ -1484,3 +1525,4 @@ static void st_draw(void)
 }
 
 #include "tfm_ui.c"                                        /* TFM-UI: TFM's screens, the button map */
+#include "tfm_dice.c"                                      /* TFM-UI: START, DICE, SETUP, TIME */

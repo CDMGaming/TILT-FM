@@ -130,6 +130,7 @@ static void graph_jam(void);
 #define TU_OFF_DEFAULT 0
 #endif
 static int tu_on(void);
+static int tu_classic(void);
 static int tu_deep_on(void);
 static void tu_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint32_t busy);
 static void tu_draw(void);
