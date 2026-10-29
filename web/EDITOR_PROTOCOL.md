@@ -195,11 +195,7 @@ at 1..3 and hides 6 5 8: what it sets still plays the right kit, and the device 
 | 8 PRESET | engine, preset | engine, preset (applies the preset's sound to the selected track and sends; the steps and the track's own parameters stay, see "Sound loads and undo"). For another track, select it with `TRACK` first |
 | 9 PROJECT | op (0 load, 1 save, 2 query), slot 0..3 | op, slot, used (1/0). Save writes flash: allow ~2 s; it stops the transport first (see "Saves while playing") |
 | 10 NAMES | engine | engine, count, count preset-name strings, then the two edit-page titles |
-| 11 SMP_BEGIN | slot 0..2 | slot, rc (0 ok). Erases the slot's header sector: the slot is empty from now on |
-| 12 SMP_WRITE | slot, offset (3 × 7 bit, LSB first), pack7 data (≤ 256 bytes) | slot, offset, rc: 0 ok, 1 arguments, 2 erase, 3 write, 4 slot in use (send SMP_BEGIN first). Offset ≥ 512 and a multiple of 256; writes go in increasing order (a write at a 4 KiB boundary erases that sector) |
-| 13 SMP_END | slot, pack7 header (480 bytes) | slot, rc: 0 ok, 1 size, 2 header, 3 data CRC, 4 flash, 5 zones |
-| 14 SMP_ERASE | slot | slot, rc (erases the whole slot, ~1 s) |
-| 15 SMP_INFO | — | slots, slot KiB, then per slot: zone count (0 = empty), name string, data KiB |
+| 11..15 SMP_* | — | Removed in the 8 x 3 firmware (no user samples; the SAMPLE engine keeps its factory sets): 11..14 (`SMP_BEGIN` / `SMP_WRITE` / `SMP_END` / `SMP_ERASE`) get no reply, 15 (`SMP_INFO`) answers 0 slots. The rows of older firmware: slot 0..2 for 11, 13, 14; 12 takes slot, offset (3 × 7 bit), pack7 data; 13 takes the 480-byte header; replies slot [, offset], rc (13: 0 ok, 1 size, 2 header, 3 data CRC, 4 flash, 5 zones); 15 answers slots, slot KiB, then per slot zone count, name, data KiB |
 | 16 UP_LIST | start, count (1..16) | start, count, total slots, then per slot: used (0/1), engine, name string ("" if unused); 1.2: then one category byte per slot listed (below; 0 if unused) |
 | 17 UP_GET | slot | slot, used, engine, name, P_COUNT × v14, 16 × (note, flags), then (v5) kind (0 a note pattern, 1 a drum grid) and for kind 1 16 × hi; 1.2: then the category |
 | 18 UP_PUT | slot, engine, name, P_COUNT × v14, 16 × (note, flags) [, kind 0 or 1, 16 × hi (v5) [, category (1.2)]] | slot, rc (0 ok, 1 args, 2 flash). Writes flash: allow 1 s |
@@ -227,7 +223,7 @@ at 1..3 and hides 6 5 8: what it sets still plays the right kit, and the device 
 | cmd (v7) | Request args | Reply args |
 | --- | --- | --- |
 | 64 MOTION | track (query); track, 1, on 0/1 (play on / off); track, 2 (clear); track, 3, step, id, v14 (set an event); track, 4, step, id (delete an event or a lock); (1.1) track, 5, step, id, v14 (set a lock); track, 6, step (clear the step's locks; step 127: every step's); track, 7 (query with the kinds); (1.2) track, 8 (every record, with the kinds) | track, rc, on (0/1), count (this track's events and locks), max (64), then count × (step, id, v14); after ops 5..7 (1.1) then count × kind (0 automation, 1 lock), in the same order. 1.2: ops 1..7 list at most the track's first 64 records (count ≤ 64, max 64: as before); op 8 answers track, rc, on, count lo, count hi, max lo, max hi (two 7-bit bytes each, LSB first; max 128), count × (step, id, v14), count × kind |
-| 65 BACKUP_LIST | — | 1, rc, count (11), then per object: id, size u32, crc u32 |
+| 65 BACKUP_LIST | — | 1, rc, count (33 since the 8 x 3 firmware, see "Round 2"; 13, 12 or 11 before), then per object: id, size u32, crc u32 |
 | 66 BACKUP_GET | id, offset u32, count lo, count hi (≤ 256) | id, rc, offset u32, count lo, count hi, pack7 data |
 | 67 BACKUP_PUT | op 0 begin: 0, id, size u32, crc u32; op 1 data: 1, id, offset u32, pack7 data; op 2 commit: 2, id; op 3 abort: 3, id | op, id, rc |
 
@@ -239,7 +235,7 @@ reply.
 unused mask bits in the last group must be zero. Oversized or incomplete transfers
 are rejected; SMP_WRITE decodes at most 256 bytes, SMP_END exactly 480 bytes.
 
-**User sample slot** (80 KiB each, SAMPLE engine sets USR1..USR3; reference uploader
+**User sample slot** (older firmware only; the 8 x 3 firmware has none) (80 KiB each, SAMPLE engine sets USR1..USR3; reference uploader
 `tools/fm1_sample_upload.py`, slot builder `sampleio.user_slot`; the editor's port of it is
 checked byte for byte by `web/test_web.mjs`): header at 0, ADPCM data at 512.
 
@@ -770,6 +766,12 @@ repeats) right after the tracks' steps, before the motion: 68 + 4 × (104 + 2 + 
 before the FM6 patches at 3312. FUN9 and older store rows {slot, repeat} (36 bytes); they load as sections with the four
 tracks on the row's slot: the same song.
 
+**Slots on the wire (round 2: 8 scenes per song).** The slot bytes of ops 4..7 name a scene of the current song: A..D = 0..3, "-"
+(the track is silent) = 4, E..H = 5..8; the same encoding as the chain bytes stored in project and song records. Ops 0..3 (rows of one
+slot) stay A..D only (a slot above 3 is rc 1). The project tab's four slots stay A..D of the current song (`PROJECT` slot & 3). The
+editor's `req.song(op, rows)` takes `{slot 0..3, repeat}` rows for ops 0..3 and `{lanes: 4 × 0..8, repeat}` sections for ops 4..7
+(`songLane("E")` = 5, `songLaneName(4)` = "-"); its reply rows are `{slot, repeat}` for ops 0..3 and `{lanes, repeat}` for ops 4..7.
+
 ## 1.5: filter TYPE, ENV SYNC
 
 No new command or INFO tag: P_COUNT 111 and P_E0 103 (from `INFO`, with the INSERT) say it, and `DESC` describes the two as always.
@@ -838,7 +840,7 @@ and at most 256 decoded bytes (256-byte pieces are fine at full speed, one reque
 the editor"; a piece that gets no reply was not taken: abort and begin the object again). Commit: `2, id`: the device checks the length and the CRC, validates the
 content, and then writes. Abort: `3, id`. Id 0 replaces the music now playing (RAM only, no flash);
 ids 1..9 are written to flash (settings and presets are applied too). Nothing is written before the commit.
-The web editor sends ids 2..7 and the samples first, then 1, then 0 last. A failed restore can leave
+The web editor (older firmware) sends ids 2..7 and the samples first, then 1, then 0 last; for the 8 x 3 firmware see "Round 2" below. A failed restore can leave
 earlier objects restored; the file is still the source.
 
 | rc | Meaning |
@@ -852,6 +854,36 @@ earlier objects restored; the file is still the source.
 
 `BACKUP_LIST` answers `1, rc, 0` when rc is not 0. `GET` and `PUT` answer id 127 when they got no arguments.
 A `LIST` replaces the snapshot, and a `PUT` begin ends it: a `GET` after a begin gets rc 5.
+
+### Round 2: 8 scenes x 3 songs (backup format 2)
+
+The three user sample slots are gone (TFM has no samples); their flash holds scenes. 3 songs x 8 scenes = 24 scenes
+(g = 8 song + scene, scene 0..7 = A..H). `BACKUP_LIST` answers `1, rc, 33` and these objects, in this order:
+
+| id | object | size |
+| --- | --- | --- |
+| 0 | runtime: the music now playing (FUN10) | 3840 |
+| 1 | settings | the settings record's size |
+| 6, 7 | user preset banks | the bank's size, or 0 |
+| 8 | the retired FM6 bank, always listed empty | 0 |
+| 9 | the user presets' FM6 patches | 3728, or 0 |
+| 64..87 | scene g = id - 64: 64..71 song 1 A..H, 72..79 song 2, 80..87 song 3 (a FUN10 project) | 3840, or 0 if empty |
+| 96..98 | song n = id - 96: a song record (first 4 bytes the little-endian magic 0x474E4F53 "SONG", `firmware/src/project.c` `song_rec_t`) | the record's size (at most 3840), or 0 if empty |
+
+Ids 2..5 (the four project slots) and 32..34 (the sample slots) are not objects any more: a `BACKUP_PUT` begin of them answers
+rc 1. The chain bytes inside project and song records keep the stored encoding of older firmware (A..D 0..3, "-" 4, E..H 5..8).
+
+Archive file (`web/fm1backup.js`): `{"format": "felucca-backup", "version": 2, ...}` with exactly the 33 objects in order. Version 1
+(13, 12 or 11 objects: ids 0..9 and 32..34) is what older firmware lists and is still read. Reading checks every object's CRC and
+size (at most 3840; a song record with data must start with the SONG magic); the live music and settings must be present. A device
+of 13/12/11 objects still gives a version 1 file.
+
+Restoring a version 2 file: ids 6, 7, 8, 9, 64..87, 96..98, then 1, then 0 last. A device that refuses a scene or song object at begin
+(rc 1; the editor probes id 64 first, with size 0 and an abort, before the first write) is older firmware: the editor says the backup is
+for the 8 x 3 firmware and writes nothing. Restoring a version 1 file onto the 8 x 3 firmware (the editor detects it by the device taking
+id 64): its objects 2..5 are sent as ids 64..67 (song 1 scenes A..D), its sample objects 32..34 are skipped (the editor reports how many
+had data), and song 1's record is cleared (id 96, size 0) before settings and the live music so it cannot contradict the restored
+scenes. A version 1 file onto older firmware restores as before (ids 2..5, samples with commands 11..14).
 
 ## FM6 patches (68-71)
 

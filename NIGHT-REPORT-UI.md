@@ -122,3 +122,48 @@ One commit and one push per item, branch `tfm-ui`. Package to try: `tilt-fm-ui-r
 - Silkscreen's four sizes are my reading of "up the same way" (about x1.3); the Barlow sizes are as asked.
 - PRESETS on DRUMS flips bars now (item 1 asked for it on both screens); the SPEC's "PRESETS changes the sound
   everywhere" now has two exceptions (NOTES and DRUMS).
+
+## Round 2: 8 x 3 format
+
+Felix's decision: the three user sample slots (240 KB) become scene storage. Branch `tfm-ui`; commits `d77d655` (steps 1 and 2: map, storage, migration, backup objects, in one commit because the migration tests live with the storage), `44c6645` (3: screens), `7c520d8` (5: going back), then the commit with this section (4: the web side, the budget lines, renders, report). Package: `tilt-fm-ui-r2-<sha>.fwsc` (Windows folder). **Nothing was run on an FM-1; nothing was flashed.**
+
+### Flash map, before / after (full table: `docs/FLASH-MAP.md`)
+| | Before | After |
+|---|---|---|
+| `0x97000..0x9EFFF` | 4 project slots (A/B sectors) | scenes 1-4 = song 1 A..D (same objects, not moved) |
+| `0xA0000..0xDBFFF` | 3 user sample slots, 80 KB each | `0xA0000..0xC7FFF` scenes 5-24 (20 objects x A/B); `0xC8000..0xCDFFF` the 3 song records; `0xCE000..0xCFFFF` the format tag `TMS8`; `0xD0000..0xDBFFF` blank |
+| everything else | user presets, FM6 patches, OTA staging, autosave, voice bank, settings | unchanged |
+
+24 scenes x 2 sectors = 48 sectors; the old sample region is 60, so 12 sectors stay free. A scene is a project record as ever (FUN10, 3,840 B). A song record (globals, chain, MIDI channels, name; about 490 B in RAM for the three) holds what the song owns. Chain slot bytes keep the stored encoding of every older build (A..D 0..3, "-" 4) and add E..H as 5..8; in RAM "-" is now 8.
+
+**RAM / playing.** Only the current scene is decoded into RAM; a scene is read from flash when asked. Switching scenes while playing is read-only (tested: the erase and program counters do not move through the cue, the flip and the following passes), flips on the bar line, and the scene left, if edited, waits in RAM (up to three) for the stop. A fourth edited scene is refused ("STOP TO SAVE"). **Deviation from the brief:** a SONG that plays still prepares the patterns of all the scenes it uses before PLAY (now up to eight instead of four: `chain_src`, the extra four in the pool); it does not stream sections from flash. To make room `app.ld` moved 6 KB from RAM to the pool (RAM 72K to 66K); the build's headroom checks pass (RAM 62,088 of 67,584 B, 5,496 spare of 4,096 required; pool 365,752 of 374,784 B, 9,032 spare of 8,192 required). Flash: app 486,072 B (487,308 before: the sample code left).
+
+**Removed:** the editor's sample commands (BEGIN/WRITE/END/ERASE are refused with no reply, INFO lists no slots), the backup of sample slots, the slice store (SLICE's slices kept in the slots), the boot scan of the sample slots, the editor's Samples tab with its recorder and trimmer. The SAMPLE / GRAIN / SLICE engine code that plays a user slot is still in the tree and is now permanently empty (the SLICE render became the sine fallback, which is why `tests/target_budget.py` lost its `slc_rev` line and `slice_render` has no loops: those two budget lines were updated for that, nothing else).
+
+### Migration, first boot (tested in `tests/persistence_test.c`)
+Tag missing: the whole region `0xA0000..0xDBFFF` is wiped (blank sectors skipped, watchdog fed), song 1's record is written from scene A (else the first stored scene), the tag is written last. Scenes A..D are never touched. Results: A..D byte for byte as before; the chain (with a silent lane) and tempo decode identically; E..H and songs 2, 3 empty; the sample region holds only our records or blank sectors; the second boot writes nothing. **Power cut:** every one of the 66 erase/program calls of the migration was cut in turn (the cut call applies half a program or half an erase): at the cut the old scenes are there, and after the next boot the migration has finished, 66 of 66. A flash that cannot erase leaves A..D usable and does not hang.
+
+### Screens
+SCENES: all 8 tiles live (C4..C5 go there; "E-H: NO FLASH YET" is gone), header "SCENES · SONG n". SONG: K1..K4 step A..H then "-"; the song plays scenes E..H in the right lane (tested). SONGS: three live slots with name, scene count and length; OCT+ loads, SAVE opens NAME and stores the song now into the slot (a dialog first over another song), GLO then pick then GLO copies, EDIT clears; every dialog has NO picked, HOME and OCT- leave it. The settings remember song and scene (one byte; older settings restore into song 1). Renders: `tfm-spec/built/ui_scenes`, `ui_song`, `ui_songs`, plus `ui_song_overwrite`, `ui_song_copy`, `ui_song_clear`, `ui_songs_copy`; 301 screens x 16 palettes, 0 lint findings, 0 alignment errors.
+
+### Backup (web)
+`web/fm1backup.js` format v2 (33 objects: live music, settings, presets, FM6 objects, 24 scenes ids 64..87, 3 songs ids 96..98). v1 archives (13, 12, 11 objects) still read; restored onto the new firmware their slots 2..5 go into song 1 A..D, song 1's record is cleared, samples are skipped and reported; onto an old firmware a v1 archive restores exactly as before. Corrupted files (bad CRC, wrong order or count, bad song magic, oversize) are refused before the first write; a v2 file on an older device fails with a message and writes nothing. `node web/test_backup.mjs`: 56 ok. `node web/test_web.mjs`: 250 ok. Device side (`tests/backup_test.c`): scenes and songs round trip, length and CRC checks, a flash error keeps the scene, the restored live music lands in the song and scene the restored settings remember.
+
+### Going back (tested; `docs/tilt/FLASHING-CHECKLIST.md` 4a)
+An older firmware finds no `FSMP` header in the three sample slots and reads A..D as its four projects (one whose chain uses E..H shows empty there; the data stays). If it uploads a sample over the region: the scenes and songs in that slot read as empty here; if the tag goes, the next boot migrates again (A..D and song 1 come back, the rest is empty) and then stays quiet; with the tag intact nothing migrates. Stock V15 does not use the region. **Back up first in the editor.**
+
+### Tests
+`tests/run_tests.sh`: 6,053 ok lines; the only failure was `target_budget` (`slc_rev` gone, `slice_render` loops gone: fixed as above, now 0 over). Every older test kept its checks; the ones that encoded the old format were ported (project slots read through the scene layer, the editor's wire for song slots, backup ids), the sample-upload checks became refusal checks.
+
+### Not done / limits
+- The editor's Song panel still edits sections over A..D only: the A..H lane protocol (ops 4..7) is implemented and tested in `web/editor.html`, but there is no UI for it yet. `web/index_pkg.html` (the installer page) still says samples are backed up (`stockBackup`).
+- No device measurements: first-boot time (up to 60 sector erases, typically none to a few seconds), the cost of a flash read at a scene switch (up to 15 read windows of 256 B with IRQs off, like every flash read), nothing about audio on hardware.
+- A SONG preloads its scenes (up to eight) rather than streaming them.
+- The migration's song 1 record comes from scene A (the song-level values every scene stores); if the four scenes disagreed, A wins.
+- The web restore sends a begin + abort of scene A as a probe before a v2 restore; on the device that stops the transport (a restore needs it stopped anyway).
+
+### What Felix must do before flashing a real FM-1
+1. Back up in the editor of the build you have now (scenes, songs, presets, settings).
+2. Read `docs/tilt/FLASHING-CHECKLIST.md` sections 4 and 4a; keep V15 handy as ever.
+3. The first boot takes longer and must not be interrupted by pulling power (a cut is safe, but let it finish).
+4. Any sample you loaded into USR1..3 is wiped by the migration.

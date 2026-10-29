@@ -6,7 +6,7 @@
 // - editor.html: the protocol section (between PROTO-BEGIN/END) against its mock device (v1 commands,
 //   the user preset bank / librarian, library files, live pushes, older-firmware fallback, the v3 tracks
 //   and the mixer, the v5 drum grid in steps and user presets), its tab layout and ja/en strings,
-//   and the user-sample pipeline byte for byte against tools/sampleio.py
+//   and that it has no user-sample UI or commands (the TFM firmware has no samples)
 // - fm1pkg.js: productOf and logicalImage on build/felucca.fwsc (skipped without a build)
 // - fm1ota.js: a full install and an unplug during the write against a simulated FM-1
 
@@ -25,17 +25,15 @@ const py = (code, ...args) => execFileSync("python3", ["-c", code, ...args], { m
 const HERE = new URL(".", import.meta.url).pathname;
 /* what lives outside web/, each overridable (a web-only checkout passes them, or the checks skip):
    FELUCCA_DESC  the firmware's parameter / protocol table (tests/descdump.c -> build/host/desc.json)
-   FELUCCA_TOOLS the firmware's tools (tools/fm1_sample_upload.py, the sample format's reference)
    FELUCCA_ROOT  the Felucca tree with a ./build.sh build (the package check) */
 const DESC = process.env.FELUCCA_DESC || join(HERE, "../build/host/desc.json");
-const TOOLS = process.env.FELUCCA_TOOLS || join(HERE, "../tools");
 const FW_ROOT = process.env.FELUCCA_ROOT || join(HERE, "..");
 
 /* ------------------------------------------------------------ editor protocol --- */
 const html = readFileSync(join(HERE, "editor.html"), "utf8");
 const proto = html.slice(html.indexOf("/*PROTO-BEGIN*/"), html.indexOf("/*PROTO-END*/"));
 const E = vm.runInNewContext(proto + `
-;({ frame, unframe, parse, req, Link, parseWav, resample, normalize, takeSample, autoTrim, zoomView, rootFromName, buildSlot, makeMockDevice, CMD, SMP,
+;({ frame, unframe, parse, req, Link, makeMockDevice, CMD, songLane, songLaneName,
    UP, bank, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
    mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, devicePresetRows, engineOrder, ENGINE_ORDER, aliasOf, fmtValue, FM6, enumShown, F,
    FM4, fromDigital, fromPerc, DRUM_KIT_E,
@@ -302,16 +300,6 @@ async function editorMock() {
   ok(st.n === 2 && st.notes[1] === 64 && st.vel === 100, "editor: STEP_SET");
   const pj = E.parse[E.CMD.PROJECT](await rq(E.req.project(1, 2), { timeout: 4000, retries: 0 }));
   ok(pj.used === 1, "editor: PROJECT save");
-  /* sample upload as smpUpload() does it */
-  const s = Int16Array.from({ length: 3000 }, (_, i) => Math.round(8000 * Math.sin(i / 7)));
-  const { hdr, data } = E.buildSlot("test", [{ s, root: 60 }]);
-  let rc = E.parse[E.CMD.SMP_BEGIN](await rq(E.req.smpBegin(1), { timeout: 1000, retries: 0 })).rc;
-  for (let off = 0; off < data.length && !rc; off += 256) {
-    rc = E.parse[E.CMD.SMP_WRITE](await rq(E.req.smpWrite(1, E.SMP.DATA_OFF + off, data.subarray(off, off + 256)), { timeout: 1000 })).rc;
-  }
-  rc = rc || E.parse[E.CMD.SMP_END](await rq(E.req.smpEnd(1, hdr), { timeout: 2000, retries: 0 })).rc;
-  const si = E.parse[E.CMD.SMP_INFO](await rq(E.req.smpInfo()));
-  ok(rc === 0 && si.slots[1].zones === 1 && si.slots[1].name === "TEST", "editor: sample upload (CRC checked by the mock)");
   /* a device that never answers */
   const dead = new E.Link(() => {}, { timeout: 30 });
   const err = await dead.request(E.req.info(), { retries: 1 }).then(() => null, (e) => e.message);
@@ -1427,6 +1415,32 @@ async function editorSong() {
   await ask(1, []);
   r = await ask(2);
   ok(r.rc === 1 && !r.playing, "SONG: empty chain does not PLAY");
+  /* sections (ops 4..7): a slot per track, wire encoding A..D = 0..3, "-" (silent) = 4, E..H = 5..8; ops 0..3 stay A..D */
+  ok(E.songLane("A") === 0 && E.songLane("D") === 3 && E.songLane("-") === 4 && E.songLane("E") === 5 && E.songLane("H") === 8 &&
+     E.songLaneName(8) === "H" && E.songLaneName(4) === "-" && E.songLaneName(1) === "B", "SONG: slot encoding A..D 0..3, silent 4, E..H 5..8");
+  const secs = [{ lanes: ["A", "E", "-", "H"].map(E.songLane), repeat: 2 }, { lanes: [5, 6, 7, 8], repeat: 1 }];
+  r = await ask(5, secs);
+  ok(r.rc === 0 && r.op === 5 && JSON.stringify(r.rows) === JSON.stringify(secs), "SONG: sections with A..H and silent lanes round trip (op 5)");
+  r = await ask(4);
+  ok(r.op === 4 && JSON.stringify(r.rows) === JSON.stringify(secs), "SONG: op 4 queries the sections");
+  r = await ask(0);
+  ok(r.op === 0 && r.rows.map((x) => x.slot).join() === "0,5", "SONG: op 0 on sections lists the first playing lane's slot");
+  r = await ask(5, [{ lanes: [0, 1, 4, 3], repeat: 1 }]); r = await ask(6);
+  ok(r.rc === 6 && !r.playing, "SONG: a section on an empty A..D slot is rejected before PLAY (rc 6 = slot D)");
+  r = await ask(5, [{ lanes: [5, 6, 4, 8], repeat: 3 }]);
+  r = await ask(6);
+  ok(!r.rc && r.playing && r.remaining === 3, "SONG: sections of scenes E..H and a silent lane PLAY (op 6)");
+  r = await ask(5, secs);
+  ok(r.rc === 2 && r.count === 1, "SONG: editing sections during PLAY refused");
+  r = await ask(7);
+  ok(!r.playing, "SONG: op 7 stops");
+  r = E.parse[C.SONG](await rq([C.SONG, [5, 1, 0, 0, 0, 9, 1]]));
+  ok(r.rc === 1 && r.count === 1, "SONG: a slot above 8 in a section is rejected (device)");
+  const bad = (f) => { try { f(); return false; } catch { return true; } };
+  ok(bad(() => E.req.song(5, [{ lanes: [0, 9, 0, 0], repeat: 1 }])) && bad(() => E.req.song(5, [{ lanes: [0, 1, 2], repeat: 1 }])) &&
+     bad(() => E.req.song(1, [{ slot: 5, repeat: 1 }])) && bad(() => E.req.song(8)) && !bad(() => E.req.song(5, [{ lanes: [0, 4, 8, 3], repeat: 16 }])),
+    "SONG: req.song takes A..H and silent for sections (ops 4..7), A..D only for rows (ops 0..3)");
+  ok(E.req.song(5, secs)[1].join() === "5,2,0,5,4,8,2,5,6,7,8,1", "SONG: op 5 request bytes: count, then 4 slots and the repeat per section");
   link.close(); m.stop();
   const old = E.makeMockDevice({ auto: false, v5: true });
   const l = new E.Link((d) => [...old.access.outputs.values()][0].send(d));
@@ -1515,7 +1529,7 @@ function editorTabs() {
   const tabs = [...html.matchAll(/<button role="tab" data-tab="(\w+)"/g)].map((x) => x[1]);
   const panels = [...html.matchAll(/<section class="panel" id="p-(\w+)" data-tab="(\w+)"/g)].map((x) => [x[1], x[2]]);
   const TABS = JSON.parse((/const TABS = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]");
-  ok(tabs.length === 8 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
+  ok(tabs.length === 7 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
   ok(/localStorage\.setItem\(TAB_KEY/.test(html) && /try \{ localStorage/.test(html) && /history\.replaceState\([^)]*"#" \+ name\)/.test(html)
     && /addEventListener\("hashchange"/.test(html), "editor: last tab in localStorage (try/catch) and in the URL hash");
@@ -1524,7 +1538,7 @@ function editorTabs() {
   const TEXT = vm.runInNewContext(tb.replace("const TEXT =", "(") + ")");
   const ja = new Set(Object.keys(TEXT.ja)), en = new Set(Object.keys(TEXT.en));
   const used = new Set([...html.matchAll(/data-t="(\w+)"|\bt\("(\w+)"\)|sayK\("(\w+)"|hint = "(\w+)"/g)].map((x) => x[1] || x[2] || x[3] || x[4]));
-  for (const k of ["needDevice", "smpNone", "bankConnect", "bankNone", "selectedTrack", "selectTrack", "notesHelp", "live", "polling"]) used.add(k);
+  for (const k of ["needDevice", "bankConnect", "bankNone", "selectedTrack", "selectTrack", "notesHelp", "live", "polling"]) used.add(k);
   const miss = [...used].filter((k) => !ja.has(k) || !en.has(k));
   const odd = [...ja].filter((k) => !en.has(k)).concat([...en].filter((k) => !ja.has(k)));
   ok(!miss.length && !odd.length, `editor: every string in ja and en (${used.size} used${miss.length ? ", missing " + miss : ""}${odd.length ? ", one language only " + odd : ""})`);
@@ -1550,74 +1564,20 @@ function editorIcons() {
   ok(/html:not\(\.fk\) \.ic \{ display: none; \}/.test(html) && html.includes('classList.add("fk")'), "editor: icons hidden until the font has loaded");
 }
 
-/* ------------------------------------------- user samples: JS == sampleio.py --- */
-function wav(sr, ch, bits, float, frames, f) {
-  const bps = bits / 8, data = Buffer.alloc(frames * ch * bps);
-  for (let i = 0; i < frames; i++) for (let c = 0; c < ch; c++) {
-    const v = f(i, c), o = (i * ch + c) * bps;
-    if (float) data.writeFloatLE(v, o);
-    else if (bits === 8) data[o] = Math.max(0, Math.min(255, Math.round(v * 127 + 128)));
-    else if (bits === 16) data.writeInt16LE(Math.round(v * 32000), o);
-    else if (bits === 24) data.writeIntLE(Math.round(v * 8000000), o, 3);
-  }
-  const fmt = Buffer.alloc(16);
-  fmt.writeUInt16LE(float ? 3 : 1, 0); fmt.writeUInt16LE(ch, 2); fmt.writeUInt32LE(sr, 4);
-  fmt.writeUInt32LE(sr * ch * bps, 8); fmt.writeUInt16LE(ch * bps, 12); fmt.writeUInt16LE(bits, 14);
-  const chunk = (id, b) => Buffer.concat([Buffer.from(id), Buffer.from(Uint32Array.of(b.length).buffer), b]);
-  const body = Buffer.concat([Buffer.from("WAVE"), chunk("fmt ", fmt), chunk("data", data)]);
-  return Buffer.concat([Buffer.from("RIFF"), Buffer.from(Uint32Array.of(body.length).buffer), body]);
-}
-
-function samplesMatch() {
-  const dir = mkdtempSync(join(tmpdir(), "felucca-web-"));
-  const files = [
-    ["tone_A4.wav", wav(44100, 1, 16, false, 9000, (i) => Math.sin(i * 0.0627) * Math.exp(-i / 4000))],
-    ["pad C3.wav", wav(48000, 2, 24, false, 7000, (i, c) => Math.sin(i * (c ? 0.031 : 0.0313)) * 0.7)],
-    ["Bb2 float.wav", wav(22050, 1, 32, true, 5000, (i) => ((i % 97) / 48 - 1) * 0.5)],
-    ["BD1 lofi.wav", wav(96000, 1, 8, false, 12000, (i) => Math.sin(i * 0.01) * Math.exp(-i / 3000))],
-  ].map(([n, b]) => { const p = join(dir, n); writeFileSync(p, b); return p; });
-  const zones = files.map((p) => {
-    const w = E.parseWav(readFileSync(p));
-    const s = E.normalize(E.resample(w.x, w.sr, E.SMP.RATE));
-    return { s, root: E.rootFromName(p.split("/").pop().replace(/\.[^.]*$/, "")) };
-  });
-  const js = E.buildSlot("Mix ä 12345", zones);
-  if (existsSync(join(TOOLS, "fm1_sample_upload.py"))) {
-    execFileSync("python3", [join(TOOLS, "fm1_sample_upload.py"), "build", "Mix ä 12345", join(dir, "slot"), ...files]);
-    const pyHdr = readFileSync(join(dir, "slot.hdr")), pyData = readFileSync(join(dir, "slot.bin"));
-    ok(eq(js.hdr, pyHdr) && eq(js.data, pyData), `samples: editor == sampleio.py (${files.length} WAV formats, ${js.data.length} B)`);
-  } else console.log("samples: editor == sampleio.py (no FELUCCA_TOOLS)                skip");
-  /* recording / trimming: takeSample (a cut of the raw input, faded at the cuts, normalised), autoTrim */
-  const R = E.SMP.RATE, raw = new Float64Array(R);       /* 1 s: silence, a tone from 0.25 to 0.6 s, silence */
-  for (let i = Math.round(R * 0.25); i < Math.round(R * 0.6); i++) raw[i] = Math.sin(i * 0.2) * 0.3;
-  ok(eq(E.takeSample(raw, 0, raw.length), E.normalize(raw)) && eq(E.takeSample(raw, -9, 1e9), E.normalize(raw)),
-    "samples: the whole input == normalize (files load as before); the ends are clamped");
-  const [a, b] = E.autoTrim(raw), on = Math.round(R * 0.25), off = Math.round(R * 0.6);
-  ok(a <= on && on - a <= Math.round(R * 0.005) + 2 && b >= off - 2 && b - off <= Math.round(R * 0.02) + 1,
-    `samples: autoTrim finds the sound (${a}..${b} for ${on}..${off}: 5 ms before, 20 ms after)`);
-  ok(E.autoTrim(new Float64Array(500)).join() === "0,500", "samples: autoTrim of silence keeps all");
-  const cut = E.takeSample(raw, on + 1000, on + 3000);
-  let pk = 0;
-  for (const v of cut) pk = Math.max(pk, Math.abs(v));
-  ok(cut.length === 2000 && cut[0] === 0 && Math.abs(cut[1999]) < 1000 && pk === 30000 &&
-     Math.abs(cut[22]) < Math.abs(cut[22 + 63]) + 30000 * 0.6,
-    "samples: a cut: its length, faded to 0 at both cut ends, peak normalised");
-
-  /* the trimming view: zoom at the pointer, at least 256 samples, inside the input; pan; out to all */
-  {
-    const n = 22050;
-    let v = E.zoomView(n, 0, n, 0.5, 0.5, 0);
-    const z1 = v[1] - v[0] === 11025 && v[0] === 5513;                     /* x2 around the middle */
-    v = E.zoomView(n, 0, n, 0.1, 0.25, 0);
-    const under = Math.abs((v[0] + 0.1 * (v[1] - v[0])) - 0.1 * n) <= 1;    /* the pointer's sample stays */
-    let w = [0, n];
-    for (let i = 0; i < 60; i++) w = E.zoomView(n, w[0], w[1], 0.97, 0.8, 0);
-    const minOk = w[1] - w[0] === 256 && w[1] <= n;
-    const p = E.zoomView(n, 1000, 3000, 0.5, 1, 0.1), edge = E.zoomView(n, 21000, 22000, 0.5, 1, 1);
-    const out = E.zoomView(n, 1000, 3000, 0.5, 100, 0);
-    ok(z1 && under && minOk && p[0] === 1200 && p[1] === 3200 && edge[1] === n && out.join() === `0,${n}`,
-      "samples: trim view: zoom at the pointer, 256 samples at least, inside the input, pan, out to all");
-  }
+/* ------------------------------------------- no user samples (the TFM firmware has none) --- */
+async function noSamples() {
+  ok(!/data-tab="samples"|id="p-samples"|smpslots|"samples"/.test(html), "samples: the editor has no Samples tab, panel or slot list");
+  ok(!/SMP_(BEGIN|WRITE|END|ERASE|INFO)|smp(Begin|Write|End|Erase|Info)|buildSlot|takeSample|decodeFile|getUserMedia|renderSamples|smpslots/.test(html),
+    "samples: no sample commands, recording, trimming or upload code in the editor");
+  ok(![11, 12, 13, 14, 15].some((n) => Object.values(E.CMD).includes(n)) && E.req.smpInfo === undefined && E.req.smpBegin === undefined && E.buildSlot === undefined,
+    "samples: CMD / req have no sample commands (11..15)");
+  const m = E.makeMockDevice({ auto: false });
+  const link = new E.Link((d) => [...m.access.outputs.values()][0].send(d), { timeout: 60 });
+  [...m.access.inputs.values()][0].onmidimessage = (e) => link.receive(e.data);
+  const answers = [];
+  for (const cmd of [11, 12, 13, 14, 15]) answers.push(await link.request([cmd, [0]], { retries: 0 }).then(() => "reply", () => "none"));
+  ok(answers.every((x) => x === "none"), "samples: the mock device (like the firmware) does not answer commands 11..15");
+  link.close(); m.stop();
 }
 
 /* ------------------------------------------------------- packages: JS == Python --- */
@@ -1736,7 +1696,7 @@ fm6TabNoBank();
 await editorFm4();
 editorTabs();
 editorIcons();
-samplesMatch();
+await noSamples();
 await packages();
 await updater();
 console.log(failed ? `WEB TESTS FAILED (${failed})` : "web tests passed");
