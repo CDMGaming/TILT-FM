@@ -5,6 +5,9 @@
  * Hold OCT+ on STEP: the step sheet (tfm_sheet.c); hold SEQ: STEP TOOLS (Felucca's layer). Included from tilt.c. */
 #define TQ_REST_KEY 26u                                 /* G5: the 27th key */
 static uint8_t tq_bar;                                  /* NOTES, DRUMS: the bar shown (16 steps) */
+static uint8_t tq_grab;                                 /* NOTES: the note at the cursor is GRABbed (OCT+ tap): K1 moves it in time, K2 its pitch */
+static uint8_t tq_pan;                                  /* NOTES: SELECT scrolled the roll (the window stays while the cursor does) */
+static uint32_t tq_pan_cur, tq_oct_t0;
 static int8_t tq_base;                                  /* NOTES: the top row's note */
 
 static int tq_has_note(const track_t *t, const step_t *s) { return drum_track(t) ? s->hit != 0u : s->time == ST_NOTE && s->n; }
@@ -198,6 +201,8 @@ static void tq_note_rows(const track_t *t, int32_t *top)   /* the top row's note
 {
     const step_t *s = &t->step[ui.cursor % NSTEP];
     int32_t n = s->time == ST_NOTE && s->n ? s->note[0] : 57, k, hi = tq_base;
+    if (tq_pan && tq_pan_cur != ui.cursor)
+        tq_pan = 0;                                     /* (the cursor moved: the window follows the note again) */
     if (hi < 12 || hi > 127)
         hi = n + 5;
     for (k = 0; k < 6; k++)                             /* (the in-scale note at or above) */
@@ -205,7 +210,7 @@ static void tq_note_rows(const track_t *t, int32_t *top)   /* the top row's note
             break;
         else
             hi++;
-    {
+    if (!tq_pan) {
         int32_t bot = hi, j;
         for (j = 0; j < 10; j++)
             bot = tq_next_in_scale(t, bot, -1);
@@ -230,6 +235,8 @@ static void tq_notes_body(void)                         /* y 22 .. 215 */
     char b[8], l2[40];
     tu_rect(0, 22, TU_W, 193, TC_BG);
     tq_note_rows(t, &top);
+    if (!(t->step[ui.cursor % NSTEP].time == ST_NOTE && t->step[ui.cursor % NSTEP].n) && tq_grab)
+        tq_grab = 0;                                    /* (the grabbed note is gone: ALGORITHM, a clear) */
     for (r = 0, notes[0] = top; r < 11u; r++) {
         int32_t y = 26 + (int32_t)r * 11, n = notes[r];
         int rootrow = (uint32_t)n % 12u == root;
@@ -260,7 +267,8 @@ static void tq_notes_body(void)                         /* y 22 .. 215 */
                 int32_t x = 22 + (int32_t)(i % 16u) * 13;
                 while (i + l < len && t->step[i + l].time == ST_TIE && (i + l) / 16u == tq_bar)
                     l++;
-                tu_rrect(x + 1, 27 + (int32_t)r * 11, (int32_t)l * 13 - 2, 9, 3, tu_mix(TC_BG, TU_TC[song.sel], 85), TC_BG);
+                tu_rrect(x + 1, 27 + (int32_t)r * 11, (int32_t)l * 13 - 2, 9, 3,
+                         tq_grab && i == ui.cursor % NSTEP ? tu_mix(TU_TC[song.sel], TC_TEXT, 55) : tu_mix(TC_BG, TU_TC[song.sel], 85), TC_BG);
                 if (i == ui.cursor % NSTEP) {
                     tu_rect(x + 1, 27 + (int32_t)r * 11, (int32_t)l * 13 - 2, 1, TC_TEXT);
                     tu_rect(x + 1, 35 + (int32_t)r * 11, (int32_t)l * 13 - 2, 1, TC_TEXT);
@@ -279,41 +287,51 @@ static void tq_notes_body(void)                         /* y 22 .. 215 */
                 if (i <= ui.cursor % NSTEP)
                     m = tot;
             }
+        (void)m; (void)tot;
+        str_cpy(b, "STEP ", 8);                         /* "STEP 7 \xB7 EMPTY" or "STEP 7 \xB7 D3 \xB7 1/16" */
+        fmt_int(b + 5, (int32_t)(ui.cursor % NSTEP) + 1);
         if (s->time == ST_NOTE && s->n) {
-            str_cpy(b, "NOTE ", 8);
-            fmt_int(b + 5, (int32_t)m);
-            str_cpy(b + str_len(b), " of ", 5);
-            fmt_int(b + str_len(b), (int32_t)tot);
-            str_cpy(l2, "step ", 8);
-            fmt_int(l2 + 5, (int32_t)(ui.cursor % NSTEP) + 1);
+            char nb[8];
+            uint32_t ln = 1;
+            while (ui.cursor % NSTEP + ln < len && t->step[ui.cursor % NSTEP + ln].time == ST_TIE)
+                ln++;
+            str_cpy(l2, "\xB7 ", 4);
+            str_cpy(l2 + str_len(l2), tu_note_name(s->note[0], nb), 8);
+            str_cpy(l2 + str_len(l2), " \xB7 ", 5);
+            if (ln == 1u) str_cpy(l2 + str_len(l2), "1/16", 6);
+            else if (ln == 2u) str_cpy(l2 + str_len(l2), "1/8", 6);
+            else if (ln == 3u) str_cpy(l2 + str_len(l2), "1/8.", 6);
+            else if (ln == 4u) str_cpy(l2 + str_len(l2), "1/4", 6);
+            else { fmt_int(l2 + str_len(l2), (int32_t)ln); str_cpy(l2 + str_len(l2), "/16", 4); }
             if (s->flags & SF_SLIDE)
-                str_cpy(l2 + str_len(l2), " \xB7 slide on", 14);
-        } else {                                        /* "STEP 7 \xB7 EMPTY \xB7 KEY ADDS" */
-            str_cpy(b, "STEP ", 8);
-            fmt_int(b + 5, (int32_t)(ui.cursor % NSTEP) + 1);
-            str_cpy(l2, s->time == ST_TIE ? "TIE" : "EMPTY", 8);
-            str_cpy(l2 + str_len(l2), " \xB7 KEY ADDS", 16);
+                str_cpy(l2 + str_len(l2), " \xB7 slide", 12);
+        } else {
+            str_cpy(l2, s->time == ST_TIE ? "\xB7 TIE" : "\xB7 EMPTY", 10);
         }
         tu_text(9, 158, &AF_TM, b, TC_TEXT, TC_BG);
         tu_text(9 + text_w(&AF_TM, b) + 5, 158, &AF_TL, l2, TC_MID, TC_BG);
         for (k = 0; k < 4u; k++) {
-            static const char *const LB[4] = {"K1 NOTE", "K2 PITCH", "K3 LENGTH", "K4 VELO"};
+            static const char *const LB[4] = {"K1 STEP", "K2 PITCH", "K3 LENGTH", "K4 VELO"};
+            int has = s->time == ST_NOTE && s->n;
+            uint16_t vc = has || k == 0u ? TC_TEXT : TC_DIM, lc = has || k == 0u ? TU_TC[k] : TC_DIM;
             char v[10];
             int32_t x = 7 + (int32_t)k * 58;
             uint32_t l = 1;
             while (ui.cursor % NSTEP + l < len && s->time == ST_NOTE && t->step[ui.cursor % NSTEP + l].time == ST_TIE)
                 l++;
             if (k == 0u)
-                fmt_int(v, (int32_t)m);
+                fmt_int(v, (int32_t)(ui.cursor % NSTEP) + 1);
+            else if (!has)
+                str_cpy(v, "-", 2);
             else if (k == 1u)
-                str_cpy(v, s->time == ST_NOTE && s->n ? tu_note_name(s->note[0], b) : "-", 8);
+                str_cpy(v, tu_note_name(s->note[0], b), 8);
             else if (k == 2u)
                 fmt_int(v, (int32_t)l);
             else
                 fmt_int(v, s->vel);
             tu_rrect(x, 172, 55, 26, 5, TC_DEEP, TC_BG);
-            tu_text_c(x + 27, 179, &AF_TS, LB[k], TU_TC[k], TC_DEEP);
-            tu_text_c(x + 27, 191, &AF_TL, v, TC_TEXT, TC_DEEP);
+            tu_text_c(x + 27, 179, &AF_TS, LB[k], lc, TC_DEEP);
+            tu_text_c(x + 27, 191, &AF_TL, v, vc, TC_DEEP);
         }
         (void)nn;
     }
@@ -327,9 +345,9 @@ static void tq_notes_head(void)
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
     tu_badge(9, 10, song.sel, TC_BG);
-    str_cpy(l, "NOTES \xB7 ", 12);
+    str_cpy(l, tq_grab ? "MOVING \xB7 " : "NOTES \xB7 ", 12);
     str_cpy(l + str_len(l), tu_inst_name(TSEL), 12);
-    tu_text(26, 10, &AF_TM, l, TC_TEXT, TC_BG);
+    tu_text(26, 10, &AF_TM, l, tq_grab ? TC_AMBER : TC_TEXT, TC_BG);
     x = 108;
     for (i = 0; i < 4u; i++) {                          /* the bar tabs */
         uint32_t used = i * 16u < tq_len(TSEL);
@@ -346,13 +364,58 @@ static void tq_notes_head(void)
 static void tq_notes_draw(void)
 {
     uint32_t sig = ui.cursor * 31u + song.sel * 7u + tq_len(TSEL) * 977u + steps_hash(TSEL) + tq_bar * 7919u + (uint32_t)(uint8_t)tq_base * 131u +
-                   (uint32_t)TSEL->p[P_ROOT] * 17u + (uint32_t)TSEL->p[P_SCALE] * 19u;
+                   (uint32_t)TSEL->p[P_ROOT] * 17u + (uint32_t)TSEL->p[P_SCALE] * 19u + (uint32_t)tq_grab * 6151u;
     if (song.playing)
         sig += TSEL->seq_idx * 131071u;
     tu_zone(0, 0, TU_HY, TC_BG, sig, tq_notes_head);
     tu_zone(2, 22, 100, TC_BG, sig, tq_notes_body);
     tu_zone(3, 122, 93, TC_BG, sig, tq_notes_body);
-    tu_foot(3, "SELECT", "STEP", "KEYS", "ADD", "EDIT", "DELETE", 0, 0, 0, 0);
+    if (tq_grab)
+        tu_foot(3, "K1", "MOVE", "OCT+", "DROP", "K2", "PITCH", 0, 0, 0, 0);
+    else
+        tu_foot(3, "K1", "STEP", "OCT+", "GRAB", "EDIT", "DELETE", 0, 0, 0, 0);
+}
+/* NOTES: OCT+ tapped (a hold is the step sheet) GRABs the note at the cursor, tapped again DROPs it */
+static void tq_oct(uint32_t pressed, uint32_t oct)
+{
+    const step_t *s = &TSEL->step[ui.cursor % NSTEP];
+    if ((pressed >> panel.btn[B_OCTUP]) & 1u)
+        tq_oct_t0 = fm1_ms;
+    if (!(oct & 2u) || fm1_ms - tq_oct_t0 > 450u)
+        return;
+    if (tq_grab) {
+        tq_grab = 0;
+        ui_message("DROPPED");
+    } else if (chain_busy()) {
+        ui_message("STOP TO EDIT");
+    } else if (s->time == ST_NOTE && s->n) {
+        tq_grab = 1;
+        ui_message("MOVING");
+    } else {
+        ui_message("NO NOTE HERE");
+    }
+    ui.force = 1;
+}
+static int tq_occupied(const step_t *s) { return s->time == ST_TIE || (s->time == ST_NOTE && s->n); }
+/* a grabbed note (and its ties) one step in time: not past another note or the pattern's end. 1 moved */
+static int tq_move(int32_t d)
+{
+    track_t *t = TSEL;
+    uint32_t len = tq_len(t), cur = ui.cursor % NSTEP, l = 1, i;
+    step_t buf[NSTEP];
+    while (cur + l < len && t->step[cur + l].time == ST_TIE)
+        l++;
+    if (d > 0 ? cur + l >= len || tq_occupied(&t->step[cur + l]) : cur == 0u || tq_occupied(&t->step[cur - 1u]))
+        return 0;
+    for (i = 0; i < l; i++)
+        buf[i] = t->step[cur + i];
+    for (i = 0; i < l; i++)
+        step_clear(&t->step[cur + i]);
+    for (i = 0; i < l; i++)
+        t->step[(uint32_t)((int32_t)cur + d) + i] = buf[i];
+    cursor_set((uint32_t)((int32_t)cur + d));
+    tq_bar = (uint8_t)(ui.cursor / 16u);
+    return 1;
 }
 /* K1 the next note (a bar flips), K2 its pitch in the scale, K3 its length (ties), K4 its velocity */
 static void tq_notes_knob(uint32_t k, int32_t s)
@@ -361,15 +424,23 @@ static void tq_notes_knob(uint32_t k, int32_t s)
     uint32_t len = tq_len(t), i, cur = ui.cursor % NSTEP;
     step_t *st = &t->step[cur];
     int32_t d = s > 0 ? 1 : -1;
-    if (k == 0u) {
-        for (i = 1; i < len; i++) {
-            uint32_t j = (uint32_t)((int32_t)cur + d * (int32_t)i + (int32_t)len * 4) % len;
-            if (t->step[j].time == ST_NOTE && t->step[j].n) {
-                cursor_set(j);
-                tq_bar = (uint8_t)(j / 16u);
-                return;
-            }
+    if (k == 0u && tq_grab) {                           /* GRABbed: the note moves in time */
+        if (chain_busy())
+            ui_message("STOP TO EDIT");
+        else {
+            int32_t n;
+            for (n = 0; n < (s > 0 ? s : -s); n++)
+                if (!tq_move(d)) {
+                    ui_message(d > 0 ? "NO ROOM AHEAD" : "NO ROOM BEHIND");
+                    break;
+                }
         }
+        ui.force = 1;
+        return;
+    }
+    if (k == 0u) {                                      /* every step, empty ones too; the bar follows */
+        cursor_set((uint32_t)clamp((int32_t)cur + s, 0, (int32_t)len - 1));
+        tq_bar = (uint8_t)(ui.cursor / 16u);
         return;
     }
     if (chain_busy()) {
@@ -380,6 +451,9 @@ static void tq_notes_knob(uint32_t k, int32_t s)
         return;
     if (k == 1u) {
         st->note[0] = (uint8_t)tq_next_in_scale(t, st->note[0], d);
+        tq_pan = 0;
+    } else if (k == 2u && tq_grab) {                    /* (GRABbed: the length stays) */
+        return;
     } else if (k == 2u) {
         uint32_t l = 1, nl;
         while (cur + l < len && t->step[cur + l].time == ST_TIE)
@@ -491,7 +565,7 @@ static void tq_drums_draw(void)
     tu_zone(0, 0, TU_HY, TC_BG, sig, tq_drums_head);
     tu_zone(2, 22, 100, TC_BG, sig, tq_drums_body);
     tu_zone(3, 122, 93, TC_BG, sig, tq_drums_body);
-    tu_foot(3, "SELECT", "STEP", "KEYS", "HIT", "K2", "LANE", 0, 0, 0, 0);
+    tu_foot(3, "K1", "STEP", "KEYS", "HIT", "K2", "LANE", 0, 0, 0, 0);
 }
 static void tq_drums_knob(uint32_t k, int32_t s)
 {
@@ -525,7 +599,7 @@ static void tq_adapt(void)                              /* ALGORITHM moved to a 
 static void tq_input(uint32_t notes, uint32_t busy)
 {
     uint32_t k;
-    int32_t s;
+    int32_t s, sel;
     if (!busy) {
         if (sheet_on()) {                               /* hold OCT+: the step sheet (STEP, NOTES) */
             for (k = 0; k < 4u; k++)
@@ -551,14 +625,21 @@ static void tq_input(uint32_t notes, uint32_t busy)
             cursor_set(ni < tq_len(TSEL) ? ni : tq_len(TSEL) - 1u);
             tq_bar = (uint8_t)(ui.cursor / 16u);
         }
-        if ((s = panel_enc(EN_SELECT)) != 0 && (tu.scr == TU_NOTES || tu.scr == TU_DRUMS)) {
-            cursor_set((uint32_t)clamp((int32_t)ui.cursor + (s > 0 ? 1 : -1), 0, (int32_t)tq_len(TSEL) - 1));
+        sel = panel_enc(EN_SELECT);
+        if (sel != 0 && tu.scr == TU_NOTES) {           /* the roll up / down by pitch (rows), not steps */
+            tq_note_rows(TSEL, &(int32_t){0});
+            for (k = 0; k < (uint32_t)(sel > 0 ? sel : -sel); k++)
+                tq_base = (int8_t)tq_next_in_scale(TSEL, tq_base, sel > 0 ? 1 : -1);
+            tq_pan = 1; tq_pan_cur = ui.cursor;
+            ui.force = 1;
+        } else if (sel != 0 && tu.scr == TU_DRUMS) {
+            cursor_set((uint32_t)clamp((int32_t)ui.cursor + (sel > 0 ? 1 : -1), 0, (int32_t)tq_len(TSEL) - 1));
             tq_bar = (uint8_t)(ui.cursor / 16u);
         }
         if ((s = panel_enc(EN_PRESET)) != 0 && tu.scr == TU_STEP)
             tu_sound_step(s);
-        if ((s = panel_enc(EN_SELECT)) != 0 && tu.scr == TU_STEP)
-            cursor_set((uint32_t)clamp((int32_t)ui.cursor + (s > 0 ? 1 : -1) * 16, 0, (int32_t)tq_len(TSEL) - 1));
+        if (sel != 0 && tu.scr == TU_STEP)
+            cursor_set((uint32_t)clamp((int32_t)ui.cursor + (sel > 0 ? 1 : -1) * 16, 0, (int32_t)tq_len(TSEL) - 1));
     }
     tq_keys(notes);
     if (tu.scr == TU_NOTES || tu.scr == TU_STEP || tu.scr == TU_DRUMS)

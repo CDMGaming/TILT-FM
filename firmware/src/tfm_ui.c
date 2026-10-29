@@ -57,6 +57,7 @@ static void tu_song_delete(void);
 static void tu_song_sounds(void);
 static uint8_t tq_bar;                                  /* (tfm_seq.c: the bar NOTES and DRUMS show) */
 static void tq_input(uint32_t notes, uint32_t busy);
+static void tq_oct(uint32_t pressed, uint32_t oct);
 static void tq_step_draw(void);
 static void tq_notes_draw(void);
 static void tq_drums_draw(void);
@@ -85,6 +86,7 @@ static int tu_on(void)                                  /* a TFM screen is the U
     return !tu_classic() && tu.scr != TU_DEEP && !ui.menu && !name_on() && !ui.uboot;
 }
 static int tu_deep_on(void) { return !tu_classic() && tu.scr == TU_DEEP && !ui.menu; }
+static uint8_t tq_grab;                                 /* NOTES: a note is grabbed (tfm_seq.c) */
 static uint8_t tsg_copy = 0xFF;                         /* SONGS: GLO pressed on this slot: the next GLO copies it onto the one picked */
 static void tu_goto(uint32_t scr)
 {
@@ -92,6 +94,7 @@ static void tu_goto(uint32_t scr)
         return;
     if (scr != TU_SONGS)
         tsg_copy = 0xFF;
+    tq_grab = 0;
     if (tu.scr != scr)
         tu.prev = tu.scr;
     tu.scr = (uint8_t)scr;
@@ -596,7 +599,7 @@ static void tu_black_mute(uint32_t notes)               /* MIX: the black keys, 
 static int tu_song_on(void) { return tu.scr == TU_SONG; }
 static int tu_oct_ok(void)                              /* OCT+ is OK and OCT- BACK here (no octave) */
 {
-    return !tu_classic() && !ui.menu && (tu.scr == TU_SONG || tu.scr == TU_SONGS);
+    return !tu_classic() && !ui.menu && (tu.scr == TU_SONG || tu.scr == TU_SONGS || tu.scr == TU_NOTES);
 }
 static void tu_deep(void)                               /* SOUND > DEEP: Felucca's own pages for this track */
 {
@@ -633,6 +636,8 @@ static void tu_screen_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint
         break;
     case TU_STEP: case TU_NOTES: case TU_DRUMS:
         tq_input(notes, busy);
+        if (tu.scr == TU_NOTES)
+            tq_oct(pressed, oct);
         break;
     case TU_FX: case TU_SPACE: case TU_ARP: case TU_CLOCK: case TU_CLOCK2: case TU_MOTION:
         tu_pages_input(busy);

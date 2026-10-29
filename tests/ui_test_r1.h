@@ -22,12 +22,12 @@ static int test_r1_cursor(void)
             for (i = 0; i < len; i++) {                 /* up: every step 1..LEN, empty or not, the shown bar following */
                 R1(ui.cursor == i && tq_bar == i / 16u);
                 seen |= i < 32u ? 1u << i : 0u;
-                turn(EN_SELECT, 1);
+                turn(scr ? EN_SELECT : EN_K1, 1);               /* (round 3: NOTES steps with K1, SELECT scrolls its rows; DRUMS: both) */
             }
             ok &= ui.cursor == len - 1u;                /* (the end stays the end) */
             for (i = len; i-- > 0;) {
                 R1(ui.cursor == i && tq_bar == i / 16u);
-                turn(EN_SELECT, -1);
+                turn(scr ? EN_SELECT : EN_K1, -1);
             }
             R1(ui.cursor == 0u && (len >= 32u ? seen == 0xFFFFFFFFu : seen == (1u << len) - 1u));
             if (len > 16u) {                            /* PRESETS: the next bar, the same step in it */
