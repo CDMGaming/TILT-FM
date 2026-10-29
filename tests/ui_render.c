@@ -784,7 +784,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_UI_JAM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_SETUP, S_UI_TIME,
        S_UI_SND0, S_UI_SND1, S_UI_SND2, S_UI_SND3, S_UI_SND4, S_UI_SND5, S_UI_SND6, S_UI_SND7, S_UI_SND8, S_UI_SND9, S_UI_SND10,
        S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_UI_SCENES, S_UI_SONG, S_UI_SONGS,
-       S_UI_FX, S_UI_SPACE, S_UI_ARP, S_UI_CLOCK, S_UI_CLOCK2, S_UI_MOTION, S_COUNT };
+       S_UI_FX, S_UI_SPACE, S_UI_ARP, S_UI_CLOCK, S_UI_CLOCK2, S_UI_MOTION, S_SONG_OVR, S_SONG_COPY, S_SONG_CLR, S_SONGS_COPY, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -825,7 +825,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "ui_jam", "ui_mix", "ui_start", "ui_dice", "ui_setup", "ui_time",
     "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
     "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_step", "ui_notes", "ui_drums", "ui_sheet", "ui_scenes", "ui_song", "ui_songs",
-    "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion"};
+    "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion", "ui_song_overwrite", "ui_song_copy", "ui_song_clear", "ui_songs_copy"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1463,21 +1463,35 @@ static void setup(int s)
         ui.force = 1;
         break;
     }
-    case S_UI_SCENES: case S_UI_SONG: case S_UI_SONGS: {   /* TFM-UI: the song's screens over three stored scenes */
+    case S_UI_SCENES: case S_UI_SONG: case S_UI_SONGS: case S_SONG_OVR: case S_SONG_COPY: case S_SONG_CLR: case S_SONGS_COPY: {   /* TFM-UI: the song's screens over stored scenes (round 2: three songs, eight scenes) */
         uint32_t i;
         tu_off = 0; song.playing = 0; go_home();
         tfm_load(&trk[0], TI_THUMP, 0); tfm_load(&trk[1], TI_SQUELCH, 0); tfm_load(&trk[2], TI_CHORDETTE, 0); tfm_load(&trk[3], TI_HAZE, 0);
         for (i = 0; i < 4u; i++) { trk[i].p[P_SLEN] = i == 3u ? 32 : 16; trk[i].step[0].time = ST_NOTE; trk[i].step[0].n = 1; trk[i].step[0].note[0] = 60; trk[i].step[0].hit = 1; }
-        memset(proj_slot, 0, sizeof proj_slot);
+        memset(proj_slot, 0, sizeof proj_slot); memset(song_rec, 0, sizeof song_rec); sng_cur = 0;
         project_save_as(0, "NEON DRIFT"); trk[3].p[P_SLEN] = 64; trk[0].step[0].n = 0; trk[0].step[0].hit = 0;
         project_save_as(1, "NEON DRIFT"); project_save_as(2, "NEON DRIFT");
+        trk[3].p[P_SLEN] = 16; trk[1].step[2].time = ST_NOTE; trk[1].step[2].n = 1; trk[1].step[2].note[0] = 55;   /* (round 2: more scenes, three songs) */
+        project_save_as(4, "NEON DRIFT"); trk[2].step[4].time = ST_NOTE; trk[2].step[4].n = 1; trk[2].step[4].note[0] = 62;
+        project_save_as(5, "NEON DRIFT"); project_save_as(7, "NEON DRIFT");
+        chain_config.count = 1; chain_config.row[0] = chain_row_of(0, 1);
+        song.g[G_BPM] = 118;
+        song_save_as(0, "NEON DRIFT");                    /* song 1 stored; a second song from it, then back to song 1 */
+        chain_config.row[0] = chain_row_of(4, 2); chain_config.count = 2; chain_config.row[1] = chain_row_of(5, 1);
+        song_save_as(1, "HALF LIT");
+        song_load(0);
+        trk[0].step[0].n = 1; trk[0].step[0].hit = 1;
         chain_config.count = 6;
         chain_config.row[0] = chain_row_of(0, 2); chain_config.row[1] = chain_row_of(1, 1); chain_config.row[2] = chain_row_of(2, 4);
         chain_config.row[3] = chain_row_of(1, 1); chain_config.row[4] = chain_row_of(0, 1); chain_config.row[5] = chain_row_of(2, 2);
         chain_config.row[4].slot[1] = CHAIN_SILENT; chain_config.row[4].slot[3] = 3;
         ui.msg_t = 0; ui.frame++; song.playing = 1;
         if (s == S_UI_SCENES) { ui.layer = LAYER_SCENE; }
-        else { tu_goto(s == S_UI_SONG ? TU_SONG : TU_SONGS); ui.song_row = 4; tsg_sel = 0; }
+        else if (s == S_SONG_OVR) { song.playing = 0; ui.confirm = CF_SONG_OVR; ui.confirm_trk = 1; }      /* (SONGS' dialogs) */
+        else if (s == S_SONG_COPY) { song.playing = 0; ui.confirm = CF_SONG_COPY; ui.confirm_trk = 0u << 2 | 1u; }
+        else if (s == S_SONG_CLR) { song.playing = 0; ui.confirm = CF_SONG_CLR; ui.confirm_trk = 1; }
+        else if (s == S_SONGS_COPY) { song.playing = 0; tu_goto(TU_SONGS); tsg_sel = 2; tsg_copy = 0; }
+        else { tu_goto(s == S_UI_SONG ? TU_SONG : TU_SONGS); ui.song_row = 4; tsg_sel = 1; }
         ui.force = 1;
         break;
     }
@@ -1524,7 +1538,8 @@ static void setup(int s)
         ui.hot_col = 1; ui.hot_t = 30;
         if (s == S_TFM_JAM_LARGE) ui_prefs = PREF_LARGE;
         break;
-    case S_SCENE_OVR: song.playing = 0; go_home(); ui.confirm = CF_SCENE_OVR; ui.confirm_trk = 0u << 2 | 2u; break;
+    case S_SCENE_OVR: song.playing = 0; go_home(); ui.confirm = CF_SCENE_OVR; ui.confirm_trk = 0u << 3 | 2u; break;
+
     case S_SCENE_CLR:
         song.playing = 0; go_home();
         chain_config.count = 1; chain_config.row[0] = chain_row_of(2, 1);

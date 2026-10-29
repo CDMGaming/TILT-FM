@@ -282,7 +282,8 @@ static struct {
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
        CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
-       CF_SCENE_DROP, CF_SCENE_OVR, CF_SCENE_CLR };   /* (TILT-FM: the SCENE layer's copy, clear) */                                 /* (TILT-FM: the music in no scene, edited, leaves: tilt.c) */
+       CF_SCENE_DROP, CF_SCENE_OVR, CF_SCENE_CLR,
+       CF_SONG_OVR, CF_SONG_COPY, CF_SONG_CLR };       /* (round 2: SONGS: save over a song, copy over one, clear one) */   /* (TILT-FM: the SCENE layer's copy, clear) */                                 /* (TILT-FM: the music in no scene, edited, leaves: tilt.c) */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot; a pattern over the user's steps;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
@@ -521,6 +522,15 @@ static void scene_copy_ui(uint32_t src, uint32_t dst, int sure);
 static void scene_clear_ui(uint32_t s, int sure);
 static int scene_in_song(uint32_t s);
 static int scene_copy(uint32_t src, uint32_t dst);
+static uint32_t song_nscenes(uint32_t n);              /* round 2: the songs (project.c) */
+static int song_stored(uint32_t n);
+static const char *song_name_of(uint32_t n);            /* a stored song's name (NAME_LEN + 4 bytes) */
+static uint32_t song_bars_n(uint32_t n, uint32_t bar);  /* a stored song's length in bars (a bar: `bar` steps) */
+static int song_save(uint32_t n);
+static int song_save_named(uint32_t n, const char *name);
+static int song_load(uint32_t n);
+static int song_copy(uint32_t a, uint32_t b);
+static int song_clear(uint32_t n);
 static int scene_clear(uint32_t s);
 static int scene_undo(void);
 static uint32_t scene_undo_slot(void);

@@ -761,8 +761,9 @@ static void te_do(uint32_t o)
                 sl = i;
                 break;
             }
+        (void)sl;
         tu_goto(TU_SONGS);
-        name_open(NK_PROJ_SAVE, sl);
+        name_open(NK_SONG_SAVE, sng_cur);
     } else if (o == TO_SAVE) {
         for (i = 0; i < NPAGES && PAGES[i].graph != GR_SLOTS; i++)
             ;

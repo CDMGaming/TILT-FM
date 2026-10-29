@@ -48,6 +48,9 @@ static void tu_pages_draw(void);
 static void tu_pages_input(uint32_t busy);
 static void tu_song_input(uint32_t oct);                /* (tfm_song.c) */
 static void tu_songs_input(uint32_t oct);
+static void tu_songs_save(void);
+static void tu_songs_copy(void);
+static void tu_songs_clear(void);
 static void tu_song_draw(void);
 static void tu_songs_draw(void);
 static void tu_song_delete(void);
@@ -82,10 +85,13 @@ static int tu_on(void)                                  /* a TFM screen is the U
     return !tu_classic() && tu.scr != TU_DEEP && !ui.menu && !name_on() && !ui.uboot;
 }
 static int tu_deep_on(void) { return !tu_classic() && tu.scr == TU_DEEP && !ui.menu; }
+static uint8_t tsg_copy = 0xFF;                         /* SONGS: GLO pressed on this slot: the next GLO copies it onto the one picked */
 static void tu_goto(uint32_t scr)
 {
     if (scr >= TU_N)
         return;
+    if (scr != TU_SONGS)
+        tsg_copy = 0xFF;
     if (tu.scr != scr)
         tu.prev = tu.scr;
     tu.scr = (uint8_t)scr;
@@ -357,10 +363,17 @@ static void tu_foot(uint32_t n, const char *k0, const char *a0, const char *k1, 
     tu_zone(1, TU_FY, 25, tu_pbg, sig + tu_pbg * 7u + tu_pq * 3u, tu_foot_draw);
 }
 
-/* ---- the scene letters: A..H (the first four are the stored scenes; phase 6 widens it to eight) ---- */
-#define TU_NSCENE 8u
-static uint32_t tu_scene_cur(void) { uint32_t c = scene_cur(); return c < 4u ? c : 0xFFu; }
-static int tu_scene_used(uint32_t s) { return s < 4u && project_used(s); }
+/* ---- the scene letters: A..H (round 2: all eight are stored scenes) ---- */
+#define TU_NSCENE NSCN
+static uint32_t tu_scene_cur(void) { uint32_t c = scene_cur(); return c < NSCN ? c : 0xFFu; }
+static int tu_scene_used(uint32_t s) { return s < NSCN && project_used(s); }
+static uint32_t tu_used_mask(void)                      /* the scenes stored, one bit each (the zones' signatures) */
+{
+    uint32_t s, m = 0;
+    for (s = 0; s < NSCN; s++)
+        m |= (uint32_t)(project_used(s) != 0) << s;
+    return m;
+}
 
 /* ---- bars: the longest pattern, where it plays ---- */
 static void tu_bars(uint32_t *cur, uint32_t *tot)
@@ -505,8 +518,7 @@ static void tu_jam_draw(void)
         if (trk[i].peak > 200 || tu.flash[i])
             sig += ui.frame >> 1;
     tu_zone(2, TU_HY, 104, TC_BG, sig, tu_jam_body);
-    tu_zone(3, 126, 44, TC_BG, cur * 977u + project_used(0) * 3u + project_used(1) * 5u + project_used(2) * 7u + project_used(3) * 11u,
-            tu_strip_draw);
+    tu_zone(3, 126, 44, TC_BG, cur * 977u + tu_used_mask() * 5u + (uint32_t)sng_cur * 131u, tu_strip_draw);
     tu_zone(4, 170, 45, TC_BG, 1u + song.sel * 7u + (uint32_t)tu_sel_big() * 101u, tu_gap_draw);
     tu_foot(3, "K1-K4", "JAM", "SCL", "TEMPO", "ENV", "DICE", 0, 0, 0, 0);
 }
@@ -696,18 +708,25 @@ static void tu_tap(uint32_t b)
     case B_FX: case B_SCL: case B_LFO: case B_ARP:      /* FX (again SPACE), CLOCK (again page 2), MOTION, ARP */
         tu_pages_tap(b);
         break;
-    case B_GLO:                                         /* SONG; again: SOUNDS SCENE / CURRENT */
+    case B_GLO:                                         /* SONG; again: SOUNDS SCENE / CURRENT (SONGS: copy the song picked) */
         if (tu.scr == TU_SONG)
             tu_song_sounds();
+        else if (tu.scr == TU_SONGS)
+            tu_songs_copy();
         else
             tu_goto(TU_SONG);
         break;
-    case B_SAVE:                                        /* SONGS */
-        tu_goto(TU_SONGS);
+    case B_SAVE:                                        /* SONGS; there: save the song now (the NAME screen) into the slot picked */
+        if (tu.scr == TU_SONGS)
+            tu_songs_save();
+        else
+            tu_goto(TU_SONGS);
         break;
     case B_EDIT:                                        /* SOUND: the face; again: macros 2; again: DEEP (NOTES: delete; SONG: delete the section) */
         if (tu.scr == TU_SONG) {
             tu_song_delete();
+        } else if (tu.scr == TU_SONGS) {
+            tu_songs_clear();
         } else if (tu.scr == TU_NOTES) {
             tq_notes_delete();
         } else if (tu.scr != TU_SOUND) {

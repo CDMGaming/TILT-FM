@@ -11135,6 +11135,7 @@ static int tfm_only(void)
     return !tu_classic() && tu.scr != TU_DEEP && !ui.menu && (tu_on() || name_on());
 }
 #include "ui_test_r1.h"
+#include "ui_test_r2.h"
 static int test_tfm_ui_acceptance(void)
 {
     int bad = 0, ok;
@@ -11317,6 +11318,10 @@ int main(void)
     bad += test_r1_jam_frames();
     bad += test_r1_rules();
     bad += test_r1_text();
+    bad += test_r2_scenes();
+    bad += test_r2_song_chain();
+    bad += test_r2_songs();
+    bad += test_r2_remember();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

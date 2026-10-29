@@ -1526,6 +1526,23 @@ static void confirm_text(char *a, char *b)
         if (scene_in_song(k & 7u))
             str_cpy(b, "USED IN SONG", 24);
         break;
+    case CF_SONG_OVR:                                /* round 2, SONGS: the song now saved over another (k: the slot) */
+        str_cpy(a, "OVERWRITE SONG 1?", 24);
+        a[15] = (char)('1' + k % NSONG);
+        str_cpy(b, "WITH THE SONG NOW", 24);
+        break;
+    case CF_SONG_COPY:                               /* .. a song copied over another (k: from << 2 | to) */
+        str_cpy(a, "OVERWRITE SONG 1?", 24);
+        a[15] = (char)('1' + (k & 3u) % NSONG);
+        str_cpy(b, "WITH SONG 1", 24);
+        b[10] = (char)('1' + ((k >> 2) & 3u) % NSONG);
+        break;
+    case CF_SONG_CLR:                                /* .. a song and its scenes cleared */
+        str_cpy(a, "CLEAR SONG 1?", 24);
+        a[11] = (char)('1' + k % NSONG);
+        fmt_int(b, (int32_t)song_nscenes(k % NSONG));
+        str_cpy(b + str_len(b), " SCENES GO WITH IT", 24 - 2);
+        break;
     case CF_SCENE_DROP:                              /* TILT-FM: the music in no scene, edited (tilt.c) */
         str_cpy(a, "LEAVE THIS MUSIC?", 24);
         str_cpy(b, "NO SCENE WAS FREE", 24);
@@ -1591,7 +1608,8 @@ static void draw_confirm(void)
         GFX_HOOK_ALIGN(0, 0, DLG_W, 0, AL_H, "dialog detail centred");
         cv_text_flags(ink_in(&AF_M, f, DLG_W), 55, &AF_M, f, T_MID, T_SURF, 8u | (f[str_len(f) - 1u] == ELLIPSIS));
     }
-    if (ui.confirm == CF_SCENE_OVR || ui.confirm == CF_SCENE_CLR) {   /* (TILT-FM: NO picked, YES raised) */
+    if (ui.confirm == CF_SCENE_OVR || ui.confirm == CF_SCENE_CLR || ui.confirm == CF_SONG_OVR || ui.confirm == CF_SONG_COPY ||
+        ui.confirm == CF_SONG_CLR) {                  /* (TILT-FM: NO picked, YES raised) */
         int32_t x = 10 + HALF_UP(90 - kh_ink(KC_OCTDN, "NO"));
         cv_rrect(10, 80, 90, 26, 6, T_THEME, T_SURF);
         GFX_HOOK_ALIGN(10, 80, 100, 106, AL_HV | AL_N(2), "dialog button NO");

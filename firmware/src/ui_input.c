@@ -1680,6 +1680,12 @@ static void ui_input(void)
                 scene_copy_ui(ui.confirm_trk >> 3, ui.confirm_trk & 7u, 1);
             } else if (kind == CF_SCENE_CLR) {
                 scene_clear_ui(ui.confirm_trk & 7u, 1);
+            } else if (kind == CF_SONG_OVR) {           /* (round 2, SONGS: the NAME screen, then the song is saved) */
+                name_open(NK_SONG_SAVE, ui.confirm_trk % NSONG);
+            } else if (kind == CF_SONG_COPY) {
+                (void)song_copy((ui.confirm_trk >> 2) & 3u, ui.confirm_trk & 3u);
+            } else if (kind == CF_SONG_CLR) {
+                (void)song_clear(ui.confirm_trk % NSONG);
             } else if (kind == CF_LOAD_PAT) {
                 pat_load_ui(&trk[ui.confirm_trk % NTRK], pat_pick());
                 str_cpy(ui.msg2, "[SAVE] HOLD TO UNDO", sizeof ui.msg2);

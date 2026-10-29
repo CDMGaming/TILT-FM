@@ -865,6 +865,7 @@ typedef struct {                                      /* what the screens ask of
     uint8_t cell[NTRK];
 } scn_inf_t;
 static scn_inf_t scn_inf[SCN_N] __attribute__((section(".pool")));
+static scn_inf_t *scn_inf_get(uint32_t g);
 static uint8_t sng_cur;                               /* the song the music is in (0..NSONG - 1) */
 static uint32_t scn_used;                             /* flash: bit g = scene g is stored (scn_boot, scn_store) */
 static uint8_t scn_pend_g[3] = {0xFF, 0xFF, 0xFF};    /* flash, playing: scenes stored in RAM only (images proj_slot[1 + i]) */
@@ -882,6 +883,27 @@ typedef struct {
 } song_rec_t;
 static song_rec_t song_rec[NSONG] __attribute__((section(".pool")));
 static int song_stored(uint32_t n) { return n < NSONG && song_rec[n].magic == SONG_MAGIC; }
+static const char *song_name_of(uint32_t n) { return song_rec[n % NSONG].name; }
+static uint32_t song_bars_n(uint32_t n, uint32_t bar)   /* a stored song's length in bars: each section its longest scene x REPS */
+{
+    uint32_t i, k, tot = 0;
+    chain_config_t c;
+    if (!song_stored(n))
+        return 0;
+    c = song_rec[n].chain;
+    chain_dec(&c);
+    for (i = 0; i < c.count && i < CHAIN_ROWS; i++) {
+        uint32_t best = 0;
+        for (k = 0; k < NTRK; k++)
+            if (c.row[i].slot[k] < NSCN) {
+                const scn_inf_t *q = scn_inf_get(n * NSCN + c.row[i].slot[k]);
+                uint32_t b = q->used ? (q->len + bar - 1u) / bar : 0u;
+                if (b > best) best = b;
+            }
+        tot += best * c.row[i].repeat;
+    }
+    return tot;
+}
 static int song_rec_ok(const song_rec_t *r)             /* a record that can be a song: its magic, a valid chain */
 {
     chain_config_t c = r->chain;
@@ -2014,8 +2036,18 @@ static int song_copy_raw(uint32_t a, uint32_t b)        /* song a's scenes and r
     }
     return song_put(b, &song_rec[a]);
 }
-static int song_save(uint32_t n)                        /* the music stored as song n (and it is song n from now on) */
+static uint32_t song_nscenes(uint32_t n)                /* how many scenes song n has stored */
 {
+    uint32_t s, c = 0;
+    for (s = 0; s < NSCN; s++)
+        c += (uint32_t)(scn_stored(n * NSCN + s) != 0);
+    return c;
+}
+/* the music stored as song n (it is song n from now on), under `name` (0: the name it has). The song it was is stored first,
+ * under its own name; a slot that held another song takes the music's scenes and record */
+static int song_save_as(uint32_t n, const char *name)
+{
+    song_rec_t r;
     if (n >= NSONG)
         return 1;
     if (song_store_cur())
@@ -2027,13 +2059,24 @@ static int song_save(uint32_t n)                        /* the music stored as s
         }
         sng_cur = (uint8_t)n;
     }
+    if (name) {
+        memset(proj_name, 0, sizeof proj_name);
+        memcpy(proj_name, name, str_len(name) < PROJ_NAME_LEN ? str_len(name) : PROJ_NAME_LEN);
+    }
+    song_pack_live(&r);
+    if (song_put(n, &r)) {
+        ui_message("SAVE ERROR");
+        return 2;
+    }
     ui_message("SONG SAVED");
     return 0;
 }
+static int song_save(uint32_t n) { return song_save_as(n, 0); }
+static int song_save_named(uint32_t n, const char *name) { return song_save_as(n, name); }
 static int song_copy(uint32_t a, uint32_t b)            /* song a copied over song b (not the one the music is in) */
 {
     if (a >= NSONG || b >= NSONG || a == b || b == sng_cur) {
-        ui_message("NOT OVER THE SONG IN USE");
+        ui_message("NOT OVER THE SONG NOW");
         return 1;
     }
     if (transport_busy()) {

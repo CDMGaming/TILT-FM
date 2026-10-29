@@ -1,7 +1,7 @@
-/* TFM-UI phase 6 (tfm-spec/TFM-UI-SPEC.md 3 SCENES, SONG, SONGS): the song's screens, on the project storage as it is: the
- * scenes A..D are the four project slots (flash, stored on a switch), the song is the chain. SCENES shows eight tiles:
- * A..D live, E..H dim (the 8 x 3 format needs flash that is not free: NIGHT-REPORT-UI.md, phase 6). Included from tilt.c. */
-#define TS_N 4u                                         /* the scenes there are */
+/* TFM-UI phase 6 and round 2 (tfm-spec/TFM-UI-SPEC.md 3 SCENES, SONG, SONGS): the song's screens. The scenes A..H are the
+ * eight scenes of the song the music is in (flash, stored on a switch), the song is the chain; SONGS lists the three songs.
+ * Included from tilt.c. */
+#define TS_N NSCN                                       /* the scenes there are */
 static uint8_t tsg_sel;                                 /* SONGS: the slot picked */
 static void tsg_text_len(char *b, uint32_t bars)
 {
@@ -59,6 +59,10 @@ static void tsg_time_text(char *b, uint32_t bars)       /* bars -> "1:17" at the
     b[n + 3u] = 0;
 }
 /* ================================================================== SCENES ================================== */
+static uint32_t tsg_used_sig(void)                      /* which scenes are stored and which song this is (the zones' signatures) */
+{
+    return tu_used_mask() * 3u + (uint32_t)sng_cur * 17u;
+}
 static void tsg_chain_chips(int32_t y)
 {
     uint32_t i, cur = chain.running ? chain.row : 0xFFu;
@@ -133,6 +137,11 @@ static void tsg_scenes_head(void)
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
     tu_text(9, 10, &AF_TM, "SCENES", TC_TEXT, TC_BG);
+    {
+        char sn[8] = "SONG 1";
+        sn[5] = (char)('1' + sng_cur % NSONG);
+        tu_text(9 + text_w(&AF_TM, "SCENES") + 6, 12, &AF_TS, sn, TC_QUIET, TC_BG);
+    }
     tu_timer_text(t);
     if (t[0])
         tu_text_c(120, 10, &AF_PS, t, TC_AMBER, TC_BG);
@@ -147,7 +156,7 @@ static void tsg_scenes_head(void)
 }
 static void tu_scenes_draw(void)
 {
-    uint32_t sig = scene_cur() * 7u + project_used(0) * 3u + project_used(1) * 5u + project_used(2) * 9u + project_used(3) * 11u +
+    uint32_t sig = scene_cur() * 7u + tsg_used_sig() +
                    chain_config.count * 31u + (chain.running ? chain.row + 1u : 0u) * 977u + (uint32_t)song.g[G_BPM] * 131u +
                    (tm.on ? tm.left : 0u) + steps_hash(&trk[0]) + steps_hash(&trk[1]) * 3u + steps_hash(&trk[2]) * 5u + steps_hash(&trk[3]) * 7u;
     uint32_t i;
@@ -203,6 +212,11 @@ static void tsg_song_head(void)
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
     tu_text(9, 10, &AF_TM, "SONG", TC_TEXT, TC_BG);
+    {
+        char sn[4] = " 1";
+        sn[1] = (char)('1' + sng_cur % NSONG);
+        tu_text(9 + text_w(&AF_TM, "SONG"), 10, &AF_TM, sn, TC_TEXT, TC_BG);
+    }
     tu_timer_text(t);
     if (t[0])
         tu_text_c(120, 10, &AF_PS, t, TC_AMBER, TC_BG);
@@ -211,7 +225,7 @@ static void tsg_song_head(void)
 static void tu_song_draw(void)
 {
     uint32_t i, sig = ui.song_row * 7u + chain_config.count * 31u + (chain.running ? chain.row + 1u : 0u) * 977u + ((ui_prefs3 & PREF_SONG_SCENE) ? 5u : 0u) +
-                      project_used(0) * 3u + project_used(1) * 11u + project_used(2) * 17u + project_used(3) * 23u;
+                      tsg_used_sig();
     for (i = 0; i < chain_config.count; i++)
         sig = sig * 31u + chain_config.row[i].repeat + chain_config.row[i].slot[0] * 7u + chain_config.row[i].slot[1] * 13u +
               chain_config.row[i].slot[2] * 17u + chain_config.row[i].slot[3] * 19u;
@@ -280,36 +294,54 @@ static void tu_song_sounds(void)                        /* GLO again: SOUNDS SCE
     ui.force = 1;
 }
 /* ================================================================== SONGS =================================== */
+/* The three songs (round 2): the slot picked with SELECT; OCT+ LOADs it (the song now is stored first), SAVE stores the
+ * song now into it (the NAME screen; a dialog first when it holds another song), EDIT clears it, GLO then GLO copies it onto
+ * another slot. Every dialog has NO picked (OCT- / HOME cancel). The scenes of a song are 8 flash objects each (project.c). */
+static uint32_t tsg_song_bars_n(uint32_t n)             /* song n's length in bars */
+{
+    return n == sng_cur ? tsg_song_bars() : song_bars_n(n, tfm_bar());
+}
+static void tsg_song_name(uint32_t i, char *nm)         /* the name shown for slot i ("" none) */
+{
+    if (i == sng_cur)
+        project_cur_name(nm);
+    else
+        memcpy(nm, song_name_of(i), 16);
+}
 static void tsg_songs_rows(void)                        /* y 22 .. 215 */
 {
     uint32_t i;
     char b[24], nm[16];
     tu_rect(0, 22, TU_W, 193, TC_BG);
-    for (i = 0; i < 3u; i++) {
-        int32_t y = 32 + (int32_t)i * 52;
-        int sel = i == tsg_sel, live = i == 0u;
+    for (i = 0; i < NSONG; i++) {
+        int32_t y = 30 + (int32_t)i * 50;
+        int sel = i == tsg_sel, live = i == sng_cur, has = live || song_stored(i);
         uint16_t bg = sel ? TC_AMBER : TC_SURF;
-        tu_rrect(12, y, 216, 46, 8, bg, TC_BG);
-        if (live) {
-            uint32_t n = 0, s;
-            project_cur_name(nm);
-            for (s = 0; s < TS_N; s++)
-                n += (uint32_t)project_used(s);
-            tu_text(24, y + 15, &AF_TL, nm[0] ? nm : "UNTITLED", sel ? TC_BG : TC_TEXT, bg);
-            fmt_int(b, (int32_t)(n ? n : 1u));
+        tu_rrect(12, y, 216, 44, 8, bg, TC_BG);
+        if (has) {
+            uint32_t n = song_nscenes(i);
+            tsg_song_name(i, nm);
+            tu_text(24, y + 14, &AF_TL, nm[0] ? nm : "UNTITLED", sel ? TC_BG : TC_TEXT, bg);
+            fmt_int(b, (int32_t)n);
             str_cpy(b + str_len(b), n == 1u ? " scene \xB7 " : " scenes \xB7 ", 14);
-            tsg_text_len(b + str_len(b), tsg_song_bars());
-            tu_text(24, y + 32, &AF_TS, b, sel ? TC_BG : TC_QUIET, bg);
-            tu_text_r(220, y + 15, &AF_TS, "THE SONG NOW", sel ? TC_BG : TC_AMBER, bg);
+            tsg_text_len(b + str_len(b), tsg_song_bars_n(i));
+            tu_text(24, y + 31, &AF_TS, b, sel ? TC_BG : TC_QUIET, bg);
         } else {
-            str_cpy(nm, "EMPTY", 8);
-            tu_text(24, y + 15, &AF_TL, nm, sel ? TC_BG : TC_DIM, bg);
-            tu_text(24, y + 32, &AF_TS, "needs flash for 8 scenes x 3 songs", sel ? TC_BG : TC_DIM, bg);
+            tu_text(24, y + 14, &AF_TL, "EMPTY", sel ? TC_BG : TC_DIM, bg);
+            tu_text(24, y + 31, &AF_TS, "SAVE puts the song now here", sel ? TC_BG : TC_DIM, bg);
         }
+        tu_text_r(220, y + 14, &AF_TS, tsg_copy == i ? "COPY FROM HERE" : live ? "THE SONG NOW" : "", sel ? TC_BG : TC_AMBER, bg);
         b[0] = (char)('1' + i);
         b[1] = 0;
-        tu_text(14 + 0, y + 8, &AF_TS, "", TC_BG, bg);
-        tu_text_r(220, y + 32, &AF_TS, b, sel ? TC_BG : TC_QUIET, bg);
+        tu_text_r(220, y + 31, &AF_TS, b, sel ? TC_BG : TC_QUIET, bg);
+    }
+    {
+        static const char *const K0[3] = {"EDIT", "GLO", "OCT-"}, *const A0[3] = {"CLEAR", "COPY", "BACK"};
+        static const char *const K1[3] = {"GLO", "SELECT", "OCT-"}, *const A1[3] = {"COPY HERE", "PICK", "CANCEL"};
+        if (tsg_copy == 0xFFu)
+            tu_hint_line(198, TC_BG, TC_QUIET, 3, K0, A0);
+        else
+            tu_hint_line(198, TC_BG, TC_QUIET, 3, K1, A1);
     }
 }
 static void tsg_songs_head(void)
@@ -325,26 +357,92 @@ static void tsg_songs_head(void)
 }
 static void tu_songs_draw(void)
 {
-    uint32_t sig = tsg_sel * 7u + project_used(0) * 3u + project_used(1) * 5u + chain_config.count * 31u;
+    uint32_t i, sig = tsg_sel * 7u + (uint32_t)tsg_copy * 29u + tsg_used_sig() + chain_config.count * 31u;
+    char nm[16];
+    for (i = 0; i < NSONG; i++) {
+        tsg_song_name(i, nm);
+        sig = sig * 31u + (uint32_t)song_stored(i) * 5u + str_hash(3u, nm) + song_nscenes(i) * 977u + tsg_song_bars_n(i) * 131u;
+    }
     tu_zone(0, 0, TU_HY, TC_BG, sig, tsg_songs_head);
     tu_zone(2, 22, 100, TC_BG, sig, tsg_songs_rows);
     tu_zone(3, 122, 93, TC_BG, sig, tsg_songs_rows);
-    tu_foot(3, "SELECT", "PICK", "OCT+", "RENAME", "OCT-", "BACK", 0, 0, 0, 0);
+    tu_foot(3, "SELECT", "PICK", "OCT+", "LOAD", "SAVE", "SAVE", 0, 0, 0, 0);
     ui.force = 0;
+}
+static void tu_songs_load(void)
+{
+    tsg_copy = 0xFF;
+    if (tsg_sel == sng_cur) {
+        ui_message("THE SONG NOW");
+    } else if (!song_stored(tsg_sel)) {
+        ui_message("EMPTY SONG");
+    } else if (transport_busy()) {
+        ui_message("STOP TO LOAD");
+    } else {
+        (void)song_load(tsg_sel);
+    }
+    ui.force = 1;
+}
+static void tu_songs_save(void)                         /* SAVE on SONGS: the song now, under a name, into the slot picked */
+{
+    tsg_copy = 0xFF;
+    if (transport_busy())
+        ui_message("STOP TO SAVE");
+    else if (tsg_sel != sng_cur && song_stored(tsg_sel))
+        confirm_open(CF_SONG_OVR, tsg_sel);
+    else
+        name_open(NK_SONG_SAVE, tsg_sel);
+    ui.force = 1;
+}
+static void tu_songs_copy(void)                         /* GLO: the slot picked is the source; GLO again on another: the target */
+{
+    uint32_t from;
+    if (transport_busy()) {
+        tsg_copy = 0xFF;
+        ui_message("STOP TO COPY");
+    } else if (tsg_copy == 0xFFu) {
+        if (!song_stored(tsg_sel) && tsg_sel != sng_cur)
+            ui_message("EMPTY SONG");
+        else {
+            tsg_copy = tsg_sel;
+            ui_message("COPY TO: PICK, GLO");
+        }
+    } else if (tsg_copy == tsg_sel) {
+        tsg_copy = 0xFF;
+        ui_message("COPY OFF");
+    } else if (tsg_sel == sng_cur) {
+        tsg_copy = 0xFF;
+        ui_message("NOT OVER THE SONG NOW");
+    } else {
+        from = tsg_copy;
+        tsg_copy = 0xFF;
+        if (song_stored(tsg_sel))
+            confirm_open(CF_SONG_COPY, from << 2 | tsg_sel);
+        else
+            (void)song_copy(from, tsg_sel);
+    }
+    ui.force = 1;
+}
+static void tu_songs_clear(void)                        /* EDIT: the slot picked and its scenes (a dialog, NO picked) */
+{
+    tsg_copy = 0xFF;
+    if (transport_busy())
+        ui_message("STOP TO ERASE");
+    else if (!song_stored(tsg_sel) && tsg_sel != sng_cur)
+        ui_message("EMPTY SONG");
+    else
+        confirm_open(CF_SONG_CLR, tsg_sel);
+    ui.force = 1;
 }
 static void tu_songs_input(uint32_t oct)
 {
     int32_t s;
     if ((s = panel_enc(EN_SELECT)) != 0)
-        tsg_sel = (uint8_t)clamp((int32_t)tsg_sel + (s > 0 ? 1 : -1), 0, 2);
+        tsg_sel = (uint8_t)clamp((int32_t)tsg_sel + (s > 0 ? 1 : -1), 0, (int32_t)NSONG - 1);
     if (oct & 2u) {
-        if (tsg_sel == 0u && scene_cur() != SCENE_NONE)
-            name_open(NK_PROJ_SAVE, scene_cur());        /* (the NAME screen: the name, then the scene is stored with it) */
-        else if (tsg_sel == 0u)
-            ui_message("NO SCENE TO NAME");
-        else
-            ui_message("NEEDS FLASH: SEE THE REPORT");
+        tu_songs_load();
     } else if (oct & 1u) {
+        tsg_copy = 0xFF;
         tu_goto(TU_JAM);
     }
 }

@@ -213,7 +213,7 @@ static void tu_start_rows(void)
         project_cur_name(pn);
         if (o == SO_CONT && pn[0]) {                    /* "NEON DRIFT · 3 scenes" */
             uint32_t n = 0, s;
-            for (s = 0; s < 4u; s++)
+            for (s = 0; s < NSCN; s++)
                 n += (uint32_t)project_used(s);
             str_cpy(hint, pn, 14);
             str_cpy(hint + str_len(hint), " \xB7 ", 5);
@@ -244,7 +244,7 @@ static void tu_time_top(void)
     tu_rect(0, 0, TU_W, 76, TC_BG);
     tu_text_sp(120, 32, &AF_PL, "TIME", 5, TC_AMBER, TC_BG);
     tu_bars(&cur, &bars);
-    for (s = 0; s < 4u; s++)
+    for (s = 0; s < NSCN; s++)
         n += (uint32_t)project_used(s);
     str_cpy(b, te.saved == 1u ? "TAKE SAVED" : te.saved == 2u ? "NOTHING NEW TO SAVE" : "TAKE NOT SAVED", 24);
     str_cpy(b + str_len(b), " \xB7 ", 5);
