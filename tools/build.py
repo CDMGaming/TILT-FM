@@ -101,6 +101,8 @@ def generate():
         (GEN / old).unlink(missing_ok=True)
     tools = SRC / "tools"
     cmds = [[tools / "gen_aa_font.py", GEN / "ui_fonts.h", "--preset", "inter-tight"],
+            [tools / "gen_aa_font.py", GEN / "ui_fonts_tfm.h", "--preset", "tfm", "--kern-min", "4",
+             "--huff", "TM,TL,TX,PS,PM,PL"],             # TFM's faces: Barlow Condensed, Silkscreen (SIL OFL 1.1)
             [tools / "gen_aa_icons.py", GEN / "ui_icons.h"],
             [tools / "gen_aa_keycaps.py", GEN / "ui_keycaps.h"],
             [tools / "gen_ui_palettes.py", GEN / "ui_palettes.h"],

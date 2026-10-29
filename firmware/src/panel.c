@@ -138,7 +138,7 @@ static void settings_init(void)
     }
     if (settings.magic != SETTINGS_MAGIC || settings.palette >= NPALETTES) {
         settings.magic = SETTINGS_MAGIC;
-        settings.palette = palette_named("AMBER");   /* TILT-FM: AMBER (Felucca's default: GREY, named MONO before 1.0.2) */
+        settings.palette = palette_named("TFM");   /* TFM-UI: TFM AMBER (Felucca's default: GREY, named MONO before 1.0.2) */
         settings_fresh = 1;
         settings.lowcut = 0;
         settings.zoom = 0;                     /* (retired: the LEDS setting, settings_persist.c) */

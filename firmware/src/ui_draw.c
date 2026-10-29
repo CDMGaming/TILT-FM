@@ -1692,6 +1692,19 @@ static void ui_draw_page(uint32_t counting)
         ui.force = 0;
         return;
     }
+    if (tu_on()) {                                      /* TFM-UI: TFM's screens (tfm_ui.c) */
+        tu_draw();
+        if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {
+            str_cpy(ui.msg, ui.msg2, sizeof ui.msg);
+            ui.msg2[0] = 0;
+            ui.msg_t = 60;
+        }
+        if (ui.hot_t)
+            ui.hot_t--;
+        if (ui.bpm_t)
+            ui.bpm_t--;
+        return;
+    }
     if (!ui.home && !page_visible(ui.page)) {          /* an OP page of a track that is not DIGITAL (without
                                                          * FELUCCA_FM4: any track): EDIT 1 */
         ui.page = (uint8_t)page_first(FAM_EDIT);

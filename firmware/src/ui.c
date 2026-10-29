@@ -125,11 +125,22 @@ static int home_jam(void);                              /* TFM (tfm_jam.c): HOME
 static void jam_cards(void);
 static void jam_turn(uint32_t k, int32_t s);
 static void graph_jam(void);
+/* TFM-UI (tfm_ui.c): TFM's screens; CLASSIC (tu_off): Felucca's own UI, as the Felucca tests drive it */
+#ifndef TU_OFF_DEFAULT
+#define TU_OFF_DEFAULT 0
+#endif
+static int tu_on(void);
+static int tu_deep_on(void);
+static void tu_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint32_t busy);
+static void tu_draw(void);
+static void tu_tap(uint32_t b);
+static void tu_home_tap(void);
+static void tu_home_reset(void);
 static int sheet_on(void);                              /* TFM (tfm_sheet.c): the STEP SHEET (OCT+ held on STEP) */
 static void sheet_cards(void);
 static void sheet_turn(uint32_t k, int32_t d);
 /* TFM: the tracks' colours, T1 blue, T2 yellow, T3 pink, T4 green (JAM's bumpers, the menus' knob rows) */
-static const uint16_t TFM_TRK_COL[4] = {RGB(64, 150, 255), RGB(255, 210, 0), RGB(255, 84, 184), RGB(60, 220, 110)};
+static const uint16_t TFM_TRK_COL[4] = {RGB(90, 169, 255), RGB(255, 210, 74), RGB(255, 107, 154), RGB(75, 224, 143)};
 static uint16_t tfm_trk_col(uint32_t c)                  /* (GREY, MONO: no hue, the theme's) */
 {
     return settings.palette == UI_GREY_INDEX || settings.palette == UI_BW_INDEX ? T_THEME : TFM_TRK_COL[c & 3u];
@@ -889,6 +900,7 @@ static void go_home(void)
     song.seq_mode = 0;
     ui.force = 1;
     help_start();
+    tu_home_reset();                             /* (TFM-UI: back on JAM, tfm_ui.c) */
 }
 
 /* HOME tapped (1.2): HOME -> MIXER (up to 1.1.5 GLO's first page) -> CLOCK (up to 1.1.5 GLO > GLOBAL) -> HOME; from any

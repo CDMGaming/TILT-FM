@@ -1363,6 +1363,10 @@ static void layer_lock_input(uint32_t pressed);
 static int page_tap(uint32_t b)
 {
     uint32_t f;
+    if (tu_on()) {                                      /* TFM-UI: the button's screen (tfm_ui.c) */
+        tu_tap(b);
+        return 1;
+    }
     if (b == B_EDIT && detail_on()) {                    /* DETAIL (1.5.1): the step's CHANCE RATCH NUDGE VEL back */
         if (chain_busy())
             ui_message("STOP TO EDIT");
@@ -1651,6 +1655,8 @@ static void ui_input(void)
         ui_message("STOP TO UNDO");
     else if (save == BT_HOLD)                                /* SAVE held: undo the last sound load */
         undo_swap();
+    else if (save == BT_TAP && !ui.confirm && tu_on())   /* TFM-UI: SONGS */
+        tu_tap(B_SAVE);
     else if (save == BT_TAP && !ui.confirm)             /* SAVE acts on release (a hold is the undo) */
         open_family(FAM_SAVE);
     if (ui.confirm) {                                   /* OCT- cancels, OCT+ does it; nothing else reacts */
@@ -1717,7 +1723,9 @@ static void ui_input(void)
     }
     if (lytap)                                          /* a layer's button acts on release (held: the layer; SEQ's */
         layer_tap(lytap);                               /* on every page since 1.2, its tap the SEQ pages) */
-    if (home == BT_TAP)                                 /* HOME acts on release: a hold opens the menu */
+    if (home == BT_TAP && (tu_on() || tu_deep_on()))     /* HOME acts on release: a hold opens the menu (TFM-UI: JAM, MIX) */
+        tu_home_tap();
+    else if (home == BT_TAP)
         home_tap();
     cursor_fix();                                       /* LEN may have changed (knob, editor, load) */
     for (id = 0; id < 14u; id++) {
@@ -1777,6 +1785,10 @@ static void ui_input(void)
             go_home();
     } else if (ui.ml.on && oct) {                          /* MIDI LEARN: OCT- clears the picked CC, OCT+ done */
         ml_oct(oct);
+    }
+    if (tu_on()) {                                      /* TFM-UI: the screen's keys and knobs (tfm_ui.c) */
+        tu_input(pressed, notes, oct, lay | kq);
+        return;
     }
     song.grid = (uint8_t)keys_mode();                 /* (seq.c: the keys are the grid's) */
 #if FELUCCA_SLICE

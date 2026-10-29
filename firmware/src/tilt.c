@@ -60,6 +60,7 @@ enum { NS_KEY, NS_SCALE, NS_BPM, NS_LINEUP, NS_T1, NS_CODE = NS_T1 + NTRK, NS_RO
 #include "tfm_jam.c"                                     /* TFM: HOME > JAM */
 #include "tfm_toys.c"                                    /* TFM: the instruments' pinball toys (MACROS) */
 #include "tfm_sheet.c"                                   /* TFM: the STEP SHEET (OCT+ held on STEP) */
+/* (tfm_ui.c: TFM-UI, included at the end of this file; tilt.c's own forward declarations of what it uses) */
 static struct {
     uint8_t row, rolled, lineup;                        /* the selected row; (rolled: once, the first open); LU_* */
     uint16_t hold;                                      /* bit r: row r held (NUDGE leaves it) */
@@ -1481,3 +1482,5 @@ static void st_draw(void)
     }
     ui.force = 0;
 }
+
+#include "tfm_ui.c"                                        /* TFM-UI: TFM's screens, the button map */

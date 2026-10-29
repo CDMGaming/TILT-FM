@@ -780,7 +780,8 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_TIME, S_TIME_UNSAVED, S_TIME_KEEP,
        S_START, S_START_BLANK, S_START_NONE, S_START_CRASH,
        S_TILT_SCENES, S_SCENE_DROP, S_TILT_CUED, S_SCENE_PEND, S_SCENE_OVR, S_SCENE_CLR,
-       S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_TFM_JAM, S_TFM_JAM_LARGE, S_TFM_TOY_DRUM, S_TFM_TOY_SQUELCH, S_COUNT };
+       S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_TFM_JAM, S_TFM_JAM_LARGE, S_TFM_TOY_DRUM, S_TFM_TOY_SQUELCH,
+       S_UI_JAM, S_UI_MIX, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -817,7 +818,8 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "time", "time_unsaved", "time_keep",
     "start", "start_blank", "start_none", "start_crash",
     "tilt_scenes", "scene_drop", "tilt_cued", "scene_pending", "scene_overwrite", "scene_clear",
-    "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large", "tfm_toy_drum", "tfm_toy_squelch"};
+    "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large", "tfm_toy_drum", "tfm_toy_squelch",
+    "ui_jam", "ui_mix"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1406,6 +1408,14 @@ static void setup(int s)
     case S_TFM_MACROS: song.playing = 0; tfm_load(TSEL, TI_SQUELCH, 2); go_page(GR_MACRO); break;
     case S_TFM_MACROS2: song.playing = 0; tfm_load(TSEL, TI_WOBBLER, 0); go_page(GR_MACRO); ui.page++; break;
     case S_TFM_PRESETS: song.playing = 0; tfm_load(TSEL, TI_SQUELCH, 1); go_page(GR_BROWSE); break;
+    case S_UI_JAM: case S_UI_MIX:                       /* TFM-UI: JAM (home), MIX (HOME again) over a playing song */
+        tu_off = 0; tu_goto(s == S_UI_JAM ? TU_JAM : TU_MIX);
+        tfm_load(&trk[0], TI_THUMP, 0); tfm_load(&trk[1], TI_THUMP, 1); tfm_load(&trk[2], TI_SQUELCH, 0); tfm_load(&trk[3], TI_HAZE, 0);
+        tfm_macro_set(&trk[0], 0, 79); tfm_macro_set(&trk[1], 0, 51); tfm_macro_set(&trk[2], 0, 99); tfm_macro_set(&trk[3], 0, 38);
+        trk[3].p[P_MUTE] = 1; trk[0].peak = 5000; trk[1].peak = 2500; trk[2].peak = 7000;
+        trk[0].p[P_LEVEL] = 100; trk[1].p[P_LEVEL] = 70; trk[2].p[P_LEVEL] = 89; trk[3].p[P_LEVEL] = 76;
+        song.playing = 1; song.g[G_BPM] = 118; proj_cur = 1;
+        break;
     case S_TFM_TOY_DRUM: song.playing = 0; tfm_load(TSEL, TI_THUMP, 0); go_page(GR_MACRO); toy.lit[0] = toy.lit[2] = 4; toy.ang = 48; break;
     case S_TFM_TOY_SQUELCH: song.playing = 0; tfm_load(TSEL, TI_SQUELCH, 0); go_page(GR_MACRO); toy.lit[0] = 3; toy.ang = 80; break;
     case S_TFM_JAM: case S_TFM_JAM_LARGE:               /* TFM: HOME > JAM: T3 muted, T4 no instrument, T2 sounding */

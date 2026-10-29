@@ -197,7 +197,7 @@ export AC79_SDK="${AC79_SDK:-$HOME/fw-AC79_AIoT_SDK}"
 cd "$(dirname "$0")/.."
 OUT=build/host
 mkdir -p "$OUT"
-CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
+CC="${CC:-cc} -O1 -Wall -Wno-unused-function -DTU_OFF_DEFAULT=1"   # (TFM-UI: the Felucca checks run on CLASSIC, Felucca's own UI; the TFM checks switch it on)
 fail=0
 run() { echo "== $1"; shift; "$@" || fail=1; }
 

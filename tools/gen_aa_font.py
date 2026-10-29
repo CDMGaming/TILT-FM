@@ -37,11 +37,12 @@ import aa_raster as ar  # noqa: E402
 FONTS = Path(__file__).resolve().parents[1] / "fonts"
 LOCAL_INTER = os.path.expanduser("~/Library/Fonts/Inter.ttc")   # 4.001: 0 Regular, 10 Medium, 12 SemiBold
 EXTRAS = [0xA9, 0xB0, 0xB7, 0xC4, 0xD6, 0xDC, 0xE4, 0xF6, 0xFC, 0x2026]  # (c) deg . A: O: U: a: o: u: (Latin-1), ...
+TFM_EX = [0xA9, 0xB0, 0xB7, 0xD7, 0x2026]   # TFM: (c) deg . x (and the ellipsis)
 CODE = {0x2026: 0x85}                  # characters outside Latin-1 -> their one-byte code in the firmware
 PHASES, PHASES_L = 4, 2                # horizontal phases per glyph (aa_raster.raster_font): S M, L
 # faces stored Huffman-coded (--huff): M and L. S, the most drawn and the least compressible (-15 %), stays
 # 2 px per byte, so the labels draw at full speed
-HUFF = [("M", "L")]
+HUFF = [("M", "L", "TM", "TL", "TX", "PS", "PM", "PL")]
 # L draws only "FELUCCA", the UPDATE MODE countdown digit, the calibration's control names (panel.c
 # B_NAME / E_NAME) and MENU > LARGE's card values and page titles (ui_draw.c draw_column_tall, ui_graph.c
 # graph_title: # . / J W too; a value with another character is set in M): a sparse face of those glyphs, the
@@ -56,6 +57,16 @@ def preset(name):
         return [("S", v + "@400", 12, (32, 126), EXTRAS, 0.0, PHASES),
                 ("M", v + "@500", 15, (32, 126), EXTRAS, 0.0, PHASES),
                 ("L", v + "@600", 28, (32, 32), [ord(c) for c in L_CHARS[1:]], 0.0, PHASES_L)]
+    if name == "tfm":                          # TFM's own faces (tfm-ui): the drawings' sizes, halved from the 2x mock-ups
+        d = str(FONTS.parent / "assets" / "fonts") + "/"
+        bc = [d + "BarlowCondensed-SemiBold.ttf", d + "BarlowCondensed-Bold.ttf"]   # SIL OFL 1.1 (Barlow, jpt)
+        sil = d + "Silkscreen-Regular.ttf"                                         # SIL OFL 1.1 (Silkscreen)
+        big = [ord(c) for c in "#+-./0123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ%"]     # (a sparse face: only what it draws)
+        up = [ord(c) for c in "-.:!'/0123456789?+ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
+        return [("TS", bc[0], 8, (32, 126), TFM_EX, 0.0, 2), ("TM", bc[1], 10, (32, 126), TFM_EX, 0.0, 2),
+                ("TL", bc[1], 12, (32, 126), TFM_EX, 0.0, 2), ("TX", bc[1], 19, (32, 32), big, 0.0, 1),
+                ("PS", sil, 10, (32, 32), up, 0.0, 1), ("PM", sil, 17, (32, 32), up, 0.0, 1),
+                ("PL", sil, 32, (32, 32), up, 0.0, 1)]
     if name == "standin":
         if os.path.exists(LOCAL_INTER):
             reg, med, semi = LOCAL_INTER + "#0", LOCAL_INTER + "#10", LOCAL_INTER + "#12"
@@ -231,7 +242,7 @@ def emit(face, tracking, gamma, kern_min):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out")
-    ap.add_argument("--preset", choices=["standin", "inter-tight"])
+    ap.add_argument("--preset", choices=["standin", "inter-tight", "tfm"])
     ap.add_argument("--face", action="append", default=[])
     ap.add_argument("--tracking", type=float, default=0.0, help="extra advance per glyph in em")
     ap.add_argument("--gamma", type=float, default=1.0, help="coverage curve; <1 thickens light-on-dark text")

@@ -174,6 +174,8 @@ static void ui_power_on(void)
     memset(&chain, 0, sizeof chain);
     chain_defaults(&chain_config);
     memset(&ui, 0, sizeof ui);
+    memset(&tu, 0, sizeof tu);                    /* (TFM-UI: JAM, and the UI the tests ask for: CLASSIC unless a TFM check) */
+    tu_off = TU_OFF_DEFAULT;
     page_over = 0;                                /* (no layer's knobs; roll_settle's test page gone) */
     cin_left = cin_total = 0;                     /* (no count-in) */
     memset(&nm, 0, sizeof nm);                    /* NAME closed, no project name */
@@ -1611,6 +1613,7 @@ static int test_display_preferences(void)
                  str_eq(UI_PALETTES[UI_BW_INDEX].name, "MONO") && T_BG == 0u && T_TEXT == 0xFFFFu &&
                  (turn(EN_K1, 1), str_eq(UI_PALETTES[settings.palette].name, "PLASMA")) &&
                  (turn(EN_K1, 1), turn(EN_K1, 1), turn(EN_K1, 1), turn(EN_K1, 1), str_eq(UI_PALETTES[settings.palette].name, "CHROME")) &&
+                 (turn(EN_K1, 1), str_eq(UI_PALETTES[settings.palette].name, "TFM")) &&   /* (TFM-UI: TFM AMBER, the last) */
                  (turn(EN_K1, 1), settings.palette == UI_GREY_INDEX) && str_eq(UI_PALETTES[UI_GREY_INDEX].name, "GREY"));
     settings.lowcut = 2;
     ui.menu_sel = MI_LOWCUT;
@@ -10737,6 +10740,50 @@ static int test_tfm_jam_menu(void)
     }
     return bad;
 }
+/* TFM-UI phase 1: the shell (tfm_ui.c): JAM is home, HOME again MIX, the jam knobs, ENV the dice, ALGORITHM the track,
+ * the black keys mute on MIX; a screen not built yet falls back to Felucca's page in DEEP, HOME back */
+static int test_tfm_ui_shell(void)
+{
+    int bad = 0, ok;
+    int32_t p0;
+    ui_power_on();
+    tu_off = 0;
+    tu_goto(TU_JAM);
+    tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[1], TI_THUMP, 0);
+    frame();
+    ok = tu_on() && tu.scr == TU_JAM && !tu_classic();
+    press(B_HOME); ok &= tu.scr == TU_MIX;
+    press(B_HOME); ok &= tu.scr == TU_JAM;
+    p0 = tfm_macro_get(&trk[0], 0);
+    turn(EN_K1, 6); ok &= tfm_macro_get(&trk[0], 0) > p0;
+    p0 = trk[1].p[P_LEVEL];
+    tfm_load(&trk[1], 0, 0); trk[1].preset = 0;           /* (a track with no instrument: K2 is its LEVEL) */
+    ok &= tfm_ins_of(&trk[1]) == TI_NONE || tfm_ins_of(&trk[1]) == TI_THUMP;
+    bad += check("TFM-UI shell: power-on screen JAM; HOME again MIX, again JAM; K1 moves T1's jam macro", ok);
+    ok = 1;
+    turn(EN_ALGO, 1); ok &= song.sel == 1u;
+    turn(EN_ALGO, -1); ok &= song.sel == 0u;
+    press(B_HOME);                                      /* MIX */
+    {
+        uint32_t kb = 0, k, n = 0;
+        int16_t m0 = trk[2].p[P_MUTE];
+        for (k = 0; k < 27u; k++) if (key_black(k) && n++ == 2u) kb = k;     /* the third black key: T3 */
+        fm1_in.notes |= 1u << kb; host_notes |= 1u << kb; frame();
+        fm1_in.notes &= ~(1u << kb); frame();
+        ok &= trk[2].p[P_MUTE] != m0;
+    }
+    press(B_HOME);
+    press(B_ENV); ok &= tilt_ns_open == TILT_NS && !tu_on();
+    bad += check("TFM-UI shell: ALGORITHM picks the track, the black keys mute on MIX, ENV opens the dice", ok);
+    ok = 1;
+    ui_power_on();
+    tu_off = 0; tu_goto(TU_JAM);
+    press(B_SEQ);                                       /* (not built yet: Felucca's STEP, in DEEP) */
+    ok &= tu.scr == TU_DEEP && tu_deep_on();
+    press(B_HOME); ok &= tu.scr == TU_JAM && tu_on();
+    bad += check("TFM-UI shell: a screen not built yet is Felucca's page in DEEP, HOME back to JAM", ok);
+    return bad;
+}
 static int test_tfm_nosample(void)
 {
     int bad = 0, ok;
@@ -10854,6 +10901,7 @@ int main(void)
     bad += test_tfm_dice();
     bad += test_tfm_instruments();
     bad += test_tfm_jam_menu();
+    bad += test_tfm_ui_shell();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */
