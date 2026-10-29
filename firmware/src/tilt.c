@@ -57,6 +57,23 @@ enum { NS_KEY, NS_SCALE, NS_BPM, NS_LINEUP, NS_T1, NS_CODE = NS_T1 + NTRK, NS_RO
 #include "tfm_rng.c"                                    /* TFM: TILT's generator, its roll's tables, a setup */
 #include "tfm_instr.c"                                  /* TFM: the instruments over the engines, their macros */
 #include "tfm_code.c"                                   /* TFM: TILT's setup codes */
+static tfm_setup_t tfm_jam_s;                           /* TODAY'S JAM: the setup TILT's code of the day gave (the editor's "Send today's jam") */
+static uint8_t tfm_jam_has;                             /* (a jam waits on the start screen) */
+static int tfm_jam_accept(const uint8_t *a, uint32_t n) /* a code (ASCII, from the editor): decoded, kept, START offers it */
+{
+    char code[TFM_CODE_MAX + 1u];
+    tfm_setup_t sj;
+    uint32_t i;
+    for (i = 0; i < n && i < TFM_CODE_MAX && a[i]; i++)
+        code[i] = (char)a[i];
+    code[i] = 0;
+    if (!tfm_decode(code, &sj))
+        return 0;
+    tfm_jam_s = sj;
+    tfm_jam_has = 1;
+    ui.force = 1;
+    return 1;
+}
 #include "tfm_jam.c"                                     /* TFM: HOME > JAM */
 #include "tfm_toys.c"                                    /* TFM: the instruments' pinball toys (MACROS) */
 #include "tfm_sheet.c"                                   /* TFM: the STEP SHEET (OCT+ held on STEP) */
@@ -1403,6 +1420,13 @@ static void st_do(uint32_t o)
         tilt_start_pending = 1;
         ns_from_start = 1;
         tilt_ns_show();
+    } else if (o == SO_JAM) {                           /* TFM-UI: today's jam: its sounds, key, scale, tempo, played once */
+        scene_claim();
+        tilt_start_pending = 1;
+        ns.s = tfm_jam_s;
+        tfm_jam_has = 0;
+        ns_start();
+        ui_message("TODAY'S JAM");
     } else {
         uint32_t i;
         tilt_start_pending = 1;
@@ -1543,3 +1567,4 @@ static void st_draw(void)
 #include "tfm_faces.c"                                     /* TFM-UI: the instruments' faces, SOUND */
 #include "tfm_seq.c"                                       /* TFM-UI: STEP, NOTES, DRUMS */
 #include "tfm_song.c"                                      /* TFM-UI: SCENES, SONG, SONGS */
+#include "tfm_pages.c"                                     /* TFM-UI: FX, SPACE, ARP, CLOCK, MOTION */

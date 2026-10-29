@@ -10763,6 +10763,7 @@ static int test_tfm_jam_menu(void)
 }
 /* TFM-UI phase 1: the shell (tfm_ui.c): JAM is home, HOME again MIX, the jam knobs, ENV the dice, ALGORITHM the track,
  * the black keys mute on MIX; a screen not built yet falls back to Felucca's page in DEEP, HOME back */
+static void stap(uint32_t b);
 static int test_tfm_ui_shell(void)
 {
     int bad = 0, ok;
@@ -10799,10 +10800,11 @@ static int test_tfm_ui_shell(void)
     ok = 1;
     ui_power_on();
     tu_off = 0; tu_goto(TU_JAM);
-    press(B_FX);                                        /* (not built yet: Felucca's FX page, in DEEP) */
-    ok &= tu.scr == TU_DEEP && tu_deep_on();
+    stap(B_EDIT); stap(B_EDIT); stap(B_EDIT);          /* SOUND, MACROS 2, DEEP: Felucca's pages */
+    ok &= tu.scr == TU_DEEP && tu_deep_on() && !tu_on();
+    press(B_HOME); ok &= tu.scr == TU_SOUND && tu_on();
     press(B_HOME); ok &= tu.scr == TU_JAM && tu_on();
-    bad += check("TFM-UI shell: a screen not built yet is Felucca's page in DEEP, HOME back to JAM", ok);
+    bad += check("TFM-UI shell: DEEP (Felucca's pages) only after SOUND, MACROS 2; HOME back to SOUND, again JAM", ok);
     return bad;
 }
 /* TFM-UI phase 2: START (F3 NEW SONG, G3 CONTINUE, B3 SONGS), DICE (keys hold a row, OCT+ re-rolls the rest, the rules of
@@ -11057,6 +11059,67 @@ static int test_tfm_ui_song(void)
     bad += check("TFM-UI SCENES: E-H say there is no flash, G5 held + a scene key chains", ok);
     return bad;
 }
+/* TFM-UI phase 7: FX (K1 REVERB, K2 DELAY, K3 CHARACTER, K4 AMOUNT; again SPACE), ARP (on and its page, again off; K1 MODE),
+ * SCL the CLOCK (K1 TEMPO, K3 KEY on every track; again its page 2: TIME SIG), LFO the MOTION (K1 RATE, K3 DESTINATION) */
+static int test_tfm_ui_pages(void)
+{
+    int bad = 0, ok;
+    int16_t v;
+    ui_power_on();
+    tu_off = 0;
+    tu_goto(TU_JAM);
+    tfm_load(&trk[0], TI_SQUELCH, 0);
+    stap(B_FX); ok = tu.scr == TU_FX && tu_on();
+    v = trk[0].p[P_REV]; turn(EN_K1, 4); ok &= trk[0].p[P_REV] > v;
+    v = trk[0].p[P_DLY]; turn(EN_K2, 4); ok &= trk[0].p[P_DLY] > v;
+    trk[0].p[P_ITYPE] = 0; turn(EN_K3, 1); ok &= trk[0].p[P_ITYPE] == 1;       /* CHARACTER: OFF -> DRIVE */
+    turn(EN_K3, 1); ok &= trk[0].p[P_ITYPE] == 5;                               /* -> CRUSH */
+    v = trk[0].p[P_IMIX]; turn(EN_K4, 4); ok &= trk[0].p[P_IMIX] != v;
+    stap(B_FX); ok &= tu.scr == TU_SPACE;
+    v = song.g[G_RSIZE]; turn(EN_K2, 4); ok &= song.g[G_RSIZE] != v;
+    turn(EN_K1, 1); ok &= song.g[G_RTYPE] == 1 || song.g[G_RTYPE] == 2 || song.g[G_RTYPE] == 0;
+    bad += check("TFM-UI FX: K1 REVERB, K2 DELAY, K3 CHARACTER, K4 AMOUNT; FX again SPACE (the reverb and the delay)", ok);
+    ok = 1;
+    trk[0].p[P_AMODE] = 0;
+    stap(B_ARP); ok &= tu.scr == TU_ARP && trk[0].p[P_AMODE] != 0;              /* on, and its page */
+    turn(EN_K1, 1); ok &= trk[0].p[P_AMODE] >= 1;
+    v = trk[0].p[P_AOCT]; turn(EN_K3, 1); ok &= trk[0].p[P_AOCT] == v + 1;
+    stap(B_ARP); ok &= tu.scr == TU_ARP && trk[0].p[P_AMODE] == 0;              /* again on its page: off */
+    bad += check("TFM-UI ARP: ARP turns it on and opens its page (MODE RATE OCTAVES GATE), again on the page: off", ok);
+    ok = 1;
+    stap(B_SCL); ok &= tu.scr == TU_CLOCK;
+    v = song.g[G_BPM]; turn(EN_K1, 3); ok &= song.g[G_BPM] > v;
+    v = trk[0].p[P_ROOT]; turn(EN_K3, 1); ok &= trk[0].p[P_ROOT] == (v + 1) % 12 && trk[3].p[P_ROOT] == (v + 1) % 12;
+    stap(B_SCL); ok &= tu.scr == TU_CLOCK2;
+    turn(EN_K1, 1); ok &= tfm_tsig() == 1u;
+    bad += check("TFM-UI CLOCK: SCL (TEMPO, SWING, KEY, SCALE on every track), again page 2 (TIME SIG)", ok);
+    ok = 1;
+    stap(B_LFO); ok &= tu.scr == TU_MOTION;
+    v = trk[0].p[P_LRATE]; turn(EN_K1, 4); ok &= trk[0].p[P_LRATE] != v;
+    trk[0].p[P_LD_FLT] = 30; trk[0].p[P_LD_PIT] = 0; trk[0].p[P_LD_SHP] = 0; trk[0].p[P_LD_AMP] = 0;
+    turn(EN_K3, 1); ok &= trk[0].p[P_LD_FLT] == 0 && trk[0].p[P_LD_SHP] == 30;  /* DESTINATION: the depth moves on */
+    bad += check("TFM-UI MOTION: LFO opens it (RATE, DEPTH, DESTINATION, SHAPE); a new destination takes the depth", ok);
+    return bad;
+}
+/* TFM-UI phase 8: TODAY'S JAM: the code of the day (sent over USB) decodes into a setup; START offers it (A3), picking it
+ * starts that jam (its instruments, key, scale, tempo) once */
+static int test_tfm_ui_jam_day(void)
+{
+    int bad = 0, ok;
+    ui_power_on();
+    tu_off = 0;
+    memset(&ns, 0, sizeof ns);
+    ok = tfm_decode("09VJ-2003-000H-00RC-1C", &tfm_jam_s);
+    tfm_jam_has = 1;
+    st.has = 0; st.crash = 0; st.pick = SO_NEW; tilt_ns_open = TILT_START;
+    ok &= so_shown(SO_JAM) && so_ord()[2] == SO_JAM;
+    turn(EN_SELECT, 1); ok &= st.pick == SO_JAM;
+    st_do(SO_JAM);
+    ok &= tilt_ns_open == 0 && !tfm_jam_has && song.g[G_BPM] == tfm_jam_s.bpm && trk[0].p[P_ROOT] == tfm_jam_s.key;
+    ok &= tfm_ins_of(&trk[0]) == tfm_jam_s.ins[0] && tfm_ins_of(&trk[3]) == tfm_jam_s.ins[3];
+    bad += check("TFM-UI START: TODAY'S JAM (A3) starts the jam of the day once: its instruments, key, tempo", ok);
+    return bad;
+}
 static int test_tfm_nosample(void)
 {
     int bad = 0, ok;
@@ -11180,6 +11243,8 @@ int main(void)
     bad += test_tfm_ui_sound();
     bad += test_tfm_ui_seq();
     bad += test_tfm_ui_song();
+    bad += test_tfm_ui_pages();
+    bad += test_tfm_ui_jam_day();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

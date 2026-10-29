@@ -43,6 +43,9 @@ static uint16_t tu_mix(uint16_t over, uint16_t c, uint32_t pct)
     return (uint16_t)(r << 11 | g << 5 | b);
 }
 
+static void tu_pages_tap(uint32_t b);                   /* (tfm_pages.c) */
+static void tu_pages_draw(void);
+static void tu_pages_input(uint32_t busy);
 static void tu_song_input(uint32_t oct);                /* (tfm_song.c) */
 static void tu_songs_input(uint32_t oct);
 static void tu_song_draw(void);
@@ -567,6 +570,9 @@ static void tu_screen_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint
     case TU_STEP: case TU_NOTES: case TU_DRUMS:
         tq_input(notes, busy);
         break;
+    case TU_FX: case TU_SPACE: case TU_ARP: case TU_CLOCK: case TU_CLOCK2: case TU_MOTION:
+        tu_pages_input(busy);
+        break;
     case TU_SONG:
         tu_song_input(oct);
         break;
@@ -633,6 +639,9 @@ static void tu_tap(uint32_t b)
             tu_goto(TU_STEP);
         else
             tu_goto(TU_STEP);
+        break;
+    case B_FX: case B_SCL: case B_LFO: case B_ARP:      /* FX (again SPACE), CLOCK (again page 2), MOTION, ARP */
+        tu_pages_tap(b);
         break;
     case B_GLO:                                         /* SONG; again: SOUNDS SCENE / CURRENT */
         if (tu.scr == TU_SONG)
@@ -702,6 +711,9 @@ static void tu_draw_screen(void)
         break;
     case TU_SONG:
         tu_song_draw();
+        break;
+    case TU_FX: case TU_SPACE: case TU_ARP: case TU_CLOCK: case TU_CLOCK2: case TU_MOTION:
+        tu_pages_draw();
         break;
     case TU_SONGS:
         tu_songs_draw();

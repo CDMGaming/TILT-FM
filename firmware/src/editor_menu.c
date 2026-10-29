@@ -16,6 +16,7 @@
  * not in the settings record: rc 0, nothing for settings_save to write. TUNE is a number (EDM_INT: the cents -50..50,
  * unit "ct"), the only one so far. 1.5.5: T1..T4 CHANNEL (26..29), MIDI IN TRACK's channels, the project's as MIDI IN (rc 0) */
 enum { ED_MENU_DESC = 72, ED_MENU_SET };
+#define ED_JAM 100u                                    /* TFM: "Send today's jam" (the web editor): the code, ASCII */
 enum { EDM_ENUM, EDM_INT };                            /* kind: names follow; or a unit (none yet) */
 static const uint8_t ED_MENU[][2] = {
     {MI_COLOR, 0}, {MI_STYLE, 1}, {MI_LARGE, 2}, {MI_ANIM, 3}, {MI_LEDS, 4}, {MI_HOLD, 5}, {MI_ACCEL, 6},
@@ -64,6 +65,10 @@ static int ed_menu_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
 {
     uint32_t i, row, k;
     int32_t v, lo;
+    if (cmd == ED_JAM) {                               /* TFM: today's jam: TILT's setup code (ASCII) -> rc 0, the START screen shows it */
+        ed_b(tfm_jam_accept(a, n) ? 0u : 1u);          /* (tilt.c: decodes it, START offers it) */
+        return 1;
+    }
     if (cmd == ED_MENU_DESC) {                         /* index -> index, id, kind, value, min, max (v14), name, names,
                                                           * (1.0.5) its tab: index, name */
         ed_b(a[0]);

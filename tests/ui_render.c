@@ -783,7 +783,8 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_TFM_JAM, S_TFM_JAM_LARGE, S_TFM_TOY_DRUM, S_TFM_TOY_SQUELCH,
        S_UI_JAM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_SETUP, S_UI_TIME,
        S_UI_SND0, S_UI_SND1, S_UI_SND2, S_UI_SND3, S_UI_SND4, S_UI_SND5, S_UI_SND6, S_UI_SND7, S_UI_SND8, S_UI_SND9, S_UI_SND10,
-       S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_UI_SCENES, S_UI_SONG, S_UI_SONGS, S_COUNT };
+       S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_UI_SCENES, S_UI_SONG, S_UI_SONGS,
+       S_UI_FX, S_UI_SPACE, S_UI_ARP, S_UI_CLOCK, S_UI_CLOCK2, S_UI_MOTION, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -823,7 +824,8 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large", "tfm_toy_drum", "tfm_toy_squelch",
     "ui_jam", "ui_mix", "ui_start", "ui_dice", "ui_setup", "ui_time",
     "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
-    "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_step", "ui_notes", "ui_drums", "ui_sheet", "ui_scenes", "ui_song", "ui_songs"};
+    "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_step", "ui_notes", "ui_drums", "ui_sheet", "ui_scenes", "ui_song", "ui_songs",
+    "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1479,6 +1481,15 @@ static void setup(int s)
         ui.force = 1;
         break;
     }
+    case S_UI_FX: case S_UI_SPACE: case S_UI_ARP: case S_UI_CLOCK: case S_UI_CLOCK2: case S_UI_MOTION:   /* TFM-UI: the dial pages */
+        tu_off = 0; song.playing = 1; go_home(); song.g[G_BPM] = 118;
+        tfm_load(&trk[2], TI_SQUELCH, 0); song.sel = 2;
+        trk[2].p[P_ITYPE] = 6; trk[2].p[P_REV] = 44; trk[2].p[P_DLY] = 25; trk[2].p[P_IMIX] = 70;
+        trk[2].p[P_AMODE] = 3; trk[2].p[P_AOCT] = 2; trk[2].p[P_LD_FLT] = 30;
+        tu_goto(s == S_UI_FX ? TU_FX : s == S_UI_SPACE ? TU_SPACE : s == S_UI_ARP ? TU_ARP : s == S_UI_CLOCK ? TU_CLOCK :
+                s == S_UI_CLOCK2 ? TU_CLOCK2 : TU_MOTION);
+        ui.force = 1;
+        break;
     case S_UI_START: case S_UI_DICE: case S_UI_SETUP: case S_UI_TIME:   /* TFM-UI: the modal screens */
         tu_off = 0; song.playing = 0; go_home();
         memset(proj_slot, 0, sizeof proj_slot);
