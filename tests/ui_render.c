@@ -783,7 +783,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_TFM_JAM, S_TFM_JAM_LARGE, S_TFM_TOY_DRUM, S_TFM_TOY_SQUELCH,
        S_UI_JAM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_SETUP, S_UI_TIME,
        S_UI_SND0, S_UI_SND1, S_UI_SND2, S_UI_SND3, S_UI_SND4, S_UI_SND5, S_UI_SND6, S_UI_SND7, S_UI_SND8, S_UI_SND9, S_UI_SND10,
-       S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_COUNT };
+       S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -823,7 +823,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large", "tfm_toy_drum", "tfm_toy_squelch",
     "ui_jam", "ui_mix", "ui_start", "ui_dice", "ui_setup", "ui_time",
     "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
-    "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker"};
+    "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_step", "ui_notes", "ui_drums", "ui_sheet"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1431,6 +1431,33 @@ static void setup(int s)
         fs[0].flash = 5; fs[0].vel = 100; fs[0].note = 60; fs[0].env = 6000; fs[0].acc = 1;
         for (kk = 0; kk < 5; kk++) fs[0].lit[kk] = (kk & 1) ? 12 : 4;
         if (s == S_UI_PICKER) { ui.layer = LAYER_EDIT; tu_picker_draw(); }
+        ui.force = 1;
+        break;
+    }
+    case S_UI_STEP: case S_UI_NOTES: case S_UI_DRUMS: case S_UI_SHEET: {   /* TFM-UI: the sequencer's screens over four patterns */
+        static const uint8_t PAT[4][16] = {{1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0}, {0,0,1,0,0,0,1,0,0,0,1,0,0,1,0,1},
+                                           {1,0,1,1,0,1,0,1,1,0,0,1,0,1,1,0}, {1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0}};
+        static const uint8_t NOTE[16] = {57, 0, 62, 64, 0, 66, 0, 55, 59, 0, 0, 62, 0, 50, 52, 0};
+        uint32_t t, i;
+        tu_off = 0; song.playing = 1; go_home();
+        tfm_load(&trk[0], TI_THUMP, 0); tfm_load(&trk[1], TI_THUMP, 1); tfm_load(&trk[2], TI_SQUELCH, 0); tfm_load(&trk[3], TI_HAZE, 0);
+        for (t = 0; t < 4u; t++) {
+            memset(trk[t].step, 0, sizeof trk[t].step);
+            trk[t].p[P_SLEN] = t == 2u ? 32 : 16; trk[t].seq_idx = 5;
+            for (i = 0; i < 16u; i++) {
+                step_t *st = &trk[t].step[i];
+                st->time = ST_REST; st->vel = 100;
+                if (!PAT[t][i]) continue;
+                if (drum_track(&trk[t])) { st->time = ST_NOTE; st->hit = (uint8_t)(t == 0u ? (i % 8u == 0u ? 1u : 2u) | (i % 2u ? 8u : 0u) : 4u); st->n = 0; }
+                else { st->time = ST_NOTE; st->n = 1; st->note[0] = NOTE[i] ? NOTE[i] : 57; }
+            }
+        }
+        trk[2].step[16 + 0].time = ST_NOTE; trk[2].step[16 + 0].n = 1; trk[2].step[16 + 0].note[0] = 64; trk[2].step[16 + 1].time = ST_TIE;
+        trk[2].step[2].flags |= SF_ACCENT; trk[2].step[3].time = ST_NOTE; trk[2].step[3].flags |= SF_SLIDE;
+        trk[2].step[3].time = ST_NOTE; trk[2].step[4].time = ST_TIE;
+        song.sel = s == S_UI_DRUMS ? 0 : 2; ui.cursor = 5; ui.lane = 1;
+        tu_goto(s == S_UI_NOTES ? TU_NOTES : s == S_UI_DRUMS ? TU_DRUMS : TU_STEP);
+        if (s == S_UI_SHEET) fm1_in.buttons |= 1u << panel.btn[B_OCTUP];
         ui.force = 1;
         break;
     }

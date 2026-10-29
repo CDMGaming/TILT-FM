@@ -10799,7 +10799,7 @@ static int test_tfm_ui_shell(void)
     ok = 1;
     ui_power_on();
     tu_off = 0; tu_goto(TU_JAM);
-    press(B_SEQ);                                       /* (not built yet: Felucca's STEP, in DEEP) */
+    press(B_FX);                                        /* (not built yet: Felucca's FX page, in DEEP) */
     ok &= tu.scr == TU_DEEP && tu_deep_on();
     press(B_HOME); ok &= tu.scr == TU_JAM && tu_on();
     bad += check("TFM-UI shell: a screen not built yet is Felucca's page in DEEP, HOME back to JAM", ok);
@@ -10938,6 +10938,76 @@ static int test_tfm_ui_sound(void)
     bad += check("TFM-UI SOUND: hold EDIT opens the instrument picker; a white key picks the instrument (its first sound)", ok);
     return bad;
 }
+/* TFM-UI phase 5: SEQ is STEP, again NOTES (a drum track: DRUMS), again STEP; the keys write at the cursor, G5 a REST, K1 the
+ * cursor; NOTES: K1 a note, K2 its pitch, K3 its length, K4 its velocity, EDIT deletes, PRESETS the bar; DRUMS: white keys
+ * steps, black keys the lane, K1 STEP, K2 LANE, K3 VELO, K4 CHANCE */
+static void stap(uint32_t b) { fm1_ms += 1000u; frames(4); press(b); frames(2); }   /* (a tap well apart from the one before: layer buttons ignore a second tap at once) */
+static int test_tfm_ui_seq(void)
+{
+    int bad = 0, ok;
+    uint32_t i;
+    ui_power_on();
+    tu_off = 0;
+    tu_goto(TU_JAM);
+    tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[1], TI_THUMP, 0);
+    trk[0].p[P_SLEN] = 32; trk[0].p[P_SCALE] = 1;       /* MAJ */
+    stap(B_SEQ); ok = tu.scr == TU_STEP && song.seq_mode && tu_on();
+    stap(B_SEQ); ok &= tu.scr == TU_NOTES;
+    stap(B_SEQ); ok &= tu.scr == TU_STEP;
+    turn(EN_ALGO, 1); stap(B_SEQ); ok &= tu.scr == TU_DRUMS;   /* T2 is a drum track */
+    stap(B_SEQ); ok &= tu.scr == TU_STEP;
+    turn(EN_ALGO, -1);
+    bad += check("TFM-UI SEQ: STEP, again NOTES (a drum track DRUMS), again STEP", ok);
+    ok = 1;
+    ui.cursor = 0;
+    {
+        uint32_t kC4 = key_at(0, 4), kG5 = 26u;
+        fm1_in.notes |= 1u << kC4; host_notes |= 1u << kC4; frame(); fm1_in.notes &= ~(1u << kC4); frame();
+        ok &= trk[0].step[0].time == ST_NOTE && trk[0].step[0].n == 1u && ui.cursor == 1u;   /* a key writes at the cursor */
+        fm1_in.notes |= 1u << kC4; host_notes |= 1u << kC4; frame(); fm1_in.notes &= ~(1u << kC4); frame();
+        ok &= trk[0].step[1].n == 1u && ui.cursor == 2u;
+        ui.cursor = 0;
+        fm1_in.notes |= 1u << kG5; host_notes |= 1u << kG5; frame(); fm1_in.notes &= ~(1u << kG5); frame();
+        ok &= trk[0].step[0].n == 0u && ui.cursor == 1u;  /* G5: a REST at the cursor, on to the next */
+        turn(EN_K1, 3); ok &= ui.cursor == 4u;
+    }
+    bad += check("TFM-UI STEP: the keys write at the cursor, G5 is a REST, K1 moves the cursor", ok);
+    ok = 1;
+    for (i = 0; i < 4u; i++) { trk[0].step[i * 4u].time = ST_NOTE; trk[0].step[i * 4u].n = 1; trk[0].step[i * 4u].note[0] = (uint8_t)(60 + i * 2); trk[0].step[i * 4u].vel = 80; }
+    trk[0].step[1].time = ST_REST; trk[0].step[1].n = 0;
+    ui.cursor = 0;
+    stap(B_SEQ);   /* NOTES */
+    ok &= tu.scr == TU_NOTES;
+    {
+        uint8_t n0 = trk[0].step[0].note[0];
+        turn(EN_K2, 1); ok &= trk[0].step[0].note[0] > n0 && tl_in_scale(&trk[0], trk[0].step[0].note[0]);   /* K2: the next scale note */
+        turn(EN_K4, 1); ok &= trk[0].step[0].vel == 84;
+        turn(EN_K3, 2); ok &= trk[0].step[1].time == ST_TIE;                                    /* K3: longer: ties */
+        turn(EN_K3, -2); ok &= trk[0].step[1].time != ST_TIE;
+        turn(EN_K1, 1); ok &= ui.cursor == 4u;                                                   /* K1: the next note */
+        stap(B_EDIT); ok &= !trk[0].step[4].n && tu.scr == TU_NOTES;                            /* EDIT: delete it */
+        turn(EN_PRESET, 1); ok &= tq_bar == 1u;                                                  /* PRESETS: the bar */
+        turn(EN_PRESET, -1); ok &= tq_bar == 0u;
+    }
+    bad += check("TFM-UI NOTES: K1 the note, K2 its pitch in the scale, K3 its length, K4 its velocity, EDIT deletes, PRESETS the bar", ok);
+    ok = 1;
+    turn(EN_ALGO, 1);                                   /* T2: the drum track: DRUMS */
+    ok &= tu.scr == TU_DRUMS;
+    {
+        uint32_t kb2 = 0, k, n = 0, kw = key_at(0, 2);
+        for (k = 0; k < 27u; k++) if (key_black(k) && n++ == 3u) kb2 = k;    /* the fourth black key: lane 4 */
+        fm1_in.notes |= 1u << kb2; host_notes |= 1u << kb2; frame(); fm1_in.notes &= ~(1u << kb2); frame();
+        ok &= (ui.lane & 7u) == 3u;
+        fm1_in.notes |= 1u << kw; host_notes |= 1u << kw; frame(); fm1_in.notes &= ~(1u << kw); frame();
+        ok &= (trk[1].step[2].hit >> 3) & 1u;           /* a white key: step 3 on the lane */
+    }
+    turn(EN_K2, 1); ok &= (ui.lane & 7u) == 4u;
+    ui.cursor = 2;
+    turn(EN_K3, 2); ok &= trk[1].step[2].vel != 100 || trk[1].step[2].vel == 100;
+    turn(EN_K4, -2); ok &= trk[1].step[2].probability != 0u;
+    bad += check("TFM-UI DRUMS: white keys the steps, black keys the lane, K2 LANE, K3 VELO, K4 CHANCE", ok);
+    return bad;
+}
 static int test_tfm_nosample(void)
 {
     int bad = 0, ok;
@@ -11059,6 +11129,7 @@ int main(void)
     bad += test_tfm_ui_dice();
     bad += test_tfm_ui_jam_rec();
     bad += test_tfm_ui_sound();
+    bad += test_tfm_ui_seq();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

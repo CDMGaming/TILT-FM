@@ -1527,3 +1527,4 @@ static void st_draw(void)
 #include "tfm_ui.c"                                        /* TFM-UI: TFM's screens, the button map */
 #include "tfm_dice.c"                                      /* TFM-UI: START, DICE, SETUP, TIME */
 #include "tfm_faces.c"                                     /* TFM-UI: the instruments' faces, SOUND */
+#include "tfm_seq.c"                                       /* TFM-UI: STEP, NOTES, DRUMS */
