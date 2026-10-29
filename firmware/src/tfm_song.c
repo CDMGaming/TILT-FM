@@ -116,6 +116,7 @@ static void tsg_scenes_body(void)                       /* y 22 .. 215 */
         (void)t;
     }
     tu_text(16, 129 + 4, &AF_TM, "SONG", TC_AMBER, TC_BG);
+    tu_text(16 + text_w(&AF_TM, "SONG") + 6, 129 + 4, &AF_TS, "GLO edits it", TC_QUIET, TC_BG);
     {
         uint32_t bars = tsg_song_bars();
         tsg_text_len(b, bars);
@@ -155,7 +156,7 @@ static void tu_scenes_draw(void)
     tu_zone(0, 0, TU_HY, TC_BG, sig, tsg_scenes_head);
     tu_zone(2, 22, 100, TC_BG, sig, tsg_scenes_body);
     tu_zone(3, 122, 93, TC_BG, sig, tsg_scenes_body);
-    tu_foot(4, "KEY", "GO", "KEY+KEY", "COPY", "HOLD G5", "CHAIN", "GLO", "EDIT SONG", 0, 0);
+    tu_foot(3, "KEY", "GO", "KEY+KEY", "COPY", "HOLD G5", "CHAIN", 0, 0, 0, 0);
     ui.force = 0;
 }
 /* ================================================================== SONG ==================================== */
@@ -205,7 +206,7 @@ static void tsg_song_head(void)
     tu_timer_text(t);
     if (t[0])
         tu_text_c(120, 10, &AF_PS, t, TC_AMBER, TC_BG);
-    tu_text_r(231, 10, &AF_TS, chain.running ? "PLAYING" : "PLAY: from the top", chain.running ? TC_GOOD : TC_QUIET, TC_BG);
+    tu_text_r(231, 10, &AF_TS, chain.running ? "PLAYING" : "SELECT row · PRESETS reps", chain.running ? TC_GOOD : TC_QUIET, TC_BG);
 }
 static void tu_song_draw(void)
 {
@@ -217,7 +218,7 @@ static void tu_song_draw(void)
     tu_zone(0, 0, TU_HY, TC_BG, sig, tsg_song_head);
     tu_zone(2, 22, 100, TC_BG, sig, tsg_song_rows);
     tu_zone(3, 122, 93, TC_BG, sig, tsg_song_rows);
-    tu_foot(4, "SELECT", "SCROLL", "K1-K4", "SCENES", "OCT+", "ADD", "EDIT", "DELETE", "PRESETS", "REPS");
+    tu_foot(3, "K1-K4", "SCENES", "OCT+", "ADD", "EDIT", "DELETE", 0, 0, 0, 0);
     ui.force = 0;
 }
 static void tu_song_input(uint32_t oct)

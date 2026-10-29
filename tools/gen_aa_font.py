@@ -63,10 +63,12 @@ def preset(name):
         sil = d + "Silkscreen-Regular.ttf"                                         # SIL OFL 1.1 (Silkscreen)
         big = [ord(c) for c in "#+-./0123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ%"]     # (a sparse face: only what it draws)
         up = [ord(c) for c in "-.:!'/0123456789?+ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
-        return [("TS", bc[0], 8, (32, 126), TFM_EX, 0.0, 2), ("TM", bc[1], 10, (32, 126), TFM_EX, 0.0, 2),
-                ("TL", bc[1], 12, (32, 126), TFM_EX, 0.0, 2), ("TX", bc[1], 19, (32, 32), big, 0.0, 1),
-                ("PS", sil, 10, (32, 32), up, 0.0, 1), ("PN", sil, 13, (32, 32), up, 0.0, 1), ("PM", sil, 17, (32, 32), up, 0.0, 1),
-                ("PL", sil, 32, (32, 32), up, 0.0, 1)]
+        # fix round 1: larger (nothing under 11 px on the panel): Barlow 11 / 13 / 16 / 24 (was 8 / 10 / 12 / 19),
+        # Silkscreen 13 / 16 / 21 / 40 (was 10 / 13 / 17 / 32)
+        return [("TS", bc[0], 11, (32, 126), TFM_EX, 0.0, 2), ("TM", bc[1], 13, (32, 126), TFM_EX, 0.0, 2),
+                ("TL", bc[1], 16, (32, 126), TFM_EX, 0.0, 2), ("TX", bc[1], 24, (32, 32), big, 0.0, 1),
+                ("PS", sil, 13, (32, 32), up, 0.0, 1), ("PN", sil, 16, (32, 32), up, 0.0, 1), ("PM", sil, 21, (32, 32), up, 0.0, 1),
+                ("PL", sil, 40, (32, 32), up, 0.0, 1)]
     if name == "standin":
         if os.path.exists(LOCAL_INTER):
             reg, med, semi = LOCAL_INTER + "#0", LOCAL_INTER + "#10", LOCAL_INTER + "#12"

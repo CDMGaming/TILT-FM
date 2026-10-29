@@ -384,11 +384,11 @@ static void tu_face_top(void)                           /* y 22 .. 125 */
         tu_text(89, 74, &AF_TL, "EDIT: DEEP", fc.ink, fc.bg);
         return;
     }
-    tu_text_fit(89, 46, str_len(TFM_INS[i].name) > 8u ? &AF_PN : &AF_PM, TFM_INS[i].name, fc.acc, fc.bg, 146);
+    tu_text_fit(89, 44, str_len(TFM_INS[i].name) > 8u ? &AF_PN : &AF_PM, TFM_INS[i].name, fc.acc, fc.bg, 146);
     {
         char d[40];
         str_cpy(d, TFM_INS[i].desc, sizeof d);
-        tu_text_fit(89, 59, &AF_TS, d, fc.mute, fc.bg, 141);
+        tu_text_fit(89, 61, &AF_TS, d, fc.mute, fc.bg, 141);
     }
     tfm_snd_label(&trk[k], b);
     tu_text_fit(89, 74, &AF_TL, b, fc.ink, fc.bg, 148);

@@ -135,6 +135,10 @@ static void tq_step_info(void)                          /* y 160 .. 215: the ste
         str_cpy(b, st->time == ST_TIE ? "tie" : "rest", 8);
     }
     tu_text(16 + text_w(&AF_TM, a) + 6, 168, &AF_TL, b, TC_MID, TC_BG);
+    {
+        static const char *const K[2] = {"K1", "SELECT"}, *const A[2] = {"STEP", "16 STEPS"};
+        tu_hint_line(198, TC_BG, TC_QUIET, 2, K, A);
+    }
 }
 static void tq_zero(void) { }
 static void tq_step_draw(void)
@@ -149,7 +153,7 @@ static void tq_step_draw(void)
     tu_zone(2, 22, 70, TC_BG, sig, tq_step_body);
     tu_zone(3, 92, 68, TC_BG, sig, tq_step_body);
     tu_zone(4, 160, 55, TC_BG, sig, tq_step_info);
-    tu_foot(4, "KEYS", "WRITE", "K1", "STEP", "G5", "REST", "HOLD OCT+", "MOVE \xB7 COPY", 0, 0);
+    tu_foot(3, "KEYS", "WRITE", "G5", "REST", "HOLD OCT+", "SHEET", 0, 0, 0, 0);
     (void)tq_zero;
 }
 /* the keys of the screens: a drum track's grid, else the cursor step (STEP's entry), G5 a REST */

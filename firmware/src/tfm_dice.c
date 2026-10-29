@@ -271,7 +271,8 @@ static void tu_time_draw(void)
 {
     uint32_t sig = te.pick * 7u + te.saved * 3u;
     tu_zone(2, 0, 76, TC_BG, sig, tu_time_top);
-    tu_zone(3, 76, 139, TC_BG, sig, tu_time_rows);
+    tu_zone(3, 76, 70, TC_BG, sig, tu_time_rows);
+    tu_zone(5, 146, 69, TC_BG, sig, tu_time_rows);
     tu_foot(3, "OCT+", "DO IT", "SELECT", "PICK", "F3-B3", "GO", 0, 0, 0, 0);
     ui.force = 0;
 }
@@ -326,8 +327,9 @@ static void tu_dice_rows(void)                          /* y 76 .. 190: the four
 static void tu_dice_note(void)
 {
     tu_rect(0, 176, TU_W, 39, TC_BG);
-    tu_text(9, 186, &AF_TS, cfg_default() ? "Rules come from SETUP: a band, drums, bass, chords and a lead." :
-                                            "Rules come from SETUP: yours.", TC_QUIET, TC_BG);
+    static const char *const K[2] = {"PLAY", "ENV"}, *const A[2] = {"START", "SETUP"};
+    tu_text(9, 184, &AF_TS, cfg_default() ? "Rules come from SETUP: a band." : "Rules come from SETUP: yours.", TC_QUIET, TC_BG);
+    tu_hint_line(203, TC_BG, TC_QUIET, 2, K, A);
 }
 static void tu_head_dice(void)
 {
@@ -407,7 +409,7 @@ static void tu_su_rows(void)
 static void tu_su_note(void)
 {
     tu_rect(0, 199, TU_W, 16, TC_BG);
-    tu_text(9, 206, &AF_TS, "Track rule: RANDOM \xB7 a TYPE (drums, bass ..) \xB7 one INSTRUMENT", TC_QUIET, TC_BG);
+    tu_text(9, 207, &AF_TS, "Rule: RANDOM, a TYPE or one INSTRUMENT", TC_QUIET, TC_BG);
 }
 static void tu_head_setup(void)
 {
@@ -435,8 +437,8 @@ static void tu_dice_draw(void)
         tu_zone(0, 0, TU_HY, TC_BG, sig, tu_head_dice);
         tu_zone(2, TU_HY, 54, TC_BG, sig, tu_dice_tiles);
         tu_zone(3, 76, 100, TC_BG, sig, tu_dice_rows);
-        tu_zone(4, 176, 39, TC_BG, 1u, tu_dice_note);
-        tu_foot(5, "KEYS", "HOLD", "OCT+", "RE-ROLL", "ENV", "SETUP", "PLAY", "START", "HOME", "BACK");
+        tu_zone(4, 176, 39, TC_BG, 1u + (uint32_t)cfg_default(), tu_dice_note);
+        tu_foot(3, "KEYS", "HOLD", "OCT+", "RE-ROLL", "HOME", "BACK", 0, 0, 0, 0);
     }
     ui.force = 0;
 }

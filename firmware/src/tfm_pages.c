@@ -43,12 +43,21 @@ static void ro_body(void)                               /* y 22 .. 215 */
     tu_rrect(8, 30, 224, 75, 8, TC_DEEP, TC_BG);
     tu_text(18, 41, &AF_TS, ro.cap, TC_QUIET, TC_DEEP);
     tu_text(18, 58, &AF_PM, ro.big, ro.col, TC_DEEP);
-    x = 18;
-    for (i = 0; i < ro.nchip; i++) {
-        int32_t w = text_w(&AF_TS, ro.chip[i]) + 10;
-        tu_rrect(x, 78, w, 13, 3, i == ro.sel ? ro.col : TC_SURF, TC_DEEP);
-        tu_text_c(x + w / 2, 84, &AF_TS, ro.chip[i], i == ro.sel ? TC_BG : TC_QUIET, i == ro.sel ? ro.col : TC_SURF);
-        x += w + 3;
+    {   /* the chips: padded to fit the card (six of them need less) */
+        int32_t sum = 0, pad = 10;
+        for (i = 0; i < ro.nchip; i++)
+            sum += text_w(&AF_TS, ro.chip[i]);
+        if (ro.nchip && sum + (int32_t)ro.nchip * pad + (int32_t)(ro.nchip - 1u) * 3 > 204)
+            pad = (204 - sum - (int32_t)(ro.nchip - 1u) * 3) / (int32_t)ro.nchip;
+        if (pad < 4)
+            pad = 4;
+        x = 18;
+        for (i = 0; i < ro.nchip; i++) {
+            int32_t w = text_w(&AF_TS, ro.chip[i]) + pad;
+            tu_rrect(x, 78, w, 15, 3, i == ro.sel ? ro.col : TC_SURF, TC_DEEP);
+            tu_text_c(x + w / 2, 85, &AF_TS, ro.chip[i], i == ro.sel ? TC_BG : TC_QUIET, i == ro.sel ? ro.col : TC_SURF);
+            x += w + 3;
+        }
     }
     for (i = 0; i < 12u; i++) {                         /* the bars at the right: a still picture of the character */
         int32_t h = 7 + (int32_t)((uint32_t)tu_sin(i * 11u) * 17u / 1024u);

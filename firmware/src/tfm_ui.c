@@ -321,22 +321,28 @@ static void tu_head(int badge, const char *l, const char *l2, const char *r, int
 }
 /* the footer: `KEY ACTION` hints centred, the key amber; a message (ui.msg) replaces them while it shows */
 static struct { const char *k[5], *a[5]; uint32_t n; } tu_ft;
-static void tu_foot_draw(void)
+/* `KEY ACTION` hints centred on a line at y: the key amber, the action in qc (the footer's, and the lines of hints a screen
+ * carries in a band of its own) */
+static void tu_hint_line(int32_t y, uint16_t bg, uint16_t qc, uint32_t n, const char *const *k, const char *const *a)
 {
     int32_t w = 0, x, i;
+    for (i = 0; i < (int32_t)n; i++)
+        w += text_w(&AF_TS, k[i]) + 3 + text_w(&AF_TS, a[i]) + (i ? 8 : 0);
+    x = (TU_W - w) / 2;
+    for (i = 0; i < (int32_t)n; i++) {
+        x = tu_text(x, y, &AF_TS, k[i], TC_AMBER, bg) + 3;
+        x = tu_text(x, y, &AF_TS, a[i], qc, bg) + 8;
+    }
+}
+static void tu_foot_draw(void)
+{
     tu_rect(0, TU_FY, TU_W, 25, tu_pbg);
     tu_rect(0, TU_FY, TU_W, 1, tu_pline);
     if (ui.msg_t && ui.msg[0]) {
         tu_text_c(120, TU_FY + 13, &AF_TL, ui.msg, TC_AMBER, tu_pbg);
         return;
     }
-    for (i = 0; i < (int32_t)tu_ft.n; i++)
-        w += text_w(&AF_TS, tu_ft.k[i]) + 3 + text_w(&AF_TS, tu_ft.a[i]) + (i ? 8 : 0);
-    x = (TU_W - w) / 2;
-    for (i = 0; i < (int32_t)tu_ft.n; i++) {
-        x = tu_text(x, TU_FY + 13, &AF_TS, tu_ft.k[i], TC_AMBER, tu_pbg) + 3;
-        x = tu_text(x, TU_FY + 13, &AF_TS, tu_ft.a[i], tu_pq, tu_pbg) + 8;
-    }
+    tu_hint_line(TU_FY + 13, tu_pbg, tu_pq, tu_ft.n, tu_ft.k, tu_ft.a);
 }
 static void tu_foot(uint32_t n, const char *k0, const char *a0, const char *k1, const char *a1, const char *k2, const char *a2,
                     const char *k3, const char *a3, const char *k4, const char *a4)
@@ -445,6 +451,12 @@ static int tu_sel_big(void) { return tu_sel_until && (int32_t)(tu_sel_until - fm
 static void tu_gap_draw(void)
 {
     tu_rect(0, 170, TU_W, 45, TC_BG);
+    if (!tu_sel_big()) {                                /* the band under the scenes: the buttons the footer has no room for */
+        static const char *const K1[2] = {"REC", "EDIT"}, *const A1[2] = {"RECORD MOVES", "SOUND"};
+        static const char *const K2[3] = {"SEQ", "GLO", "SAVE"}, *const A2[3] = {"STEPS", "SONG", "SONGS"};
+        tu_hint_line(186, TC_BG, TC_QUIET, 2, K1, A1);
+        tu_hint_line(203, TC_BG, TC_QUIET, 3, K2, A2);
+    }
     if (tu_sel_big()) {
         char b[24];
         const track_t *t = &trk[song.sel % NTRK];
@@ -496,7 +508,7 @@ static void tu_jam_draw(void)
     tu_zone(3, 126, 44, TC_BG, cur * 977u + project_used(0) * 3u + project_used(1) * 5u + project_used(2) * 7u + project_used(3) * 11u,
             tu_strip_draw);
     tu_zone(4, 170, 45, TC_BG, 1u + song.sel * 7u + (uint32_t)tu_sel_big() * 101u, tu_gap_draw);
-    tu_foot(5, "K1-K4", "JAM", "REC", "RECORD", "EDIT", "SOUND", "SCL", "TEMPO", "ENV", "DICE");
+    tu_foot(3, "K1-K4", "JAM", "SCL", "TEMPO", "ENV", "DICE", 0, 0, 0, 0);
 }
 
 /* ================================================================== MIX ====================================== */

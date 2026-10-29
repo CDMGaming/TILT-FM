@@ -194,6 +194,7 @@ static int test_r1_jam_sel(void)
 {
     int bad = 0, ok = 1;
     uint16_t bg;
+    uint32_t big_n = 0;
     ui_power_on();
     tu_off = 0;
     tu_goto(TU_JAM);
@@ -212,6 +213,7 @@ static int test_r1_jam_sel(void)
             for (x = 40; x < 200u; x++)
                 n += r1_px((int32_t)x, (int32_t)y) != bg;
         R1(n > 100u);
+        big_n = n;
     }
     fm1_ms += 1200u; frames(40);
     R1(!tu_sel_big());
@@ -220,7 +222,7 @@ static int test_r1_jam_sel(void)
         for (y = 175; y < 210u; y++)
             for (x = 40; x < 200u; x++)
                 n += r1_px((int32_t)x, (int32_t)y) != bg;
-        R1(n == 0u);                                                                   /* (and it is gone again) */
+        R1(n > 100u && n != big_n);                                                    /* (gone again: the hints take the band) */
     }
     bad += check("TFM-UI fix 4: JAM rings and reverses the selected track, the header names it, ALGORITHM shows its name big for a second", ok);
     return bad;
@@ -403,5 +405,35 @@ static int test_r1_rules(void)
     R1((TY_INS[ns.s.ins[0] % TI_N] & 1u) && (TY_INS[ns.s.ins[1] % TI_N] & 1u));
     memset(&favorites.factory[13][16], 0, 16);
     bad += check("TFM-UI fix 7: TYPE rules pick from their own group (LEAD never HAZE), a SETUP change rolls the track, RANDOM never rolls a second kit", ok);
+    return bad;
+}
+/* 6: bigger text: Barlow 11 / 13 / 16 / 24 px (no TFM face under 11), at most 3 footer hints on every screen */
+static int test_r1_text(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t s, o;
+    R1(AF_TS.h >= 14 && AF_TS_CAP_H >= 8 && AF_TM_CAP_H >= 9 && AF_TL_CAP_H >= 11 && AF_TX_CAP_H >= 17);   /* (Barlow's caps: 0.7 of the size) */
+    R1(AF_PS.h >= 13 && AF_PN.h >= 16 && AF_PM.h >= 21 && AF_PL.h >= 40);
+    for (s = 0; s < TU_N; s++) {
+        if (s == TU_DEEP)
+            continue;
+        ui_power_on();
+        tu_off = 0;
+        tu_goto(s);
+        frames(4);
+        R1(tu_ft.n >= 1u && tu_ft.n <= 3u);
+    }
+    for (o = 0; o < 4u; o++) {                          /* the modal screens, SETUP, the picker */
+        ui_power_on();
+        tu_off = 0;
+        tu_goto(TU_JAM);
+        if (o == 0u) { stap(B_ENV); }
+        if (o == 1u) { stap(B_ENV); stap(B_ENV); }
+        if (o == 2u) { tilt_start_boot(1); }
+        if (o == 3u) { te_show(); }
+        frames(4);
+        R1(tu_ft.n >= 1u && tu_ft.n <= 3u);
+    }
+    bad += check("TFM-UI fix 6: no TFM text under 11 px (Barlow 11 / 13 / 16 / 24), at most 3 footer hints on every screen", ok);
     return bad;
 }

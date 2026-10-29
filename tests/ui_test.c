@@ -11312,6 +11312,7 @@ int main(void)
     bad += test_r1_macros();
     bad += test_r1_jam_frames();
     bad += test_r1_rules();
+    bad += test_r1_text();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4
