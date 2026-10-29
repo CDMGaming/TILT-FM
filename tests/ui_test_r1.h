@@ -1,3 +1,4 @@
+#include <time.h>
 /* TFM-UI fix round 1: the tests of the round's items (included by ui_test.c after the phase tests; same helpers) */
 /* 1: NOTES and DRUMS, SELECT one step at a time through every step (the bar follows), PRESETS a bar and the same step in it */
 #define R1(c) do { if (!(c)) { ok = 0; fprintf(stderr, "R1 line %d ", __LINE__); } } while (0)
@@ -222,5 +223,122 @@ static int test_r1_jam_sel(void)
         R1(n == 0u);                                                                   /* (and it is gone again) */
     }
     bad += check("TFM-UI fix 4: JAM rings and reverses the selected track, the header names it, ALGORITHM shows its name big for a second", ok);
+    return bad;
+}
+/* 5: the macros: each track keeps its eight places; a single detent moves a continuous macro by exactly 1 from 0 to 127 and
+ * every target moves monotonically; a switch steps once per two detents; JAM's knob turns the instrument's own macro, never
+ * a switch */
+static int test_r1_macros(void)
+{
+    int bad = 0, ok = 1;
+    static const char *const JN[TI_N] = {"PUNCH", "CUTOFF", "WOB", "WARM", "CUT", "BLOOM", "SWEEP", "BARK", "METAL", "BRIGHT", "VOWEL", "DRIVE"};
+    uint32_t i, m, k, nswitch = 0, ncont = 0;
+    ui_power_on();
+    tu_off = 0;
+    for (i = 0; i < TI_N; i++) {
+        track_t *t = &trk[0];
+        const tfm_instr_t *in = &TFM_INS[i];
+        tfm_load(t, i, 0);
+        R1(!in->mac[tfm_jam_m(t)].nsw && str_eq(in->mac[tfm_jam_m(t)].name, JN[i]));    /* JAM's: the named one, no switch */
+        for (m = 0; m < 8u; m++) {
+            const tfm_macro_t *mc = &in->mac[m];
+            int32_t prev[4], pos;
+            if (mc->nsw) {                                                              /* a switch: one value per two detents */
+                int32_t v0, v1;
+                nswitch++;
+                tfm_macro_put(t, m, 0, 0);
+                v0 = t->p[mc->t[0].id];
+                fm1_ms += 1000u; tfm_macro_turn_k(t, m, m & 3u, 1);
+                R1(t->p[mc->t[0].id] == v0);                                            /* (one detent: nothing yet) */
+                fm1_ms += 1000u; tfm_macro_turn_k(t, m, m & 3u, 1);
+                v1 = t->p[mc->t[0].id];
+                R1(v1 != v0 && tfm_sw_idx(mc, v1) == 1u);                               /* (the second: the next value) */
+                fm1_ms += 1000u; tfm_macro_turn_k(t, m, m & 3u, -1);
+                R1(t->p[mc->t[0].id] == v1);                                            /* (turned back: counting again) */
+                fm1_ms += 1000u; tfm_macro_turn_k(t, m, m & 3u, -1);
+                R1(t->p[mc->t[0].id] == v0);
+                continue;
+            }
+            ncont++;
+            tfm_macro_put(t, m, 0, 0);
+            R1(tfm_macro_get(t, m) == 0);
+            for (k = 0; k < 4u && mc->t[k].id != 0xFFu; k++)
+                prev[k] = t->p[mc->t[k].id];
+            for (pos = 1; pos <= 127; pos++) {
+                fm1_ms += 1000u;
+                tfm_macro_turn_k(t, m, m & 3u, 1);
+                if (tfm_macro_get(t, m) != pos) { R1(0); break; }                       /* exactly 1 a detent, never stalled */
+                for (k = 0; k < 4u && mc->t[k].id != 0xFFu; k++) {
+                    int32_t v = t->p[mc->t[k].id], up = mc->t[k].hi >= mc->t[k].lo;
+                    if (up ? v < prev[k] : v > prev[k]) { R1(0); break; }              /* monotone */
+                    prev[k] = v;
+                }
+            }
+            R1(tfm_macro_get(t, m) == 127);
+            for (pos = 126; pos >= 0; pos--) {                                          /* and back down the same way */
+                fm1_ms += 1000u;
+                tfm_macro_turn_k(t, m, m & 3u, -1);
+                if (tfm_macro_get(t, m) != pos) { R1(0); break; }
+            }
+            /* a value changed elsewhere (DEEP, a load): the place is read from it again, once */
+            tfm_macro_put(t, m, 60, 0);
+            t->p[mc->t[0].id] = (int16_t)mc->t[0].hi;
+            R1(tfm_macro_get(t, m) > 100);
+        }
+    }
+    R1(nswitch > 0u && ncont > 60u);
+    /* JAM's knob turns it, on a track in the song */
+    tfm_load(&trk[0], TI_SQUELCH, 0);
+    tfm_macro_put(&trk[0], 0, 30, 0);
+    fm1_ms += 1000u; jam_turn(0, 1);
+    R1(tfm_macro_get(&trk[0], 0) == 31);
+    tfm_load(&trk[1], TI_CHORDETTE, 0);
+    tfm_macro_put(&trk[1], 2, 40, 0);
+    fm1_ms += 1000u; jam_turn(1, 1);
+    R1(tfm_macro_get(&trk[1], 2) == 41);
+    bad += check("TFM-UI fix 5: all 12 x 8 macros: a detent moves a continuous one by exactly 1 (0..127, targets monotone), a switch steps per two detents, JAM turns the named macro", ok);
+    return bad;
+}
+/* 5 (responsiveness): JAM redraws only the zones whose picture changed; a turn of one knob redraws the bumpers' band and
+ * nothing else (not the header, the scenes or the footer). Prints the worst host frame time and the pixels redrawn. */
+static int test_r1_jam_frames(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t f, redrawn_max = 0, idle_redraw = 0;
+    double worst = 0, tot = 0;
+    ui_power_on();
+    tu_off = 0;
+    tu_goto(TU_JAM);
+    tfm_load(&trk[0], TI_SQUELCH, 0);
+    frames(200);
+    for (f = 0; f < 20u; f++) {                         /* nothing moves: no zone redraws */
+        uint32_t before[TU_ZONES];
+        memcpy(before, tu.sig, sizeof before);
+        frame();
+        idle_redraw += memcmp(before, tu.sig, sizeof before) != 0;
+    }
+    R1(idle_redraw == 0u);
+    for (f = 0; f < 120u; f++) {
+        struct timespec a, b;
+        uint32_t z, changed = 0;
+        uint32_t before[TU_ZONES];
+        memcpy(before, tu.sig, sizeof before);
+        fm1_ms += 40u;
+        turn(EN_K1, f & 1u ? -1 : 1);
+        clock_gettime(CLOCK_MONOTONIC, &a);
+        frame();
+        clock_gettime(CLOCK_MONOTONIC, &b);
+        {
+            double us = (double)(b.tv_sec - a.tv_sec) * 1e6 + (double)(b.tv_nsec - a.tv_nsec) / 1e3;
+            worst = us > worst ? us : worst;
+            tot += us;
+        }
+        for (z = 0; z < sizeof tu.sig / sizeof tu.sig[0]; z++)
+            changed += before[z] != tu.sig[z];
+        redrawn_max = changed > redrawn_max ? changed : redrawn_max;
+    }
+    printf("    JAM, a knob turned every frame: at most %u zone (240 x 104 px) redrawn a frame, none when idle\n", redrawn_max);
+    R1(redrawn_max <= 1u);
+    bad += check("TFM-UI fix 5: JAM redraws only the zone that changed (idle: none; a knob turn: the bumpers' band only)", ok);
     return bad;
 }

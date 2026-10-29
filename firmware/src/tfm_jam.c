@@ -24,7 +24,7 @@ static int32_t jam_pos(const track_t *t)
 {
     const param_desc_t *d;
     if (jam_macro(t))
-        return tfm_macro_get(t, 0);
+        return tfm_macro_get(t, tfm_jam_m(t));
     d = track_desc(t, P_LEVEL);
     return d->max > d->min ? (t->p[P_LEVEL] - d->min) * 127 / (d->max - d->min) : 0;
 }
@@ -34,7 +34,7 @@ static void jam_turn(uint32_t k, int32_t s)
     if ((k & 3u) != song.sel && ((song.rec >> (k & 3u)) & 1u))   /* REC armed there: the move is recorded on that track */
         track_select(k & 3u);                           /* (motion_capture records the selected track) */
     if (jam_macro(t)) {
-        tfm_macro_turn_k(t, 0, k, s);
+        tfm_macro_turn_k(t, tfm_jam_m(t), k, s);
     } else {
         const param_desc_t *d = track_desc(t, P_LEVEL);
         t->p[P_LEVEL] = (int16_t)param_turn(d, t->p[P_LEVEL], accel(EN_K1 + (k & 3u), s, d->max - d->min));
@@ -59,8 +59,8 @@ static void jam_cards(void)
             draw_column(c, "LEVEL", val, unit, col, pos * 1000 / 127, trk_icon(c, 1));
             continue;
         }
-        mc = &TFM_INS[tfm_ins_of(t)].mac[0];
-        tfm_macro_text(t, 0, val, &unit);
+        mc = &TFM_INS[tfm_ins_of(t)].mac[tfm_jam_m(t)];
+        tfm_macro_text(t, tfm_jam_m(t), val, &unit);
         { char lb[6]; str_cpy(lb, mc->name, 6); draw_column(c, lb, val, unit, col, pos * 1000 / 127, trk_icon(c, 1)); }
     }
 }

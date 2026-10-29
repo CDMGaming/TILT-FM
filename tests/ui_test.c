@@ -10619,10 +10619,12 @@ static int test_tfm_instruments(void)
             ok &= trk[0].p[mc->t[0].id] == lo && tfm_macro_get(&trk[0], m) == 0;
             tfm_macro_set(&trk[0], m, 127);
             ok &= trk[0].p[mc->t[0].id] == hi && tfm_macro_get(&trk[0], m) == 127;
-            if (mc->nsw) {                              /* a detent: the next value, never stuck */
+            if (mc->nsw) {                              /* two detents: the next value, never stuck (fix round 1: one alone only counts) */
                 int16_t v;
                 tfm_macro_set(&trk[0], m, 0);
                 v = trk[0].p[mc->t[0].id];
+                tfm_macro_turn(&trk[0], m, 1);
+                ok &= trk[0].p[mc->t[0].id] == v;
                 tfm_macro_turn(&trk[0], m, 1);
                 ok &= trk[0].p[mc->t[0].id] != v && mc->nsw >= 2u;
             }
@@ -10686,12 +10688,12 @@ static int test_tfm_jam_menu(void)
     tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[2], TI_HAZE, 0);
     trk[1].preset = 0; trk[3].preset = 0;               /* (T2, T4: no instrument) */
     ok &= tfm_ins_of(&trk[1]) == TI_NONE && tfm_ins_of(&trk[0]) == TI_SQUELCH;
-    p0 = tfm_macro_get(&trk[0], 0); l0 = trk[1].p[P_LEVEL];
+    p0 = tfm_macro_get(&trk[0], tfm_jam_m(&trk[0])); l0 = trk[1].p[P_LEVEL];
     turn(EN_K1, 10); frame();
-    ok &= tfm_macro_get(&trk[0], 0) > p0;               /* KNOB 1: T1's macro 1 */
-    p0 = tfm_macro_get(&trk[2], 0);
+    ok &= tfm_macro_get(&trk[0], tfm_jam_m(&trk[0])) > p0;   /* KNOB 1: T1's jam macro (SQUELCH CUTOFF) */
+    p0 = tfm_macro_get(&trk[2], tfm_jam_m(&trk[2]));
     turn(EN_K3, -10); frame();
-    ok &= tfm_macro_get(&trk[2], 0) < p0 || p0 == 0;   /* KNOB 3: T3's */
+    ok &= tfm_macro_get(&trk[2], tfm_jam_m(&trk[2])) < p0 || p0 == 0;   /* KNOB 3: T3's (HAZE BLOOM) */
     turn(EN_K2, -5); frame();
     ok &= trk[1].p[P_LEVEL] < l0;                       /* KNOB 2: T2's LEVEL (no instrument) */
     ok &= home_jam() && str_eq(help_page(), H_JAM);
@@ -11307,6 +11309,8 @@ int main(void)
     bad += test_r1_tempo();
     bad += test_r1_home();
     bad += test_r1_jam_sel();
+    bad += test_r1_macros();
+    bad += test_r1_jam_frames();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

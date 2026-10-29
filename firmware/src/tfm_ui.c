@@ -410,7 +410,7 @@ static void tu_jam_body(void)                           /* y 22 .. 126: four bum
             tu_text_c(cx, 105, &AF_TS, ins ? tfm_ins_name(t) : tu_inst_name(t), TC_TEXT, TC_BG);
         }
         if (ins) {
-            str_cpy(b, TFM_INS[tfm_ins_of(t)].mac[0].name, 12);
+            str_cpy(b, TFM_INS[tfm_ins_of(t)].mac[tfm_jam_m(t)].name, 12);
         } else {
             str_cpy(b, "LEVEL", 12);
         }

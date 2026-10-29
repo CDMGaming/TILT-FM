@@ -50,7 +50,11 @@ L = ["# MACROS TO TUNE (TFM instruments)", "",
      "macro adds drive, no LEVEL macro.", ""]
 for ins in INS:
     L += ["## %s" % ins["name"], "", "| # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |", "|---|---|---|---|---|---|---|---|---|"]
+    JAMM = {"THUMP LAB": 1, "SQUELCH": 1, "WOBBLER": 1, "CHORDETTE": 3, "RAZOR": 3, "HAZE": 4, "PIXEL": 3, "TINE": 1,
+            "GLINT": 1, "PLUCK": 1, "VOX": 1, "WHEELHOUSE": 2}
     for n, (mn, spec) in enumerate(ins["mac"], 1):
+        if JAMM.get(ins["name"]) == n:
+            mn += " (JAM)"
         if isinstance(spec, tuple):
             _, pid, vals, names = spec
             sw = names or [str(v) for v in vals]

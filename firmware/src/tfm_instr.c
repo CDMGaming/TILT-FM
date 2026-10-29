@@ -413,6 +413,9 @@ static uint32_t tfm_snd_of(const track_t *t) { return (t->preset - TFM_PRE0) % 1
 /* track t plays instrument i's sound s: its engine (as EDIT's engine keys load it), the factory preset (as PRESETS
  * does: one undo, the steps kept), the changes, the instrument's mark */
 static void tfm_macro_put(track_t *t, uint32_t m, int32_t pos, int rec);
+static uint8_t tfm_mok[NTRK];                           /* bit m: macro m's place is stored (the places: below) */
+static int8_t tfm_swhalf[NTRK][8];                      /* a switch steps once per two detents: the detents so far */
+static int tfm_mslot(const track_t *t) { return t >= trk && t < trk + NTRK ? (int)(t - trk) : -1; }
 static void tfm_load(track_t *t, uint32_t i, uint32_t s)
 {
     const tfm_instr_t *in = &TFM_INS[i % TI_N];
@@ -430,6 +433,10 @@ static void tfm_load(track_t *t, uint32_t i, uint32_t s)
         t->p[sn->ov[k].id] = (int16_t)clamp(sn->ov[k].v, d->min, d->max);
     }
     t->preset = (uint8_t)TFM_PRE(i % TI_N, s % in->nsnd);
+    if (tfm_mslot(t) >= 0) {                            /* (the places are the preset's: set below, or derived once from it) */
+        tfm_mok[tfm_mslot(t)] = 0;
+        memset(tfm_swhalf[tfm_mslot(t)], 0, 8);
+    }
     if (sn->hasmp)                                      /* a named preset: its eight macros' places (not recorded) */
         for (k = 0; k < 8u; k++)
             tfm_macro_put(t, k, (int32_t)sn->mp[k] * 127 / 100, 0);
@@ -492,17 +499,40 @@ static uint32_t tfm_sw_idx(const tfm_macro_t *mc, int32_t v)     /* the value ne
     }
     return best;
 }
-/* macro m of the track's instrument: its place 0..127, read back from its first target */
+/* each track's eight macro places (0..127), kept: a turn moves the stored place, never one read back from a target (that
+ * rounds, and a knob turn stalled). tfm_mval is the first target's value the place wrote: while the parameter still
+ * has it the place is good; anything else that moved it (DEEP, a load, undo, a MIDI CC) makes the place derived once
+ * from the parameter and kept again. RAM only: no format change. */
+static uint8_t tfm_mpos[NTRK][8];
+static int16_t tfm_mval[NTRK][8];
+static void tfm_mstore(const track_t *t, uint32_t m, int32_t pos)
+{
+    int s = tfm_mslot(t);
+    uint32_t i = tfm_ins_of(t);
+    if (s < 0 || i == TI_NONE)
+        return;
+    tfm_mpos[s][m & 7u] = (uint8_t)clamp(pos, 0, 127);
+    tfm_mval[s][m & 7u] = (int16_t)motion_base_value(t, TFM_INS[i].mac[m & 7u].t[0].id);
+    tfm_mok[s] |= (uint8_t)(1u << (m & 7u));
+}
+/* macro m of the track's instrument: its place 0..127 (stored; else read back from its first target, once) */
 static int32_t tfm_macro_get(const track_t *t, uint32_t m)
 {
     uint32_t i = tfm_ins_of(t);
     const tfm_macro_t *mc;
+    int s = tfm_mslot(t);
+    int32_t pos;
     if (i == TI_NONE)
         return 0;
     mc = &TFM_INS[i].mac[m & 7u];
+    if (s >= 0 && ((tfm_mok[s] >> (m & 7u)) & 1u) && tfm_mval[s][m & 7u] == (int16_t)motion_base_value(t, mc->t[0].id))
+        return tfm_mpos[s][m & 7u];
     if (mc->nsw)
-        return tfm_sw_pos(mc, tfm_sw_idx(mc, motion_base_value(t, mc->t[0].id)));
-    return tfm_tgt_pos(&mc->t[0], motion_base_value(t, mc->t[0].id));
+        pos = tfm_sw_pos(mc, tfm_sw_idx(mc, motion_base_value(t, mc->t[0].id)));
+    else
+        pos = tfm_tgt_pos(&mc->t[0], motion_base_value(t, mc->t[0].id));
+    tfm_mstore(t, m, pos);
+    return pos;
 }
 static void tfm_macro_put(track_t *t, uint32_t m, int32_t pos, int rec)
 {
@@ -530,6 +560,7 @@ static void tfm_macro_put(track_t *t, uint32_t m, int32_t pos, int rec)
         if (rec)
             motion_capture(t, g->id, t->p[g->id]);      /* (REC: recorded as automation, as a knob turn is) */
     }
+    tfm_mstore(t, m, pos);
 }
 static void tfm_macro_set(track_t *t, uint32_t m, int32_t pos) { tfm_macro_put(t, m, pos, 1); }
 /* a macro's value as the card shows it: a switch its name (or the parameter's), else 0..100 */
@@ -640,6 +671,10 @@ static void tfm_tag_name(uint32_t k, char *tag, char *nm)
     str_cpy(nm, TFM_INS[i].snd[s % TFM_INS[i].nsnd].name, 13);
 }
 static const char *tfm_ins_name(const track_t *t) { return TFM_INS[tfm_ins_of(t) % TI_N].name; }
+/* JAM's knob turns this macro of the instrument, never a switch: THUMP PUNCH, SQUELCH CUTOFF, WOBBLER WOB, CHORDETTE WARM,
+ * RAZOR CUT, HAZE BLOOM, PIXEL SWEEP, TINE BARK, GLINT METAL, PLUCK BRIGHT, VOX VOWEL, WHEELHOUSE DRIVE */
+static const uint8_t TFM_JAMM[TI_N] = {0, 0, 0, 2, 2, 3, 2, 0, 0, 0, 0, 1};
+static uint32_t tfm_jam_m(const track_t *t) { return TFM_JAMM[tfm_ins_of(t) % TI_N]; }
 static void tfm_snd_label(const track_t *t, char *b)
 {
     const tfm_instr_t *in = &TFM_INS[tfm_ins_of(t) % TI_N];
@@ -656,9 +691,19 @@ static void tfm_macro_turn_k(track_t *t, uint32_t m, uint32_t k, int32_t steps)
         return;
     mc = &TFM_INS[i].mac[m & 7u];
     pos = tfm_macro_get(t, m);
-    if (mc->nsw) {
-        int32_t idx = clamp((int32_t)tfm_sw_idx(mc, motion_base_value(t, mc->t[0].id)) + (steps > 0 ? 1 : -1), 0,
-                            (int32_t)mc->nsw - 1);
+    if (mc->nsw) {                                      /* a switch: one value per two detents (a detent alone only counts) */
+        int s = tfm_mslot(t);
+        int32_t d = steps > 0 ? 1 : -1, idx, h;
+        h = s >= 0 ? tfm_swhalf[s][m & 7u] : 0;
+        h = (h && (h > 0) != (d > 0)) ? d : h + d;      /* (turned back: counting again from this detent) */
+        if (h > -2 && h < 2) {
+            if (s >= 0)
+                tfm_swhalf[s][m & 7u] = (int8_t)h;
+            return;
+        }
+        if (s >= 0)
+            tfm_swhalf[s][m & 7u] = 0;
+        idx = clamp((int32_t)tfm_sw_idx(mc, motion_base_value(t, mc->t[0].id)) + d, 0, (int32_t)mc->nsw - 1);
         pos = tfm_sw_pos(mc, (uint32_t)idx);
     } else {
         pos += accel(EN_K1 + (k & 3u), steps, 127);

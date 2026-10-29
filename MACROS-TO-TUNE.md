@@ -6,7 +6,7 @@ Generated from `tools/tfm_ins_spec.py` by `tools/gen_macros_doc.py`: every macro
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
-| 1 | PUNCH | TUNE 70..34 EXP; DRV 0..80; ACC 40..120; LEVEL 108..94 | 70/0/40/108 | 68/20/60/104 | 61/40/80/101 | 50/60/100/98 | 34/80/120/94 |  |
+| 1 | PUNCH (JAM) | TUNE 70..34 EXP; DRV 0..80; ACC 40..120; LEVEL 108..94 | 70/0/40/108 | 68/20/60/104 | 61/40/80/101 | 50/60/100/98 | 34/80/120/94 |  |
 | 2 | SMACK | SNAP 10..120; TONE 30..115; LN1 80..115; LN2 80..115 | 10/30/80/80 | 38/51/89/89 | 65/72/98/98 | 92/94/106/106 | 120/115/115/115 |  |
 | 3 | TIME | DECY 8..120 EXP; LEVEL 104..96 | 8/104 | 15/102 | 36/100 | 71/98 | 120/96 |  |
 | 4 | ROOM | REV 0..90; DLY 0..25 >70% | 0/0 | 22/0 | 45/0 | 68/4 | 90/25 |  |
@@ -21,7 +21,7 @@ Presets: WAREHOUSE, BOOM BAP, DISCO, TRASH CAN, ARCADE.
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
-| 1 | CUTOFF | CUT 18..112 EXP | 18 | 24 | 42 | 71 | 112 |  |
+| 1 | CUTOFF (JAM) | CUT 18..112 EXP | 18 | 24 | 42 | 71 | 112 |  |
 | 2 | RESO | RES 10..118; LEVEL 108..96 | 10/108 | 37/105 | 64/102 | 91/99 | 118/96 |  |
 | 3 | ENV MOD | ED>FLT 0..60; DEC 30..55 | 0/30 | 15/36 | 30/42 | 45/49 | 60/55 |  |
 | 4 | DECAY | DEC 20..100; REL 10..50 | 20/10 | 40/20 | 60/30 | 80/40 | 100/50 |  |
@@ -36,7 +36,7 @@ Presets: RUBBER, ACID RAIN, LOW RIDER, ZAPPER, GNARLY.
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
-| 1 | WOB | LD>FLT 0..63; RES 10..60 | 0/10 | 16/22 | 32/35 | 47/48 | 63/60 |  |
+| 1 | WOB (JAM) | LD>FLT 0..63; RES 10..60 | 0/10 | 16/22 | 32/35 | 47/48 | 63/60 |  |
 | 2 | RATE (SWITCH) | LSYNC: 1/1 1/2 1/4 1/8 8T 1/16 16T 1/32 | 1/1 | 1/2 | 1/8 | 1/16 | 1/32 |  |
 | 3 | GROWL | IMIX 0..100; IA 20..90; LEVEL 108..92 | 0/20/108 | 25/38/104 | 50/55/100 | 75/72/96 | 100/90/92 |  |
 | 4 | CUT | CUT 15..110 EXP | 15 | 21 | 39 | 68 | 110 |  |
@@ -53,7 +53,7 @@ Presets: HALF STEP, YOY, TRASH FLOOR, LASER WOB, SUBWAY.
 |---|---|---|---|---|---|---|---|---|
 | 1 | CHORD (SWITCH) | CHRD: MAJ MIN 7 MAJ7 MIN7 SUS2 SUS4 ADD9 POWER | MAJ | 7 | MIN7 | SUS4 | POWER |  |
 | 2 | VOICE (SWITCH) | VOIC: CLOSE OPEN DROP2 SPREAD STACK | CLOSE | OPEN | DROP2 | SPREAD | STACK |  |
-| 3 | WARM | CUT 30..110; RES 40..10 | 30/40 | 50/32 | 70/25 | 90/18 | 110/10 |  |
+| 3 | WARM (JAM) | CUT 30..110; RES 40..10 | 30/40 | 50/32 | 70/25 | 90/18 | 110/10 |  |
 | 4 | SWELL | ATK 0..90 EXP; REL 10..110 | 0/10 | 6/35 | 22/60 | 51/85 | 90/110 |  |
 | 5 | SHIMMER | CHOR 0..60; DTN 0..20 | 0/0 | 15/5 | 30/10 | 45/15 | 60/20 |  |
 | 6 | SPACE | REV 0..90; DLY 0..40 >70% | 0/0 | 22/0 | 45/0 | 68/7 | 90/40 |  |
@@ -68,7 +68,7 @@ Presets: HOUSE STAB, SUNDAY, VELVET, PUMPER, MIXTAPE.
 |---|---|---|---|---|---|---|---|---|
 | 1 | SCREAM | RES 10..110; DRV 0..70; LEVEL 108..92 | 10/0/108 | 35/18/104 | 60/35/100 | 85/52/96 | 110/70/92 |  |
 | 2 | SWEEP | ED>FLT -20..60; DEC 20..70 | -20/20 | 0/32 | 20/45 | 40/58 | 60/70 |  |
-| 3 | CUT | CUT 30..120 EXP | 30 | 36 | 52 | 81 | 120 |  |
+| 3 | CUT (JAM) | CUT 30..120 EXP | 30 | 36 | 52 | 81 | 120 |  |
 | 4 | GLIDE | GLIDE 0..80 | 0 | 20 | 40 | 60 | 80 |  |
 | 5 | WIDTH | DETUNE 0..80; SPRD 0..127 | 0/0 | 20/32 | 40/64 | 60/95 | 80/127 |  |
 | 6 | ATTACK | ATK 0..80 | 0 | 20 | 40 | 60 | 80 |  |
@@ -84,7 +84,7 @@ Presets: HERO, TRANCE GATE, ARENA, SINE RIDER, HOT WIRE.
 | 1 | DRIFT | LD>PIT 0..14; DTN 5..30 | 0/5 | 4/11 | 7/18 | 10/24 | 14/30 |  |
 | 2 | DUST | IMIX 0..100 | 0 | 25 | 50 | 75 | 100 |  |
 | 3 | SPACE | REV 10..127 | 10 | 39 | 68 | 98 | 127 |  |
-| 4 | BLOOM | ATK 10..120 EXP; REL 30..120 | 10/30 | 17/52 | 38/75 | 72/98 | 120/120 |  |
+| 4 | BLOOM (JAM) | ATK 10..120 EXP; REL 30..120 | 10/30 | 17/52 | 38/75 | 72/98 | 120/120 |  |
 | 5 | TONE | CUT 10..127 EXP | 10 | 17 | 39 | 76 | 127 |  |
 | 6 | SHINE | CHOR 0..110 | 0 | 28 | 55 | 82 | 110 |  |
 | 7 | MOVE | LD>FLT 0..60 | 0 | 15 | 30 | 45 | 60 |  |
@@ -98,7 +98,7 @@ Presets: FOG, MORNING, VHS, AURORA, DEEP END.
 |---|---|---|---|---|---|---|---|---|
 | 1 | JUMP (SWITCH) | ARP: OFF OCT 5TH TRIAD | OFF | OFF | OCT | 5TH | TRIAD |  |
 | 2 | WAVE (SWITCH) | WAVE: PULSE TRI SAW NOISE WAVE | PULSE | TRI | SAW | NOISE | WAVE |  |
-| 3 | SWEEP | SWP 0..110 | 0 | 28 | 55 | 82 | 110 |  |
+| 3 | SWEEP (JAM) | SWP 0..110 | 0 | 28 | 55 | 82 | 110 |  |
 | 4 | CRUSH | CRSH 0..120 | 0 | 30 | 60 | 90 | 120 |  |
 | 5 | VIB | VIB 0..110 | 0 | 28 | 55 | 82 | 110 |  |
 | 6 | DECAY | DEC 15..100 | 15 | 36 | 58 | 79 | 100 |  |
@@ -111,7 +111,7 @@ Presets: 1UP, BOSS LEVEL, WARP ZONE, HIGH SCORE, GLITCH.
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
-| 1 | BARK | MLVL -40..40 | -40 | -20 | 0 | 20 | 40 |  |
+| 1 | BARK (JAM) | MLVL -40..40 | -40 | -20 | 0 | 20 | 40 |  |
 | 2 | TINE | MEG -40..40 | -40 | -20 | 0 | 20 | 40 |  |
 | 3 | TREM | LD>AMP 0..90 | 0 | 22 | 45 | 68 | 90 |  |
 | 4 | CHORUS | CHOR 0..110 | 0 | 28 | 55 | 82 | 110 |  |
@@ -126,7 +126,7 @@ Presets: SUITCASE, LOUNGE, BARK BARK, DREAMY, CHURCH BASEMENT.
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
-| 1 | METAL | MLVL -40..50 | -40 | -18 | 5 | 28 | 50 |  |
+| 1 | METAL (JAM) | MLVL -40..50 | -40 | -18 | 5 | 28 | 50 |  |
 | 2 | RATIO (SWITCH) | MRAT: -8 -6 -4 -2 0 2 4 6 8 | -8 | -4 | 0 | 4 | 8 |  |
 | 3 | BLOOM | MEG -40..50 | -40 | -18 | 5 | 28 | 50 |  |
 | 4 | DECAY | DEC 30..120 | 30 | 52 | 75 | 98 | 120 |  |
@@ -141,7 +141,7 @@ Presets: MUSIC BOX, TEMPLE, ICE, CHIMES, ROBOT BELLS.
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
-| 1 | BRIGHT | BRIT 20..127; POS 40..20 | 20/40 | 47/35 | 74/30 | 100/25 | 127/20 |  |
+| 1 | BRIGHT (JAM) | BRIT 20..127; POS 40..20 | 20/40 | 47/35 | 74/30 | 100/25 | 127/20 |  |
 | 2 | DAMP | DAMP 20..127 | 20 | 47 | 74 | 100 | 127 |  |
 | 3 | BODY | STRC 10..120 | 10 | 38 | 65 | 92 | 120 |  |
 | 4 | PICK | POS 0..110 | 0 | 28 | 55 | 82 | 110 |  |
@@ -156,7 +156,7 @@ Presets: KOTO, NYLON, MUTED, HARP, BANJO-ISH.
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
-| 1 | VOWEL | VOWL 0..127 | 0 | 32 | 64 | 95 | 127 |  |
+| 1 | VOWEL (JAM) | VOWL 0..127 | 0 | 32 | 64 | 95 | 127 |  |
 | 2 | TALK | TALK 0..110 | 0 | 28 | 55 | 82 | 110 |  |
 | 3 | BUZZ | BUZZ 10..127 | 10 | 39 | 68 | 98 | 127 |  |
 | 4 | BREATH | BRTH 0..110 | 0 | 28 | 55 | 82 | 110 |  |
@@ -172,7 +172,7 @@ Presets: ROBOT, CHOIR BOY, WHISPER, YAMMER, MONK.
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
 | 1 | STOPS (SWITCH) | REG: 0 1 2 3 4 5 6 7 8 9 | 0 | 2 | 4 | 7 | 9 |  |
-| 2 | DRIVE | DRV 0..120; LEVEL 108..92 | 0/108 | 30/104 | 60/100 | 90/96 | 120/92 |  |
+| 2 | DRIVE (JAM) | DRV 0..120; LEVEL 108..92 | 0/108 | 30/104 | 60/100 | 90/96 | 120/92 |  |
 | 3 | ROTOR (SWITCH) | ROTR: OFF SLOW FAST | OFF | OFF | SLOW | FAST | FAST |  |
 | 4 | CLICK | CLICK 0..127 | 0 | 32 | 64 | 95 | 127 |  |
 | 5 | SUB | SUB -8..8 | -8 | -4 | 0 | 4 | 8 |  |
