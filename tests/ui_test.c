@@ -11304,6 +11304,7 @@ int main(void)
     bad += test_tfm_ui_pages();
     bad += test_tfm_ui_jam_day();
     bad += test_r1_cursor();
+    bad += test_r1_tempo();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

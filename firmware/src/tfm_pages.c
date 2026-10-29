@@ -8,8 +8,9 @@ static struct {
     char big[16], hl[24], hr[24], kl[4][10], kv[4][12];
     uint16_t col;
     uint16_t frac[4];
-    uint8_t nchip, sel, trk;
+    uint8_t nchip, sel, trk, hot;                       /* hot: the knob shown highlighted (0xFF: none) */
 } ro;
+static uint8_t clock_hot;                               /* CLOCK opens on K1 TEMPO; the knob last turned stays lit */
 static void ro_knob(uint32_t k, const char *label, const param_desc_t *d, int32_t v, const char *over)
 {
     char val[12];
@@ -58,9 +59,17 @@ static void ro_body(void)                               /* y 22 .. 215 */
         int32_t cx = 34 + 57 * (int32_t)i + (i > 1u);
         char kb[3] = {'K', (char)('1' + i), 0};
         tu_dial(cx, 134, 20, 17, ro.frac[i], TU_TC[i], TC_TRACK);
+        if (i == ro.hot)
+            tu_ring(cx, 134, 25, 23, TU_TC[i]);
         tu_disc(cx, 134, 16, TC_BG);
         tu_text_c(cx, 134, str_len(ro.kv[i]) > 3u ? &AF_TM : &AF_TL, ro.kv[i], TC_TEXT, TC_BG);
-        tu_text_c(cx, 162, &AF_TM, ro.kl[i], TU_TC[i], TC_BG);
+        if (i == ro.hot) {                              /* the lit knob: its name in reverse */
+            int32_t w = text_w(&AF_TM, ro.kl[i]) + 8;
+            tu_rrect(cx - w / 2, 156, w, 13, 3, TU_TC[i], TC_BG);
+            tu_text_c(cx, 162, &AF_TM, ro.kl[i], TC_BG, TU_TC[i]);
+        } else {
+            tu_text_c(cx, 162, &AF_TM, ro.kl[i], TU_TC[i], TC_BG);
+        }
         tu_text_c(cx, 173, &AF_TS, kb, TC_QUIET, TC_BG);
     }
 }
@@ -93,6 +102,7 @@ static void ro_clear(void)
 {
     memset(&ro, 0, sizeof ro);
     ro.trk = (uint8_t)song.sel;
+    ro.hot = 0xFF;
     ro.col = TU_TC[song.sel & 3u];
 }
 /* ================================================================== FX, SPACE ============================== */
@@ -225,6 +235,7 @@ static void tu_clock_fill(void)
     ro.col = TC_AMBER;
     if (tu.scr == TU_CLOCK) {
         ro.cap = "TEMPO";
+        ro.hot = clock_hot;
         fmt_int(ro.big, song.g[G_BPM]);
         str_cpy(ro.big + str_len(ro.big), " BPM", 6);
         ro_knob(0, "TEMPO", &GP[G_BPM], song.g[G_BPM], 0);
@@ -241,6 +252,7 @@ static void tu_clock_fill(void)
         static const char *const TS_[4] = {"4/4", "3/4", "6/8", "7/8"};
         uint32_t i;
         ro.cap = "TIME SIGNATURE";
+        ro.hot = 0;
         str_cpy(ro.big, TS_[tfm_tsig()], 16);
         for (i = 0; i < 4u; i++)
             ro.chip[i] = TS_[i];
@@ -262,6 +274,7 @@ static void tu_clock_input(uint32_t busy)
     for (k = 0; k < 4u; k++) {
         if ((s = panel_enc(EN_K1 + k)) == 0)
             continue;
+        clock_hot = (uint8_t)k;
         if (tu.scr == TU_CLOCK2) {
             if (k == 0u)
                 ui_prefs3 = (uint8_t)((ui_prefs3 & ~(3u << PREF_TSIG_SH)) | (uint32_t)clamp((int32_t)tfm_tsig() + (s > 0 ? 1 : -1), 0, 3) << PREF_TSIG_SH);
@@ -352,9 +365,11 @@ static void tu_pages_tap(uint32_t b)
     track_t *t = TSEL;
     if (b == B_FX)
         tu_goto(tu.scr == TU_FX ? TU_SPACE : TU_FX);
-    else if (b == B_SCL)
+    else if (b == B_SCL) {
+        if (tu.scr != TU_CLOCK && tu.scr != TU_CLOCK2)
+            clock_hot = 0;                              /* (it opens on TEMPO) */
         tu_goto(tu.scr == TU_CLOCK ? TU_CLOCK2 : TU_CLOCK);
-    else if (b == B_LFO)
+    } else if (b == B_LFO)
         tu_goto(TU_MOTION);
     else if (b == B_ARP) {
         if (tu.scr != TU_ARP) {                         /* on, and its page */

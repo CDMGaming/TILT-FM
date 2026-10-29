@@ -455,7 +455,7 @@ static void tu_jam_draw(void)
     tu_zone(3, 126, 44, TC_BG, cur * 977u + project_used(0) * 3u + project_used(1) * 5u + project_used(2) * 7u + project_used(3) * 11u,
             tu_strip_draw);
     tu_zone(4, 170, 45, TC_BG, 1u, tu_gap_draw);
-    tu_foot(4, "K1-K4", "JAM", "REC", "RECORD MOVES", "EDIT", "SOUND", "ENV", "DICE", 0, 0);
+    tu_foot(5, "K1-K4", "JAM", "REC", "RECORD", "EDIT", "SOUND", "SCL", "TEMPO", "ENV", "DICE");
 }
 
 /* ================================================================== MIX ====================================== */
