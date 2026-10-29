@@ -31,11 +31,20 @@ static void panel_setup(void) {}
 static uint8_t nor[0x100000], flash_ok = 1;
 static int erase_error, fail_after = -1;
 static uint32_t erases, as_erases;               /* (as_erases: the autosave's two sectors, 0xE5000 / 0xE6000) */
-static int st_read(uint32_t off, void *dst, uint32_t n) { memcpy(dst, nor + off, n); return 0; }
+/* round 2: a power cut after cut_ops more erase / program calls (-1: none): the call that meets it applies half of a
+ * program and fails, then the part is dead (every call fails, nothing changes) until the test powers it on again */
+static int cut_ops = -1, cut_dead;
+static uint32_t progs, off_min = 0xFFFFFFFFu, off_max, reads;
+static int st_read(uint32_t off, void *dst, uint32_t n) { reads++; memcpy(dst, nor + off, n); return 0; }
 static int st_erase(uint32_t off)
 {
     erases++;
     as_erases += off >= 0xE5000u && off < 0xE7000u;
+    if (off < off_min) off_min = off;
+    if (off + 4096u > off_max) off_max = off + 4096u;
+    if (cut_dead) return -9;
+    if (cut_ops == 0) { cut_dead = 1; memset(nor + off, 0x00, 2048); return -9; }   /* (a torn erase: half the sector left at 0) */
+    if (cut_ops > 0) cut_ops--;
     if (erase_error) return -8;
     memset(nor + off, 0xFF, 4096);
     return 0;
@@ -44,6 +53,16 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 {
     const uint8_t *s = src;
     uint32_t i;
+    progs++;
+    if (off < off_min) off_min = off;
+    if (off + n > off_max) off_max = off + n;
+    if (cut_dead) return -9;
+    if (cut_ops == 0) {
+        cut_dead = 1;
+        for (i = 0; i < n / 2u; i++) nor[off + i] &= s[i];
+        return -9;
+    }
+    if (cut_ops > 0) cut_ops--;
     if (fail_after == 0) return -9;
     if (fail_after > 0) fail_after--;
     for (i = 0; i < n; i++) nor[off + i] &= s[i];
@@ -74,9 +93,28 @@ static int check(const char *what, int ok)
     return ok ? 0 : 1;
 }
 
+/* round 2: a scene lives in flash (project.c scn_raw loads it into proj_slot[0]); these read it as a stored image and
+ * rescan which scenes there are after a test wrote or damaged flash directly */
+static project_store_t slot_img(uint32_t s)
+{
+    project_store_t z;
+    const project_store_t *r = scn_raw(s);
+    if (r) return *r;
+    memset(&z, 0, sizeof z);
+    return z;
+}
+static void scn_rescan(void)
+{
+    uint32_t g;
+    scn_used = 0;
+    for (g = 0; g < SCN_N; g++)
+        if (scn_flash_ok(g)) scn_used |= 1u << g;
+}
+
 static void reset(void)
 {
     memset(nor, 0xFF, sizeof nor);
+    scn_used = 0; sng_cur = 0; memset(scn_pend_g, 0xFF, sizeof scn_pend_g); memset(scn_inf, 0, sizeof scn_inf);
     memset(&song, 0, sizeof song);
     memset(trk, 0, sizeof trk);
     memset(&chain, 0, sizeof chain);
@@ -96,6 +134,7 @@ static void reset(void)
     flash_ok = 1;
     erase_error = 0;
     fail_after = -1;
+    cut_ops = -1; cut_dead = 0; progs = 0; off_min = 0xFFFFFFFFu; off_max = 0; reads = 0;
     up_gen = erases = 0;
     irq_start_race = irq_races = 0;
 }
@@ -493,6 +532,204 @@ static int tilt_autosave_test(void)
     }
     return bad;
 }
+/* ---- round 2: 8 scenes x 3 songs (storage.c's map), the first-boot migration, the bar-line switch ---- */
+static project_store_t old_img[4];
+static chain_config_t old_chain;
+/* a flash as the update finds it: scenes A..D stored (notes 60..63, a chain with a silent lane), the three user sample
+ * slots full of whatever they held (junk, with an "FSMP" header at the first) */
+static void old_world(void)
+{
+    uint32_t i;
+    reset();
+    memset(nor + 0xA0000, 0x5A, 0xDC000u - 0xA0000u);
+    memcpy(nor + 0xA0000, "FSMP", 4);
+    memset(nor + 0xB4000, 0xA5, 0x1000);
+    chain_defaults(&chain_config);
+    chain_config.count = 2;
+    chain_config.row[0] = (chain_row_t){{0, 1, CHAIN_SILENT, 2}, 3};
+    chain_config.row[1] = (chain_row_t){{3, 3, 3, 3}, 1};
+    old_chain = chain_config;
+    song.g[G_BPM] = 97;
+    for (i = 0; i < 4u; i++) {
+        trk[0].step[0] = (step_t){{(uint8_t)(60u + i)}, 1, ST_NOTE, 0, 96, 0, 0};
+        project_capture(&proj_scratch);
+        proj_pack(&proj_wire, &proj_scratch);
+        old_img[i] = proj_wire;
+        st_save(OBJ_PROJECT0 + i, &proj_wire, sizeof proj_wire);
+    }
+    scn_used = 0; sng_cur = 0;
+    memset(song_rec, 0, sizeof song_rec);
+    erases = progs = 0;
+}
+static int old_intact(void)                        /* scenes A..D are in flash exactly as they were */
+{
+    uint32_t i;
+    project_store_t got2;
+    for (i = 0; i < 4u; i++)
+        if (st_load(OBJ_PROJECT0 + i, &got2, sizeof got2) != (int)sizeof got2 || memcmp(&got2, &old_img[i], sizeof got2))
+            return 0;
+    return 1;
+}
+static int region_clean(void)                      /* every sector of the region is blank or a record of ours */
+{
+    uint32_t off;
+    for (off = 0xA0000u; off < 0xDC000u; off += 4096u) {
+        uint32_t i, blank = 1, magic;
+        for (i = 0; i < 4096u && blank; i++)
+            if (nor[off + i] != 0xFF) blank = 0;
+        memcpy(&magic, nor + off, 4);
+        if (!blank && magic != ST_MAGIC) return 0;
+    }
+    return 1;
+}
+static int migrated_ok(void)                       /* the state a finished migration leaves */
+{
+    scn_tag_t tg;
+    chain_config_t c;
+    if (st_load(OBJ_SCFMT, &tg, sizeof tg) != (int)sizeof tg || tg.magic != SCN_TAG) return 0;
+    if (!old_intact() || !region_clean()) return 0;
+    if (scn_used != 0xFu || !song_stored(0) || song_stored(1) || song_stored(2)) return 0;
+    c = song_rec[0].chain;
+    chain_dec(&c);
+    return !memcmp(&c, &old_chain, sizeof c) && song_rec[0].g[G_BPM] == 97;
+}
+static int scenes_round2(void)
+{
+    int bad = 0, ok;
+    uint32_t g, a, b, n_ops, k, bad_cut = 0;
+    /* the map */
+    ok = 1;
+    for (g = 0; g < SCN_N; g++) {
+        uint32_t o = st_scene_obj(g), c;
+        for (c = 0; c < 2u; c++) {
+            uint32_t s = st_sector(o, c);
+            ok &= s >= (g < 4u ? 0x97000u : 0xA0000u) && s + 4096u <= (g < 4u ? 0x9F000u : 0xC8000u);
+            for (a = 0; a < SCN_N; a++)
+                for (b = 0; b < 2u; b++)
+                    if ((a != g || b != c) && st_sector(st_scene_obj(a), b) == s) ok = 0;
+        }
+    }
+    for (a = 0; a < NSONG; a++)
+        for (b = 0; b < 2u; b++)
+            ok &= st_sector(OBJ_SONG0 + a, b) >= 0xC8000u && st_sector(OBJ_SONG0 + a, b) + 4096u <= 0xCE000u;
+    ok &= st_sector(OBJ_SCFMT, 0) == 0xCE000u && st_sector(OBJ_SCFMT, 1) == 0xCF000u;
+    bad += check("round 2 map: 24 scenes x A/B, 3 songs, the tag: each its own sectors, inside 0x97000..0xCFFFF", ok);
+    bad += check("round 2 map: the types are apart from the voice bank's record (32) and refused when out of range",
+                 !st_obj_ok(OBJ_FM6VB) && st_obj_ok(OBJ_SCN0) && st_obj_ok(OBJ_SCFMT) && !st_obj_ok(OBJ_TOP) &&
+                 st_load(OBJ_FM6VB, &old_img[0], sizeof old_img[0]) < 0);
+
+    /* 24 scenes: each stores, reads back its own notes, and nothing else changes */
+    reset();
+    ok = 1;
+    for (g = 0; g < SCN_N; g++) {
+        sng_cur = (uint8_t)(g / NSCN);
+        trk[0].step[0] = (step_t){{(uint8_t)(30u + g)}, 1, ST_NOTE, 0, 96, 0, 0};
+        ok &= project_save_as(g % NSCN, 0) == 0 && project_used(g % NSCN);
+    }
+    for (g = 0; g < SCN_N; g++) {
+        sng_cur = (uint8_t)(g / NSCN);
+        ok &= project_used(g % NSCN) && scn_get(g, &proj_scratch) && proj_scratch.t[0].step[0].note[0] == 30u + g;
+    }
+    sng_cur = 0;
+    bad += check("round 2: 24 scenes (3 songs x A..H) each store and read back their own notes", ok);
+    bad += check("round 2: the writes stayed in 0x97000..0xCFFFF (nothing below 0x4000, the OTA, autosave or settings touched)",
+                 off_min >= 0x97000u && off_max <= 0xD0000u && erases == 24u);
+    for (g = 0; g < SCN_N; g++) nor[st_sector(st_scene_obj(g), 0) + 20] ^= 0u;
+    scn_used = 0;
+    sng_cur = 0;
+    scn_rescan();
+    bad += check("round 2: a rescan (power-on) finds all 24", scn_used == 0xFFFFFFu);
+
+    /* the migration */
+    old_world();
+    scn_boot();
+    bad += check("round 2 migration: old scenes A..D, their chain (with a silent lane) and tempo = song 1; E..H and songs 2, 3 empty; "
+                 "the sample region wiped, the tag set", migrated_ok());
+    bad += check("round 2 migration: scenes A..D byte for byte as they were; song 1's chain decodes to the old one",
+                 old_intact() && !memcmp(&old_chain.row[0], &(chain_row_t){{0, 1, CHAIN_SILENT, 2}, 3}, sizeof(chain_row_t)));
+    k = erases + progs;
+    scn_boot();
+    bad += check("round 2 migration: it runs once (the second boot writes nothing)", erases + progs == k && migrated_ok());
+    /* a power cut at every erase / program call of it, and a torn one */
+    old_world();
+    scn_boot();
+    n_ops = erases + progs;
+    for (k = 0; k <= n_ops + 1u; k++) {
+        old_world();
+        cut_ops = (int)k; cut_dead = 0;
+        scn_boot();
+        cut_ops = -1; cut_dead = 0;
+        if (!old_intact()) { bad_cut++; continue; }              /* the old data, at the cut */
+        scn_boot();                                               /* power on again */
+        if (!migrated_ok()) bad_cut++;
+    }
+    bad += check("round 2 migration: a power cut at any erase or program (torn ones too): the old scenes are there at the cut and "
+                 "after the next boot, the migration finishes", bad_cut == 0 && n_ops > 10u);
+    printf("persist:   (%u erase/program calls cut one by one, %u bad)\n", (unsigned)n_ops, (unsigned)bad_cut);
+    /* a flash that fails on the first boot still lets the old scenes work */
+    old_world();
+    erase_error = 1;
+    scn_boot();
+    erase_error = 0;
+    bad += check("round 2 migration: a flash that cannot erase leaves the old scenes usable (A..D), E..H and the songs absent",
+                 old_intact() && scn_used == 0xFu && !song_stored(0));
+
+    /* playing: a scene switch is read from flash and flips on the bar line; flash is never written meanwhile */
+    {
+        uint32_t e0, p0, r0, n, t, as0;
+        project_store_t fl;
+        project_t dd;
+        reset();
+        sng_cur = 0;
+        tilt_ns_open = 0;
+        for (t = 0; t < NTRK; t++) { trk[t].p[P_SLEN] = 16; trk[t].p[P_SDIV] = 2; trk[t].p[P_SSWING] = 0; }
+        trk[0].step[0] = (step_t){{60}, 1, ST_NOTE, 0, 96, 0, 0};
+        ok = project_save_as(0, 0) == 0;                      /* scene A */
+        trk[0].step[0] = (step_t){{64}, 1, ST_NOTE, 0, 96, 0, 0};
+        ok &= project_save_as(5, 0) == 0;                     /* scene F (a song past the old four) */
+        ok &= scene_load(0) == 0 && scene_cur() == 0u && trk[0].step[0].note[0] == 60u;
+        scene_based();
+        transport_req = 1;
+        events_block(32);
+        for (n = 1; n < 300u; n++) events_block(32);
+        trk[0].step[2] = (step_t){{67}, 1, ST_NOTE, 0, 96, 0, 0};   /* A edited while it plays */
+        e0 = erases; p0 = progs; r0 = reads;
+        /* (what tilt.c tilt_scene_go does for a transport that runs: the edited scene to RAM, the cue staged from flash) */
+        ok &= scene_edited() && scene_store_ram(0) == 0 && scene_stage_from(5) == 0;
+        tsc.cue = 5; RING_PUBLISH(); scene_armed = 1;
+        for (n = 0; n < 4000u && scene_armed == 1u; n++) { events_block(32); scene_flush(); }
+        if (scene_armed == 2u) { scene_armed = 0; scene_enter(5); tsc.cue = SCENE_NONE; pat_from_set(6); scene_based(); }
+        bad += check("round 2 playing: scene F cued, read from flash, flipped on the bar line: scene F is the music",
+                     ok && scene_armed == 0u && scene_cur() == 5u && trk[0].step[0].note[0] == 64u && !scene_edited() && reads > r0);
+        bad += check("round 2 playing: no flash was erased or programmed during the cue, the flip and the following passes",
+                     erases == e0 && progs == p0);
+        bad += check("round 2 playing: the scene left (A, edited) waits in RAM for the stop (its dot), flash still has the old A",
+                     (tsc.pend & 1u) && scn_pend_g[0] == 0u && scn_get(0, &proj_scratch) && proj_scratch.t[0].step[2].note[0] == 67u &&
+                     st_load(OBJ_PROJECT0, &fl, sizeof fl) == (int)sizeof fl && proj_import(&dd, &fl, sizeof fl) && dd.t[0].step[2].time != ST_NOTE);
+        seq_stop(); transport_req = 0; events_block(32);
+        e0 = erases; as0 = as_erases;
+        scene_flush();
+        bad += check("round 2 playing: at the stop A is written (one erase, then the autosave's), the dot goes, A has its edit in flash",
+                     erases == e0 + 2u && as_erases == as0 + 1u && !tsc.pend && scn_pend_g[0] == 0xFFu && st_load(OBJ_PROJECT0, &fl, sizeof fl) == (int)sizeof fl &&
+                     proj_import(&dd, &fl, sizeof fl) && dd.t[0].step[2].note[0] == 67u);
+        /* three scenes can wait; a fourth is refused (STOP TO SAVE), nothing lost */
+        transport_req = 1; events_block(32);
+        for (n = 1; n < 40u; n++) events_block(32);
+        ok = 1;
+        for (t = 0; t < 4u; t++) {
+            trk[0].step[1] = (step_t){{(uint8_t)(50u + t)}, 1, ST_NOTE, 0, 96, 0, 0};
+            ok &= scene_store_ram(t) == (t < 3u ? 0 : 1);
+        }
+        bad += check("round 2 playing: three edited scenes wait in RAM, a fourth is refused (STOP TO SAVE): nothing is written meanwhile",
+                     ok && !strcmp(ui.msg, "STOP TO SAVE") && erases == e0 + 2u);
+        seq_stop(); transport_req = 0; events_block(32);
+        scene_flush();
+        bad += check("round 2 playing: the stop writes the three (and the autosave)", !tsc.pend && erases == e0 + 6u && scn_get(2, &proj_scratch) &&
+                     proj_scratch.t[0].step[1].note[0] == 52u);
+    }
+    return bad;
+}
+
 int main(void)
 {
     int bad = 0, ok;
@@ -617,17 +854,18 @@ int main(void)
     reset();
     trk[0].step[0] = (step_t){{60}, 1, ST_NOTE, 0, 96, 0, 0};
     project_save(0);
-    old = proj_slot[0];
+    old = slot_img(0);
     trk[0].step[0].note[0] = 72;
     fail_after = 1;
     project_save(0);
     fail_after = -1;
-    bad += check("failed project save keeps RAM and old flash", !strcmp(ui.msg, "SAVE ERROR") &&
-                  !memcmp(&proj_slot[0], &old, sizeof old) && st_load(OBJ_PROJECT0, &got, sizeof got) == (int)sizeof got &&
+    got = slot_img(0);
+    bad += check("failed project save keeps the scene as it was (flash)", !strcmp(ui.msg, "SAVE ERROR") &&
+                  !memcmp(&got, &old, sizeof old) && st_load(OBJ_PROJECT0, &got, sizeof got) == (int)sizeof got &&
                   !memcmp(&got, &old, sizeof got));
     project_save(0);
-    bad += check("successful project save publishes new RAM", !strcmp(ui.msg, "SAVED") &&
-                  proj_import(&proj_scratch, &proj_slot[0], sizeof proj_slot[0]) &&
+    bad += check("successful project save publishes the new scene", !strcmp(ui.msg, "SAVED") &&
+                  scn_get(0, &proj_scratch) &&
                   proj_scratch.t[0].step[0].note[0] == 72u && proj_ok(&proj_scratch));
     before = erases;
     transport_req = 1;
@@ -644,14 +882,12 @@ int main(void)
         project_store_t keep;
         step_t st0 = trk[0].step[0];
         project_save_as(0, "LOFI JAM");
-        memset(proj_slot[0].raw, 0, 8);                       /* (the RAM copy lost: read it back from flash) */
-        proj_fetch(0);
         bad += check("a project's name goes to flash and comes back", project_name(0, n) && !strcmp(n, "LOFI JAM") &&
                       !strcmp(proj_name, "LOFI JAM"));
-        keep = proj_slot[0];
+        keep = slot_img(0);
         fail_after = 1;
         bad += check("failed project rename: SAVE ERROR, the slot and flash as they were",
-                      project_rename(0, "DUB") == 2 && !strcmp(ui.msg, "SAVE ERROR") && !memcmp(&proj_slot[0], &keep, sizeof keep) &&
+                      project_rename(0, "DUB") == 2 && !strcmp(ui.msg, "SAVE ERROR") &&
                       st_load(OBJ_PROJECT0, &got, sizeof got) == (int)sizeof got && !memcmp(&got, &keep, sizeof got));
         fail_after = -1;
         before = erases;
@@ -660,14 +896,14 @@ int main(void)
                       !strcmp(ui.msg, "STOP TO SAVE"));
         transport_req = 0;
         bad += check("project rename: flash has the new name, the music as it was", project_rename(0, "DUB") == 0 &&
-                      !strcmp(ui.msg, "RENAMED") && (memset(proj_slot[0].raw, 0, 8), proj_fetch(0), project_name(0, n)) &&
-                      !strcmp(n, "DUB") && proj_scratch.t[0].step[0].note[0] == st0.note[0]);
+                      !strcmp(ui.msg, "RENAMED") && (scn_inf[0].ok = 0, project_name(0, n)) &&
+                      !strcmp(n, "DUB") && scn_get(0, &proj_scratch) && proj_scratch.t[0].step[0].note[0] == st0.note[0]);
     }
     {   /* 1.5.5 (#199): SAVE > PROJECT ERASE: an empty record committed as a save is (A/B, the record last) */
-        project_store_t keep = proj_slot[0];
+        project_store_t keep = slot_img(0);
         int ok2;
         fail_after = 0;                                        /* (the commit record's write fails: a power cut) */
-        ok2 = project_erase(0) == 2 && !strcmp(ui.msg, "ERASE ERROR") && !memcmp(&proj_slot[0], &keep, sizeof keep) &&
+        ok2 = project_erase(0) == 2 && !strcmp(ui.msg, "ERASE ERROR") && project_used(0) &&
               st_load(OBJ_PROJECT0, &got, sizeof got) == (int)sizeof got && !memcmp(&got, &keep, sizeof got);
         fail_after = -1;
         bad += check("failed project erase (cut before its record): ERASE ERROR, the project in RAM and flash", ok2);
@@ -683,25 +919,30 @@ int main(void)
         pat_from[0] = 1; pat_from[1] = 2;
         ok2 = project_erase(0) == 0 && !strcmp(ui.msg, "SCENE A ERASED") && !project_used(0) && erases == before + 1u &&
               st_load(OBJ_PROJECT0, &got, sizeof got) == 0 && proj_cur == PROJ_NO_SLOT && !pat_from[0] && pat_from[1] == 2u;
-        proj_fetch(0);
+        scn_rescan();
         ok2 &= !project_used(0) && project_used(1);           /* (read back from flash: empty; the next slot kept) */
         bad += check("project erase: the slot empty in RAM and flash (no older copy comes back), the others kept", ok2);
         bad += check("an erased slot takes a new save", project_save(0) == 0 && project_used(0) &&
-                      (memset(proj_slot[0].raw, 0, 8), proj_fetch(0), project_used(0)));
+                      (scn_rescan(), project_used(0)));
     }
     {   /* FUN7 itself refuses a step outside its fields: a damaged slot is empty, the tracks stay */
         step_t keep = trk[0].step[0];
-        old = proj_slot[0];
-        proj_slot[0].raw[68 + P_COUNT + 2 + 4] = 7;               /* track 1 step 1: n = 7 */
-        bad += check("damaged FUN7 slot (hash ok, n > 4) is refused", (memcpy(proj_slot[0].raw + PROJ_STORE_SIZE - 4,
-                      &(uint32_t){proj_hash(proj_slot[0].raw, PROJ_STORE_SIZE - 4)}, 4), !project_used(0)));
-        st_save(OBJ_PROJECT0, &proj_slot[0], sizeof proj_slot[0]);
+        old = slot_img(0);
+        {
+            project_store_t dmg = old;
+            dmg.raw[68 + P_COUNT + 2 + 4] = 7;               /* track 1 step 1: n = 7 */
+            memcpy(dmg.raw + PROJ_STORE_SIZE - 4, &(uint32_t){proj_hash(dmg.raw, PROJ_STORE_SIZE - 4)}, 4);
+            st_save(OBJ_PROJECT0, &dmg, sizeof dmg);
+            scn_rescan();
+            bad += check("damaged FUN7 slot (hash ok, n > 4) is refused", !project_used(0));
+            scn_used |= 1u;                                      /* (stored, but it does not load) */
+        }
         ui.msg[0] = 0;
         project_load(0);
         bad += check("loading it says EMPTY SLOT and keeps the steps", !strcmp(ui.msg, "EMPTY SLOT") &&
                       !memcmp(&trk[0].step[0], &keep, sizeof keep));
-        proj_slot[0] = old;
-        st_save(OBJ_PROJECT0, &proj_slot[0], sizeof proj_slot[0]);
+        st_save(OBJ_PROJECT0, &old, sizeof old);
+        scn_rescan();
     }
     {   /* an older format (FUN5) with values FUN7 cannot pack still loads, bounded */
         uint32_t i;
@@ -718,7 +959,7 @@ int main(void)
         v5.t[0].step[0] = (step10_t){{255, 128, 160, 200}, 255, 255, 0, 96, 255, 5};
         v5.sum = proj_hash(&v5, sizeof v5 - 4u);
         st_save(OBJ_PROJECT0 + 3u, &v5, sizeof v5);
-        memset(proj_slot[3].raw, 0, 4);
+        scn_rescan();
         project_load(3);
         bad += check("FUN5 load bounds steps and masks lane accents", trk[0].step[0].n == 4u &&
                       trk[0].step[0].time == ST_REST && trk[0].step[0].note[0] == 127u &&
@@ -798,5 +1039,6 @@ int main(void)
     bad += autosave_test();
     bad += tilt_autosave_test();                     /* (TILT-FM) */
     printf("%s\n", bad ? "PERSISTENCE TEST FAILED" : "persistence test passed");
+    bad += scenes_round2();
     return bad != 0;
 }

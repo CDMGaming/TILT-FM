@@ -2,13 +2,18 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Complete musical archive: no raw addresses are accepted. Small objects are staged
  * in main-loop RAM and fully validated before the existing A/B commit path writes.
- * Sample restore uses SMP_BEGIN/WRITE/END and its existing CRC/header-last commit.
- * A disconnected sample restore can lose that sample; the exported file is retained.
+ * (Round 2: no sample slots; scenes and songs are committed by project.c scn_store / song_put.)
  * Id 8 (the FM6 patch bank of 1.0..1.0.2) is listed empty since 1.0.3; a PUT of it from an older archive moves its
  * patches into the user presets restored before it (ids 6, 7), as the first boot after the update does (up_fm6.c).
  * Id 9 is the user presets' FM6 patches (up_fm6.c), appended in 1.0.3.
  */
-static const uint8_t ED_BK_IDS[13] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 32, 33, 34};
+/* Round 2 (8 scenes x 3 songs): the scenes are ids 64 + g (g = 8 song + scene, 24 of them), the songs 96 + n (a song
+ * record: project.c song_rec_t; 0 = empty); the four project slots (2..5) and the three user sample slots (32..34) are
+ * gone from the list: an editor restoring an older archive puts its slots 2..5 into 64..67 (song 1's A..D). */
+static const uint8_t ED_BK_IDS[33] = {0, 1, 6, 7, 8, 9,
+    64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 96, 97, 98};
+#define ED_BK_SCN(id) ((id) >= 64u && (id) < 64u + SCN_N)
+#define ED_BK_SONG(id) ((id) >= 96u && (id) < 96u + NSONG)
 #define ED_BK_N ((uint32_t)sizeof ED_BK_IDS)
 #define ED_BK_MAX ((uint32_t)sizeof proj_wire_u.raw)
 #define ED_BK_RAW (proj_wire_u.raw)  /* reuse the existing serialized main-loop scratch */
@@ -36,9 +41,15 @@ static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
     *len = 0;
     if (id == 0u) { *len = sizeof(project_store_t); return ED_BK_RAW; }
     if (id == 1u) { *len = sizeof ed_bk_settings; return (const uint8_t *)&ed_bk_settings; }
-    if (id >= 2u && id <= 5u) {
-        if (project_used(id - 2u)) *len = sizeof proj_slot[0];
-        return (const uint8_t *)&proj_slot[id - 2u];
+    if (ED_BK_SCN(id)) {                            /* a scene: loaded again for each request (a pointer good for this one) */
+        const project_store_t *s = scn_stored(id - 64u) ? scn_raw(id - 64u) : 0;
+        if (!s) return ED_BK_RAW;
+        *len = sizeof *s;
+        return (const uint8_t *)s;
+    }
+    if (ED_BK_SONG(id)) {
+        if (song_stored(id - 96u)) *len = sizeof song_rec[0];
+        return (const uint8_t *)&song_rec[id - 96u];
     }
     if (id == 6u || id == 7u) {
         if (up_bank[id - 6u].magic == UP_BANK_MAGIC) *len = sizeof up_bank[0];
@@ -49,13 +60,6 @@ static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
     if (id == 9u) {                                 /* the user presets' FM6 patches */
         if (upf_valid(&upf)) *len = sizeof upf;
         return (const uint8_t *)&upf;
-    }
-    if (id >= 32u && id < 32u + SMP_USER_SLOTS) {
-        uint32_t k = id - 32u;
-        const smp_user_hdr_t *h = (const smp_user_hdr_t *)smp_user_xip(k);
-        if (usr_nz[k] && h->magic == SMP_USER_MAGIC && h->data_len <= SMP_USER_SIZE - SMP_USER_DATA)
-            *len = SMP_USER_DATA + h->data_len;
-        return smp_user_xip(k);
     }
     return 0;
 }
@@ -93,7 +97,7 @@ static uint32_t ed_bk_commit(void)
     uint8_t *raw = ED_BK_RAW;
     uint32_t obj;
     if (ed_bk_pos != ed_bk_len || st_crc32(raw, ed_bk_len) != ed_bk_crc) return 2;
-    if (ed_bk_id == 0u || (ed_bk_id >= 2u && ed_bk_id <= 5u)) {
+    if (ed_bk_id == 0u || ED_BK_SCN(ed_bk_id)) {
         if (ed_bk_len && !proj_import(&proj_scratch, raw, (int)ed_bk_len)) return 2;
         if (ed_bk_len) {                            /* an older format becomes FUN10 inside its ranges */
             proj_bound(&proj_scratch);
@@ -104,7 +108,17 @@ static uint32_t ed_bk_commit(void)
             if (!ed_bk_len) return 2;
             return project_restore_runtime(&proj_scratch) ? 2u : 0u;
         }
-        obj = OBJ_PROJECT0 + ed_bk_id - 2u;
+        if (scn_store(ed_bk_id - 64u, ed_bk_len ? (const project_store_t *)raw : 0)) return 4;
+        if (proj_cur < NSCN && scn_g(proj_cur) == ed_bk_id - 64u)
+            proj_cur = PROJ_NO_SLOT;                     /* (another project there now: the music keeps its name) */
+        sync_reload = 1; ui.force = 1;
+        return 0;
+    } else if (ED_BK_SONG(ed_bk_id)) {                 /* a song record: valid ones only (0: the song empty) */
+        const song_rec_t *r = (const song_rec_t *)raw;
+        if (ed_bk_len && (ed_bk_len != sizeof *r || !song_rec_ok(r))) return 2;
+        if (song_put(ed_bk_id - 96u, ed_bk_len ? r : 0)) return 4;
+        sync_reload = 1; ui.force = 1;
+        return 0;
     } else if (ed_bk_id == 1u) {
         const persist_t *p = (const persist_t *)raw;
         if (ed_bk_len != sizeof *p || p->magic != PERSIST_MAGIC || !palette_stored_ok(p->palette) ||
@@ -134,12 +148,7 @@ static uint32_t ed_bk_commit(void)
 #else
     (void)obj;
 #endif
-    if (ed_bk_id >= 2u && ed_bk_id <= 5u) {
-        memset(&proj_slot[ed_bk_id - 2u], 0, sizeof proj_slot[0]);
-        if (proj_cur == ed_bk_id - 2u)
-            proj_cur = PROJ_NO_SLOT;                     /* (another project there now: the music keeps its name) */
-        if (ed_bk_len) memcpy(&proj_slot[ed_bk_id - 2u], raw, ed_bk_len);
-    } else if (ed_bk_id == 1u) {
+    if (ed_bk_id == 1u) {
         memcpy(&ed_bk_settings, raw, sizeof ed_bk_settings);
         settings_import(&ed_bk_settings, sizeof ed_bk_settings);
         panel_init(); settings_init(); palette_apply();
@@ -160,16 +169,24 @@ static int proj_store_len(uint32_t len)
 {
     return len == sizeof(project_store_t) || len == PROJ_STORE_V9 || len == PROJ_STORE_V8 || len == PROJ_STORE_V7;
 }
+static int ed_bk_known(uint32_t id)
+{
+    uint32_t i;
+    for (i = 0; i < ED_BK_N; i++)
+        if (ED_BK_IDS[i] == id) return 1;
+    return 0;
+}
 static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
 {
     /* the arguments first: a malformed request never stops the transport */
-    if (n < 2u || a[0] > 3u || a[1] > 9u) return 1;
+    if (n < 2u || a[0] > 3u || !ed_bk_known(a[1])) return 1;
     if (a[0] == 0u) {
         if (n != 12u || a[6] > 15u || a[11] > 15u) return 1;
         uint32_t len = ed_bk_r32(a + 2);
         if (len > ED_BK_MAX || (a[1] == 0u && !proj_store_len(len)) ||
             (a[1] == 1u && len != sizeof(persist_t)) ||
-            (a[1] >= 2u && a[1] <= 5u && len && !proj_store_len(len)) ||
+            (ED_BK_SCN(a[1]) && len && !proj_store_len(len)) ||
+            (ED_BK_SONG(a[1]) && len && len != sizeof(song_rec_t)) ||
             ((a[1] == 6u || a[1] == 7u) && len && len != sizeof(up_bank_t)) ||
             (a[1] == 8u && len && len != sizeof(fm6_bank_t)) || (a[1] == 9u && len && len != sizeof(upf_t))) return 1;
         if (ed_flash_stop()) return 3;

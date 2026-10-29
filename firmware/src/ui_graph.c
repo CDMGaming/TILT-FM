@@ -960,10 +960,10 @@ static void graph_fm(const track_t *t, uint16_t c)
 #endif
 /* Save-bank validity is expensive (CRC/import). Refresh it once per redraw or
  * twice per second, rather than parsing four projects on every UI frame. */
-static char graph_pname[4][13];                       /* .. and the slots' names ("" none) */
-static uint16_t graph_plen[4][NTRK];                  /* .. each track's pattern length (project_info: 1/48 quarters) */
-static uint32_t graph_pden[4][NTRK];                  /* .. and its picture for SONG (project.c proj_density: 2 bits a cell) */
-static uint8_t graph_pcell[4][NTRK];                  /* .. in this many cells (min(LEN, 16)) */
+static char graph_pname[NSCN][13];                       /* .. and the slots' names ("" none) */
+static uint16_t graph_plen[NSCN][NTRK];                  /* .. each track's pattern length (project_info: 1/48 quarters) */
+static uint32_t graph_pden[NSCN][NTRK];                  /* .. and its picture for SONG (project.c proj_density: 2 bits a cell) */
+static uint8_t graph_pcell[NSCN][NTRK];                  /* .. in this many cells (min(LEN, 16)) */
 static uint32_t graph_pname_sig;
 static int graph_project_used(uint32_t slot)
 {
@@ -971,17 +971,17 @@ static int graph_project_used(uint32_t slot)
     static uint8_t mask, ready;
     if (!ready || fm1_ms - ms >= 500u || (ui.force && frame != ui.frame)) {
         uint32_t i; mask = 0;
-        for (i = 0; i < 4u; i++)
+        for (i = 0; i < NSCN; i++)
             mask |= (uint8_t)((project_info(i, graph_pname[i], graph_plen[i], graph_pden[i], graph_pcell[i]) != 0) << i);
         graph_pname_sig = fnv(fnv(2166136261u, graph_pname, sizeof graph_pname), graph_plen, sizeof graph_plen);
         graph_pname_sig = fnv(fnv(graph_pname_sig, graph_pden, sizeof graph_pden), graph_pcell, sizeof graph_pcell);
         ready = 1; ms = fm1_ms; frame = ui.frame;
     }
-    return (mask >> (slot & 3u)) & 1u;
+    return (mask >> (slot & (NSCN - 1u))) & 1u;
 }
 static const char *graph_project_name(uint32_t slot)  /* (after graph_project_used) */
 {
-    return graph_pname[slot & 3u];
+    return graph_pname[slot & (NSCN - 1u)];
 }
 
 /* SONG's timeline (graph_song): the sections left to right, each as wide as it plays: REPS x its clock track's pattern
@@ -1020,10 +1020,10 @@ static uint32_t song_unit(const chain_row_t *r)        /* one pass of a section:
 {
     uint32_t k, s, len48[NTRK];
     for (k = 0; k < NTRK; k++)
-        len48[k] = (s = r->slot[k]) < 4u && graph_project_used(s) ? graph_plen[s][k] : 0u;
+        len48[k] = (s = r->slot[k]) < NSCN && graph_project_used(s) ? graph_plen[s][k] : 0u;
     k = chain_clock_by(r, len48);
     s = r->slot[k];
-    return s < 4u && graph_project_used(s) && graph_plen[s][k] ? graph_plen[s][k] : SG_BARU;
+    return s < NSCN && graph_project_used(s) && graph_plen[s][k] ? graph_plen[s][k] : SG_BARU;
 }
 static void song_layout(song_lay_t *L)
 {
@@ -2021,7 +2021,7 @@ static void sg_picture(const song_lay_t *L, int32_t off, uint32_t k, uint32_t i,
                        int32_t x1, const sg_fill_t *F, const int32_t *skip)
 {
     int32_t y = SG_LY(k), yb = y + SG_PAD + SG_PH, x;
-    uint32_t q, plen = graph_plen[s & 3u][k], n = graph_pcell[s & 3u][k], den = graph_pden[s & 3u][k];
+    uint32_t q, plen = graph_plen[s & (NSCN - 1u)][k], n = graph_pcell[s & (NSCN - 1u)][k], den = graph_pden[s & (NSCN - 1u)][k];
     if (!plen || !n)
         return;
     for (q = i; q < j; q++) {
@@ -2143,7 +2143,7 @@ static void graph_song(void)
             uint32_t s = chain_config.row[i].slot[k];
             for (j = i + 1u; j < L.n && chain_config.row[j].slot[k] == s; j++)
                 ;
-            if (s < 4u) {
+            if (s < NSCN) {
                 sg_block(&L, off, k, i, j, s, k == lane ? c : CHAIN_ROWS, sp);
             } else {
                 int32_t sx = SG_X0 + L.x[i] - off, ex = SG_X0 + L.x[j] - off - SG_GAP;
@@ -2178,7 +2178,7 @@ static void graph_song(void)
         if (sp >= SG_X0 && sp < hi - 1) {              /* the playhead, across the lanes (INK on the cell selected) */
             for (k = 0; k < NTRK; k++) {
                 uint32_t s = c < L.n ? chain_config.row[c].slot[k] : CHAIN_SILENT;
-                int on = k == lane && s < 4u && graph_project_used(s) && sp >= SG_X0 + L.x[c] - off &&
+                int on = k == lane && s < NSCN && graph_project_used(s) && sp >= SG_X0 + L.x[c] - off &&
                          sp + 2 <= SG_X0 + L.x[c + 1u] - off - SG_GAP;
                 cv_rect(sp, SG_LY(k), 2, SG_LH + (k + 1u < NTRK ? SG_LG : 0), on ? T_INK : T_ACCENT);
             }

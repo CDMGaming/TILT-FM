@@ -214,7 +214,18 @@ typedef struct {                               /* format 1 (until 0.5 beta), rea
 } project_v1_t;
 _Static_assert(sizeof(project_v2_t) == 2552u && sizeof(project_v1_t) == 688u && sizeof(project_v3_t) == 2584u &&
                sizeof(project_v4_t) == 2680u, "formats 1 / 2 / 3 / 4 as they were stored");
-project_store_t proj_slot[4] __attribute__((section(".noinit")));
+#ifndef SCN_RAM
+#define SCN_RAM 4u    /* scenes held in RAM when there is no flash (a host test asks for all 24): the device keeps A..D */
+#endif
+#if FELUCCA_FLASH
+#define SCN_FLASH (flash_ok != 0)
+#else
+#define SCN_FLASH 0
+#endif
+#define SCN_N (NSCN * NSONG)
+/* RAM scenes (no flash); with flash proj_slot[0] is the work buffer scn_raw loads a scene into and proj_slot[1..3] the
+ * images of the scenes stored while playing (scn_pend_g), for the flash a stop gives them */
+project_store_t proj_slot[SCN_RAM] __attribute__((section(".noinit")));
 
 static uint32_t proj_hash(const void *p, uint32_t n)   /* FNV-1a over n bytes */
 {
@@ -617,6 +628,12 @@ static void proj_midi_unpack(project_t *q, const uint8_t *b)
 
 /* A stable serialized schema: first header retains FUN6's fields; at byte66
  * np, format flags, then four byte-param tracks and nine-byte steps; FUN8: the patches at PROJ_FM6_OFF. */
+/* The chain's slot bytes in a stored project, as every older firmware wrote them: A..D 0..3, "-" 4; round 2 adds E..H as
+ * 5..8 (core.h CHAIN_SILENT is 8 in RAM). enc: RAM -> stored, dec: stored -> RAM; a stored byte over 8 is not valid */
+static uint8_t chain_enc_b(uint32_t s) { return (uint8_t)(s < 4u ? s : s == CHAIN_SILENT ? 4u : s + 1u); }
+static uint8_t chain_dec_b(uint32_t b) { return (uint8_t)(b < 4u ? b : b == 4u ? CHAIN_SILENT : b <= 8u ? b - 1u : 0xFFu); }
+static void chain_enc(chain_config_t *c) { uint32_t i, k; for (i = 0; i < CHAIN_ROWS; i++) for (k = 0; k < NTRK; k++) c->row[i].slot[k] = chain_enc_b(c->row[i].slot[k]); }
+static void chain_dec(chain_config_t *c) { uint32_t i, k; for (i = 0; i < CHAIN_ROWS; i++) for (k = 0; k < NTRK; k++) c->row[i].slot[k] = chain_dec_b(c->row[i].slot[k]); }
 static int proj_pack(project_store_t *out, const project_t *q)
 {
     uint8_t *b = out->raw; uint32_t pos = 68u, t, i; uint32_t magic = PROJ_MAGIC, size = PROJ_STORE_SIZE, sum;
@@ -648,7 +665,7 @@ static int proj_pack(project_store_t *out, const project_t *q)
         }
     }
     if (pos + sizeof q->chain + sizeof q->motion > PROJ_MIDI_OFF) return 0;
-    memcpy(b + pos, &q->chain, sizeof q->chain); pos += sizeof q->chain;
+    {   chain_config_t c = q->chain; chain_enc(&c); memcpy(b + pos, &c, sizeof c); pos += sizeof c; }
     memcpy(b + pos, &q->motion, sizeof q->motion);
     proj_midi_pack(b, q);
     memcpy(b + PROJ_FM6_OFF, q->fm6, sizeof q->fm6);
@@ -737,9 +754,10 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
             step_set_nudge(s, (int32_t)(nd ^ 8u) - 8);
         }
     }
-    if (v10)                                            /* (FUN10: sections, a slot per track; before: rows) */
+    if (v10) {                                          /* (FUN10: sections, a slot per track; before: rows) */
         memcpy(&q->chain, b + pos, sizeof q->chain);
-    else {
+        chain_dec(&q->chain);                           /* (a stored byte over 8 stays 0xFF: chain_valid refuses it) */
+    } else {
         chain_v9_t c9;
         memcpy(&c9, b + pos, sizeof c9);
         if (!chain_from_v9(&q->chain, &c9)) return 0;
@@ -837,23 +855,149 @@ static void proj_bound(project_t *q)
     q->sum = proj_sum(q);
 }
 
-#if FELUCCA_FLASH
-/* slot from flash into RAM (format 7, or format 6 / 5 / 4 / 3 / 2 / 1 converted) */
-static void proj_fetch(uint32_t slot)
+/* ---- TFM-UI round 2: 8 scenes x 3 songs (storage.c's flash map). A scene is global scene g = 8 song + slot; the
+ * functions below that take a `slot` mean the scene of the song the music is in (sng_cur), 0..7 */
+typedef struct {                                      /* what the screens ask of a scene without loading it (scn_inf_get) */
+    uint8_t ok, used, len, parts;                     /* ok: filled; len: its longest pattern (steps); parts: bit k a note or hit */
+    char name[PROJ_NAME_LEN + 1u];
+    uint16_t len48[NTRK];
+    uint32_t den[NTRK];
+    uint8_t cell[NTRK];
+} scn_inf_t;
+static scn_inf_t scn_inf[SCN_N] __attribute__((section(".pool")));
+static uint8_t sng_cur;                               /* the song the music is in (0..NSONG - 1) */
+static uint32_t scn_used;                             /* flash: bit g = scene g is stored (scn_boot, scn_store) */
+static uint8_t scn_pend_g[3] = {0xFF, 0xFF, 0xFF};    /* flash, playing: scenes stored in RAM only (images proj_slot[1 + i]) */
+static uint32_t scn_g(uint32_t slot) { return (uint32_t)sng_cur * NSCN + (slot & (NSCN - 1u)); }
+/* A song is its record (storage.c OBJ_SONG0 + n): the globals (tempo, swing, the effects, the clock, ..), the chain
+ * (as a stored project holds it: chain_enc), MIDI IN's channels and the name; its scenes are the scenes 8 n + 0..7.
+ * Kept here too, so the screens can list the songs without a flash read (scn_boot, song_save, song_clear). */
+#define SONG_MAGIC 0x474E4F53u                        /* "SONG" */
+typedef struct {
+    uint32_t magic;                                   /* SONG_MAGIC: a record; anything else: the song is empty */
+    char name[PROJ_NAME_LEN + 4u];
+    int16_t g[G_COUNT];
+    chain_config_t chain;
+    uint8_t mch[NTRK];
+} song_rec_t;
+static song_rec_t song_rec[NSONG] __attribute__((section(".pool")));
+static int song_stored(uint32_t n) { return n < NSONG && song_rec[n].magic == SONG_MAGIC; }
+static int song_rec_ok(const song_rec_t *r)             /* a record that can be a song: its magic, a valid chain */
 {
-    project_store_t *q = &proj_slot[slot & 3u];
-    int n;
-    proj_wire_gen++;
-    n = st_load(OBJ_PROJECT0 + (slot & 3u), &proj_wire, sizeof proj_wire);
-    if (!proj_import(&proj_scratch, &proj_wire, n))
-        memset(q->raw, 0, 4);
-    else {
-        proj_bound(&proj_scratch);
-        if (!proj_pack(q, &proj_scratch))
-            memset(q->raw, 0, 4);
-    }
+    chain_config_t c = r->chain;
+    chain_dec(&c);
+    return r->magic == SONG_MAGIC && chain_valid(&c);
 }
+static int song_put(uint32_t n, const song_rec_t *r)    /* the record of song n stored (r 0: erased) */
+{
+#if FELUCCA_FLASH
+    if (flash_ok && st_save(OBJ_SONG0 + n, r ? (const void *)r : (const void *)&proj_wire, r ? sizeof *r : 0u))
+        return 2;
 #endif
+    if (r)
+        song_rec[n] = *r;
+    else
+        memset(&song_rec[n], 0, sizeof song_rec[n]);
+    return 0;
+}
+static void song_pack_from(song_rec_t *r, const int16_t *g, const chain_config_t *c, const uint8_t *mch, const uint8_t *name)
+{
+    uint32_t i;
+    memset(r, 0, sizeof *r);
+    r->magic = SONG_MAGIC;
+    proj_name_get(r->name, name);
+    for (i = 0; i < G_COUNT; i++)
+        r->g[i] = g[i];
+    r->chain = *c;
+    chain_enc(&r->chain);
+    memcpy(r->mch, mch, NTRK);
+}
+/* scene g's stored image (the RAM scene, a pending image, or loaded from flash into proj_slot[0]; an older format
+ * converted as a load would), 0 when there is none. The pointer is good until the next call */
+static const project_store_t *scn_raw(uint32_t g)
+{
+    if (g >= SCN_N)
+        return 0;
+#if FELUCCA_FLASH
+    if (flash_ok) {
+        uint32_t i;
+        int n;
+        for (i = 0; i < 3u; i++)
+            if (scn_pend_g[i] == g)
+                return &proj_slot[1u + i];
+        if (!((scn_used >> g) & 1u))
+            return 0;
+        n = st_load(st_scene_obj(g), &proj_slot[0], sizeof proj_slot[0]);
+        if (n <= 0)
+            return 0;
+        if ((uint32_t)n != sizeof proj_slot[0]) {     /* a slot of an older format: as proj_import reads it */
+            if (!proj_import(&proj_scratch, &proj_slot[0], n))
+                return 0;
+            proj_bound(&proj_scratch);
+            if (!proj_pack(&proj_slot[0], &proj_scratch))
+                return 0;
+        }
+        return &proj_slot[0];
+    }
+#endif
+    return g < SCN_RAM ? &proj_slot[g] : 0;
+}
+static int scn_get(uint32_t g, project_t *q)          /* scene g decoded into q: 1; 0 empty, none or damaged */
+{
+    const project_store_t *s = scn_raw(g);
+    return s && proj_import(q, s, sizeof *s);
+}
+/* scene g stored (v: a packed project) or erased (v 0). Flash: the A/B record, committed last, so a power cut leaves
+ * the scene as it was or as it is; never called while playing (the erase silences the audio). 0 done */
+static int scn_store(uint32_t g, const project_store_t *v)
+{
+    if (g >= SCN_N)
+        return 2;
+#if FELUCCA_FLASH
+    if (flash_ok) {
+        uint32_t i;
+        if (st_save(st_scene_obj(g), v ? (const void *)v : (const void *)&proj_wire, v ? sizeof *v : 0u))
+            return 2;
+        for (i = 0; i < 3u; i++)
+            if (scn_pend_g[i] == g)
+                scn_pend_g[i] = 0xFF;
+        scn_used = v ? scn_used | 1u << g : scn_used & ~(1u << g);
+        scn_inf[g].ok = 0;
+        return 0;
+    }
+#endif
+    if (g >= SCN_RAM)
+        return 2;
+    if (v) {
+        if (v != &proj_slot[g])
+            memcpy(&proj_slot[g], v, sizeof proj_slot[g]);
+    } else
+        memset(&proj_slot[g], 0, sizeof proj_slot[g]);
+    scn_inf[g].ok = 0;
+    return 0;
+}
+/* stored while playing: RAM only (a flash write would silence the audio), flash when the transport stops (scene_flush).
+ * Up to three scenes wait; 1 = no room. No flash: stored at once */
+static int scn_store_ram(uint32_t g, const project_store_t *v)
+{
+#if FELUCCA_FLASH
+    if (flash_ok) {
+        uint32_t i, f = 3u;
+        for (i = 0; i < 3u; i++) {
+            if (scn_pend_g[i] == g) { f = i; break; }
+            if (scn_pend_g[i] == 0xFF && f == 3u) f = i;
+        }
+        if (f == 3u)
+            return 1;
+        memcpy(&proj_slot[1u + f], v, sizeof proj_slot[0]);
+        scn_pend_g[f] = (uint8_t)g;
+        scn_used |= 1u << g;
+        scn_inf[g].ok = 0;
+        return 0;
+    }
+#endif
+    return scn_store(g, v);
+}
 
 static void project_capture(project_t *p)
 {
@@ -899,25 +1043,14 @@ static int project_save_as(uint32_t slot, const char *name)
     proj_wire_gen++;
     if (!proj_pack(&proj_wire, p)) { ui_message("SAVE FORMAT ERROR"); return 2; }
 
-#if FELUCCA_FLASH
-    if (flash_ok) {
-        if (st_save(OBJ_PROJECT0 + (slot & 3u), &proj_wire, sizeof proj_wire)) {
-            ui_message("SAVE ERROR");
-            return 2;
-        }
-        memcpy(&proj_slot[slot & 3u], &proj_wire, sizeof proj_wire);
-        proj_name_get(proj_name, (const uint8_t *)p->name);
-        proj_cur = (uint8_t)(slot & 3u);
-        pat_from_set((slot & 3u) + 1u);
-        ui_message("SAVED");
-        return 0;
+    if (scn_store(scn_g(slot), &proj_wire)) {
+        ui_message(SCN_FLASH ? "SAVE ERROR" : "NO ROOM (RAM)");
+        return 2;
     }
-#endif
-    memcpy(&proj_slot[slot & 3u], &proj_wire, sizeof proj_wire);
     proj_name_get(proj_name, (const uint8_t *)p->name);
-    proj_cur = (uint8_t)(slot & 3u);
-    pat_from_set((slot & 3u) + 1u);
-    ui_message("SAVED (RAM)");
+    proj_cur = (uint8_t)(slot & (NSCN - 1u));
+    pat_from_set((slot & (NSCN - 1u)) + 1u);
+    ui_message(SCN_FLASH ? "SAVED" : "SAVED (RAM)");
     return 0;
 }
 static int project_save(uint32_t slot) { return project_save_as(slot, 0); }
@@ -951,9 +1084,37 @@ static uint32_t proj_density(const proj_trk_t *t, uint8_t *n)
     return d;
 }
 /* .. and, den not 0, each track's picture (proj_density: den[k], its cells n[k]; 0 for an empty slot) */
+static scn_inf_t *scn_inf_get(uint32_t g)             /* scene g's summary (kept until it is stored or erased) */
+{
+    scn_inf_t *c = &scn_inf[g % SCN_N];
+    uint32_t k, i, l = 0, pr = 0;
+    if (c->ok && SCN_FLASH)                             /* (no flash: the RAM scenes are asked every time, as before) */
+        return c;
+    memset(c, 0, sizeof *c);
+    c->ok = 1;
+    if (!scn_get(g, &proj_scratch))
+        return c;
+    c->used = 1;
+    proj_name_get(c->name, (const uint8_t *)proj_scratch.name);
+    for (k = 0; k < NTRK; k++) {
+        uint32_t tl = (uint32_t)clamp(proj_scratch.t[k].p[P_SLEN], 1, NSTEP);
+        c->len48[k] = (uint16_t)len48_of(proj_scratch.t[k].p[P_SLEN], proj_scratch.t[k].p[P_SDIV]);
+        c->den[k] = proj_density(&proj_scratch.t[k], &c->cell[k]);
+        for (i = 0; i < tl; i++)
+            if ((proj_scratch.t[k].step[i].time == ST_NOTE && proj_scratch.t[k].step[i].n) || proj_scratch.t[k].step[i].hit) {
+                pr |= 1u << k;
+                break;
+            }
+        if (tl > l)
+            l = tl;
+    }
+    c->len = (uint8_t)l;
+    c->parts = (uint8_t)pr;
+    return c;
+}
 static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, uint8_t *n)
 {
-    uint32_t k;
+    const scn_inf_t *c = scn_inf_get(scn_g(slot));
     b[0] = 0;
     if (len48)
         memset(len48, 0, NTRK * sizeof *len48);
@@ -961,13 +1122,15 @@ static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, 
         memset(den, 0, NTRK * sizeof *den);
         memset(n, 0, NTRK);
     }
-    if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t)))
+    if (!c->used)
         return 0;
-    proj_name_get(b, (const uint8_t *)proj_scratch.name);
-    for (k = 0; len48 && k < NTRK; k++)
-        len48[k] = (uint16_t)len48_of(proj_scratch.t[k].p[P_SLEN], proj_scratch.t[k].p[P_SDIV]);
-    for (k = 0; den && k < NTRK; k++)
-        den[k] = proj_density(&proj_scratch.t[k], &n[k]);
+    memcpy(b, c->name, sizeof c->name);
+    if (len48)
+        memcpy(len48, c->len48, sizeof c->len48);
+    if (den) {
+        memcpy(den, c->den, sizeof c->den);
+        memcpy(n, c->cell, sizeof c->cell);
+    }
     return 1;
 }
 
@@ -981,7 +1144,7 @@ static int project_rename(uint32_t slot, const char *name)
         ui_message("STOP TO SAVE");
         return 1;
     }
-    if (!proj_import(p, &proj_slot[slot & 3u], sizeof(project_store_t))) {
+    if (!scn_get(scn_g(slot), p)) {
         ui_message("EMPTY SLOT");
         return 1;
     }
@@ -989,19 +1152,13 @@ static int project_rename(uint32_t slot, const char *name)
     memcpy(p->name, name, str_len(name) < PROJ_NAME_LEN ? str_len(name) : PROJ_NAME_LEN);
     proj_wire_gen++;
     if (!proj_pack(&proj_wire, p)) { ui_message("SAVE FORMAT ERROR"); return 2; }
-#if FELUCCA_FLASH
-    if (flash_ok && st_save(OBJ_PROJECT0 + (slot & 3u), &proj_wire, sizeof proj_wire)) {
+    if (scn_store(scn_g(slot), &proj_wire)) {
         ui_message("SAVE ERROR");
         return 2;
     }
-#endif
-    memcpy(&proj_slot[slot & 3u], &proj_wire, sizeof proj_wire);
-    if (proj_cur == (slot & 3u))
+    if (proj_cur == (slot & (NSCN - 1u)))
         proj_name_get(proj_name, (const uint8_t *)p->name);
-#if FELUCCA_FLASH
-    if (flash_ok) { ui_message("RENAMED"); return 0; }
-#endif
-    ui_message("RENAMED (RAM)");
+    ui_message(SCN_FLASH ? "RENAMED" : "RENAMED (RAM)");
     return 0;
 }
 
@@ -1013,7 +1170,7 @@ static int project_rename(uint32_t slot, const char *name)
 static int project_erase(uint32_t slot)
 {
     uint32_t k;
-    slot &= 3u;
+    slot &= NSCN - 1u;
     if (transport_busy()) {                            /* (a flash erase silences the audio: project_save_as) */
         ui_message("STOP TO ERASE");
         return 1;
@@ -1022,13 +1179,10 @@ static int project_erase(uint32_t slot)
         ui_message("EMPTY SLOT");
         return 1;
     }
-#if FELUCCA_FLASH
-    if (flash_ok && st_save(OBJ_PROJECT0 + slot, &proj_wire, 0)) {
+    if (scn_store(scn_g(slot), 0)) {
         ui_message("ERASE ERROR");
         return 2;
     }
-#endif
-    memset(&proj_slot[slot], 0, sizeof proj_slot[slot]);
     if (proj_cur == slot)
         proj_cur = PROJ_NO_SLOT;
     for (k = 0; k < NTRK; k++)
@@ -1128,27 +1282,107 @@ static int project_restore_runtime(const project_t *input)
 }
 static void project_load(uint32_t slot)
 {
-#if FELUCCA_FLASH
-    if (flash_ok && !proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) proj_fetch(slot);
-#endif
-    if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) { ui_message("EMPTY SLOT"); return; }
+    if (!scn_get(scn_g(slot), &proj_scratch)) { ui_message("EMPTY SLOT"); return; }
     proj_bound(&proj_scratch);                          /* a retained RAM slot of an older format: as from flash */
     if (!project_restore_runtime(&proj_scratch)) {
-        proj_cur = (uint8_t)(slot & 3u);
-        pat_from_set((slot & 3u) + 1u);
+        proj_cur = (uint8_t)(slot & (NSCN - 1u));
+        pat_from_set((slot & (NSCN - 1u)) + 1u);
     }
 }
 
 /* settings + learned panel table: one flash object. The flash copy wins at
  * boot (the .noinit copies are garbage after a power-off). */
 #include "settings_persist.c"
-#if FELUCCA_FLASH && FELUCCA_SLICE
-#include "slice_store.c"                          /* SLICE's MAN slices, kept in the user slots */
-#endif
+/* (round 2: slice_store.c, SLICE's MAN slices kept in the user sample slots, is no longer part of the firmware: that flash
+ * is the scenes'. The host test of it, tests/slice_test.c, still includes it) */
 #if FELUCCA_FLASH
 static persist_t persist_saved __attribute__((section(".pool")));
 static uint8_t persist_pending;                 /* 1 requested, 2 waiting after a flash error */
 static uint32_t persist_retry_ms;
+#endif
+
+#if FELUCCA_FLASH
+/* ---- the scene region (storage.c: 0xA0000..0xDBFFF, once the three user sample slots) ----
+ * First boot after the update: the region is wiped as a whole (it is not scene data), song 1's record is written from
+ * scene A (else the first stored one: the song-level values and the chain every scene holds), and the format tag last.
+ * Scenes A..D (the four PROJECT objects) are not moved or touched, so a power cut anywhere leaves the old data and no
+ * tag: the next boot starts again, from the same old data. */
+#define SCN_TAG 0x38534D54u                           /* "TMS8" */
+typedef struct { uint32_t magic, version, rsv[2]; } scn_tag_t;
+static int scn_flash_ok(uint32_t g)                   /* scene g is stored and loads (a damaged one is empty, as ever) */
+{
+    int n = st_load(st_scene_obj(g), &proj_slot[0], sizeof proj_slot[0]);
+    return n > 0 && proj_import(&proj_scratch, &proj_slot[0], n);
+}
+static int scn_wipe(void)                             /* every sector of the region blank (the ones that are blank are left) */
+{
+    uint32_t off, i, j;
+    uint8_t b[256];
+    for (off = SCN_REGION; off < SCN_REGION_END; off += ST_SECTOR) {
+        uint32_t blank = 1;
+        for (i = 0; i < ST_SECTOR && blank; i += 256u) {
+            if (st_read(off + i, b, 256u))
+                return -1;
+            for (j = 0; j < 256u; j++)
+                if (b[j] != 0xFFu) { blank = 0; break; }
+        }
+        if (!blank && st_erase(off))
+            return -1;
+    }
+    return 0;
+}
+static int scn_migrate(void)                          /* 0 done (the tag is there), else the flash failed: tried again next boot */
+{
+    uint32_t g;
+    scn_tag_t tg;
+    const project_store_t *s = 0;
+    if (scn_wipe())
+        return -1;
+    for (g = 0; g < 4u && !s; g++) {
+        if (scn_flash_ok(g))
+            scn_used |= 1u << g;
+        s = scn_raw(g);
+    }
+    if (s && proj_import(&proj_scratch, s, sizeof *s)) {   /* (an older format is converted by scn_raw) */
+        song_rec_t *r = (song_rec_t *)&proj_slot[1];       /* (work area: song 1 is not in song_rec yet) */
+        song_pack_from(r, proj_scratch.g, &proj_scratch.chain, proj_scratch.mch, (const uint8_t *)proj_scratch.name);
+        if (st_save(OBJ_SONG0, r, sizeof *r))
+            return -1;
+    }
+    memset(&tg, 0, sizeof tg);
+    tg.magic = SCN_TAG;
+    tg.version = 1;
+    return st_save(OBJ_SCFMT, &tg, sizeof tg) ? -1 : 0;
+}
+static void scn_boot(void)                            /* flash_ok: which scenes and songs are stored (after a first-boot migration) */
+{
+    uint32_t g;
+    scn_tag_t tg;
+    int tagged;
+    scn_used = 0;
+    memset(song_rec, 0, sizeof song_rec);
+    for (g = 0; g < 4u; g++)
+        if (scn_flash_ok(g))
+            scn_used |= 1u << g;
+    tagged = st_load(OBJ_SCFMT, &tg, sizeof tg) == (int)sizeof tg && tg.magic == SCN_TAG;
+    if (!tagged)
+        tagged = scn_migrate() == 0;
+    if (!tagged)
+        return;                                       /* (the region may still hold samples: no scene there) */
+    for (g = 4u; g < SCN_N; g++)
+        if (scn_flash_ok(g))
+            scn_used |= 1u << g;
+    for (g = 0; g < NSONG; g++) {
+        song_rec_t r;
+        chain_config_t c;
+        if (st_load(OBJ_SONG0 + g, &r, sizeof r) == (int)sizeof r && r.magic == SONG_MAGIC) {
+            c = r.chain;
+            chain_dec(&c);
+            if (chain_valid(&c))
+                song_rec[g] = r;
+        }
+    }
+}
 #endif
 
 static void persist_boot(void)                    /* before settings_init / panel_init */
@@ -1162,30 +1396,25 @@ static void persist_boot(void)                    /* before settings_init / pane
         return;
     fl_plain_window_init();                        /* flash above 0x93000 reads as plaintext through XIP
                                                     * (user sample sets are played from there) */
-#if FELUCCA_SLICE
-    slc_store_boot();                              /* (the scans read each slot's stored slices) */
-#endif
-    {
-        uint32_t k;
-        for (k = 0; k < SMP_USER_SLOTS; k++)
-            smp_user_scan(k);
-    }
     {
         int n = st_load(OBJ_SETTINGS, &p, sizeof p);
         if (settings_import(&p, n))
             persist_saved = p;
     }
-    {   /* projects: fill empty RAM slots from flash, so the slot list is right after power-on */
-        uint32_t i;
-        for (i = 0; i < 4u; i++)
-            if (!proj_import(&proj_scratch, &proj_slot[i], sizeof(project_store_t)))
-                proj_fetch(i);
-    }
+    scn_boot();                                    /* the scenes and songs there are (round 2: the first boot migrates) */
     up_boot();                                     /* user presets */
 #endif
 }
 
-static int project_used(uint32_t slot) { return proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t)); }
+static int scn_stored(uint32_t g)         /* scene g is stored; flash: its bit, RAM: the image checked */
+{
+#if FELUCCA_FLASH
+    if (flash_ok)
+        return (int)((scn_used >> g) & 1u);
+#endif
+    return scn_get(g, &proj_scratch);
+}
+static int project_used(uint32_t slot) { return scn_stored(scn_g(slot)); }   /* (a scene of the song the music is in) */
 
 /* Main loop only: no flash access or copies when the ISR changes rows. */
 static uint32_t chain_prepare(void)
@@ -1198,7 +1427,7 @@ static uint32_t chain_prepare(void)
     for (i = 0; i < chain_config.count; i++)            /* the slots the lanes play (not the silent ones) */
         for (k = 0; k < NTRK; k++) {
             uint32_t s = chain_config.row[i].slot[k];
-            if (s >= 4u || ((used >> s) & 1u))
+            if (s >= NSCN || ((used >> s) & 1u))
                 continue;
             if (!project_used(s))
                 return 3u + s;
@@ -1215,10 +1444,10 @@ static uint32_t chain_prepare(void)
         memcpy(chain_snd.live.fm6[k], fm6_patch[k], sizeof chain_snd.live.fm6[k]);
     }
 #endif
-    for (i = 0; i < 4u; i++)
+    for (i = 0; i < NSCN; i++)
         if ((used >> i) & 1u) {
             project_t *p = &proj_scratch;
-            if (!proj_import(p, &proj_slot[i], sizeof(project_store_t))) return 3u + i;
+            if (!scn_get(scn_g(i), p)) return 3u + i;
 #ifdef PREF_SONG_SCENE
             if (ui_prefs3 & PREF_SONG_SCENE)            /* (each scene's sounds, as a load would make them) */
                 for (k = 0; k < NTRK; k++) {
@@ -1234,11 +1463,11 @@ static uint32_t chain_prepare(void)
                     p->t[k].engine = (uint8_t)e;
                 }
 #endif
-            chain.source[i].motion = p->motion;
+            chain_src(i)->motion = p->motion;
             /* A song keeps its current instruments. Engine-specific motion from
              * another instrument would change a kit/wave/algorithm unexpectedly. */
             {
-                motion_store_t *m = &chain.source[i].motion; uint32_t n = 0;
+                motion_store_t *m = &chain_src(i)->motion; uint32_t n = 0;
                 for (uint32_t e = 0; e < m->count; e++) {
                     const motion_event_t *v = &m->event[e]; uint32_t owner = v->place >> 6;
                     if (MOTION_ID(v) >= P_FM1_ATK && p->t[owner].engine != trk[owner].eng_req
@@ -1251,11 +1480,11 @@ static uint32_t chain_prepare(void)
                 m->count = (uint8_t)n;
             }
             for (k = 0; k < NTRK; k++) {
-                memcpy(chain.source[i].step[k], p->t[k].step, sizeof p->t[k].step);
-                proj_steps(chain.source[i].step[k]);
-                chain.source[i].qnt[k] = p->t[k].p[P_SQNT] != 0;
+                memcpy(chain_src(i)->step[k], p->t[k].step, sizeof p->t[k].step);
+                proj_steps(chain_src(i)->step[k]);
+                chain_src(i)->qnt[k] = p->t[k].p[P_SQNT] != 0;
                 for (j = 0; j < 4u; j++)
-                    chain.source[i].timing[k][j] = (int16_t)clamp(p->t[k].p[P_SLEN + j],
+                    chain_src(i)->timing[k][j] = (int16_t)clamp(p->t[k].p[P_SLEN + j],
                         TP[P_SLEN + j].min, TP[P_SLEN + j].max);
             }
         }
@@ -1272,9 +1501,6 @@ static void settings_poll(void)
 {
 #if FELUCCA_FLASH
     persist_t p;
-#if FELUCCA_SLICE
-    slc_store_poll();                              /* SLICE's slices edited on the SLICES page */
-#endif
     if (!persist_pending || !flash_ok || transport_busy() ||
         (persist_pending == 2u && (uint32_t)(fm1_ms - persist_retry_ms) < 1000u))
         return;
@@ -1533,29 +1759,36 @@ static uint32_t scene_sig(void)                         /* the four tracks, as a
     }
     return as_mix(h, &motion, sizeof motion);
 }
-static uint32_t scene_cur(void) { return proj_cur < 4u ? proj_cur : SCENE_NONE; }
+/* round 2: the song and scene the music is in are remembered in SCN_MEM (ui.c). Not written (settings of before): the
+ * scene is the one ui_prefs3 holds (A..D of song 1), as ever */
+static uint32_t scene_remembered(void)                  /* 0 none, 1..8 A..H */
+{
+    return (SCN_MEM & 4u) ? (uint32_t)(SCN_MEM >> 4) : (ui_prefs3 >> PREF_SCENE_SH) & 7u;
+}
+static uint32_t scene_cur(void) { return proj_cur < NSCN ? proj_cur : SCENE_NONE; }
 static int scene_edited(void) { return scene_sig() != tsc.sig; }
 static void scene_based(void) { tsc.sig = scene_sig(); }
-static void scene_enter(uint32_t s) { proj_cur = (uint8_t)(s & 3u); }   /* (tilt.c: a flip while playing done) */
+static void scene_enter(uint32_t s) { proj_cur = (uint8_t)(s & (NSCN - 1u)); }   /* (tilt.c: a flip while playing done) */
 /* the music is now none of the scenes: it takes the first empty one (none empty: none) */
 static void scene_claim(void)
 {
     uint32_t s;
-    for (s = 0; s < 4u && project_used(s); s++)
+    for (s = 0; s < NSCN && project_used(s); s++)
         ;
-    proj_cur = (uint8_t)(s < 4u ? s : PROJ_NO_SLOT);
+    proj_cur = (uint8_t)(s < NSCN ? s : PROJ_NO_SLOT);
     scene_based();
 }
 /* power-on (autosave_boot; the start screen's CONTINUE): restored, the scene the settings remember (edited: what the
  * autosave holds may not be stored); else the music is the power-on set, in an empty scene */
 static void scene_boot(int restored)
 {
-    uint32_t s = (ui_prefs3 >> PREF_SCENE_SH) & 7u;
+    uint32_t s = scene_remembered();
     if (!restored) {
         scene_claim();
         return;
     }
-    proj_cur = (uint8_t)(s >= 1u && s <= 4u ? s - 1u : PROJ_NO_SLOT);
+    sng_cur = (uint8_t)((SCN_MEM & 4u) && (SCN_MEM & 3u) < NSONG ? SCN_MEM & 3u : 0u);
+    proj_cur = (uint8_t)(s >= 1u && s <= NSCN ? s - 1u : PROJ_NO_SLOT);
     tsc.sig = ~scene_sig();
 }
 /* scene `slot`'s tracks become the music (stopped: project_restore_runtime stops the transport); the song's own as it
@@ -1563,11 +1796,8 @@ static void scene_boot(int restored)
 static int scene_load(uint32_t slot)
 {
     project_t *p = &proj_scratch;
-    slot &= 3u;
-#if FELUCCA_FLASH
-    if (flash_ok && !proj_import(p, &proj_slot[slot], sizeof(project_store_t))) proj_fetch(slot);
-#endif
-    if (!proj_import(p, &proj_slot[slot], sizeof(project_store_t)))
+    slot &= NSCN - 1u;
+    if (!scn_get(scn_g(slot), p))
         return 1;
     proj_bound(p);
     memcpy(p->g, song.g, sizeof p->g);
@@ -1590,11 +1820,8 @@ static int scene_stage_from(uint32_t slot)
 {
     project_t *p = &proj_scratch;
     uint32_t k, i;
-    slot &= 3u;
-#if FELUCCA_FLASH
-    if (flash_ok && !proj_import(p, &proj_slot[slot], sizeof(project_store_t))) proj_fetch(slot);
-#endif
-    if (!proj_import(p, &proj_slot[slot], sizeof(project_store_t))) {
+    slot &= NSCN - 1u;
+    if (!scn_get(scn_g(slot), p)) {
         for (k = 0; k < NTRK; k++) {
             const track_t *t = &trk[k];
             for (i = 0; i < P_COUNT; i++)
@@ -1641,15 +1868,18 @@ static int scene_stage_from(uint32_t slot)
 static int scene_store_ram(uint32_t slot)
 {
     project_t *p = &proj_scratch;
-    slot &= 3u;
+    slot &= NSCN - 1u;
     project_capture(p);
     proj_wire_gen++;
     if (!proj_pack(&proj_wire, p)) {
         ui_message("SAVE FORMAT ERROR");
         return 2;
     }
-    memcpy(&proj_slot[slot], &proj_wire, sizeof proj_wire);
-    tsc.pend |= (uint8_t)(1u << slot);
+    if (scn_store_ram(scn_g(slot), &proj_wire)) {       /* (three scenes wait for the stop at most) */
+        ui_message("STOP TO SAVE");
+        return 1;
+    }
+    tsc.pend |= (uint8_t)(1u << slot);                  /* (no flash: scene_flush clears it at once, stopped) */
     scene_based();
     return 0;
 }
@@ -1657,15 +1887,15 @@ static int scene_store_ram(uint32_t slot)
  * remembered scene and the music agree as after a change of scene stopped */
 static void scene_flush(void)
 {
-    uint32_t s;
+    uint32_t i;
     if (!tsc.pend || transport_busy())
         return;
 #if FELUCCA_FLASH
-    for (s = 0; s < 4u && flash_ok; s++)
-        if (((tsc.pend >> s) & 1u) && st_save(OBJ_PROJECT0 + s, &proj_slot[s], sizeof(project_store_t)))
+    for (i = 0; i < 3u && flash_ok; i++)
+        if (scn_pend_g[i] != 0xFFu && scn_store(scn_pend_g[i], &proj_slot[1u + i]))
             ui_message("SAVE ERROR");
 #else
-    (void)s;
+    (void)i;
 #endif
     tsc.pend = 0;
     autosave_now();
@@ -1673,41 +1903,34 @@ static void scene_flush(void)
 /* the SCENE layer's copy and clear (tilt.c), stopped: slot s written as SAVE > PROJECT writes it (v: a stored project;
  * 0: empty, as SAVE > PROJECT ERASE). What was there kept first, for one undo (scene_undo) */
 static struct { uint8_t on, slot; project_store_t s; } scene_ubuf __attribute__((section(".pool")));
-static void scene_fill(uint32_t s)                      /* the RAM slot from flash, when it is not there */
-{
-#if FELUCCA_FLASH
-    if (flash_ok && !proj_import(&proj_scratch, &proj_slot[s & 3u], sizeof(project_store_t))) proj_fetch(s & 3u);
-#else
-    (void)s;
-#endif
-}
 static int scene_slot_write(uint32_t s, const project_store_t *v)
 {
-    s &= 3u;
-#if FELUCCA_FLASH
-    if (flash_ok && st_save(OBJ_PROJECT0 + s, v ? (const void *)v : (const void *)&proj_wire, v ? sizeof *v : 0u)) {
+    s &= NSCN - 1u;
+    if (scn_store(scn_g(s), v)) {
         ui_message("SAVE ERROR");
         return 2;
     }
-#endif
-    if (v)
-        memcpy(&proj_slot[s], v, sizeof proj_slot[s]);
-    else
-        memset(&proj_slot[s], 0, sizeof proj_slot[s]);
     return 0;
 }
-static void scene_keep(uint32_t s)
+static void scene_keep(uint32_t s)                      /* what is in the scene (none: an empty record) for one undo */
 {
-    scene_fill(s);
-    scene_ubuf.s = proj_slot[s & 3u];
-    scene_ubuf.slot = (uint8_t)(s & 3u);
+    const project_store_t *r = scn_raw(scn_g(s));
+    if (r)
+        scene_ubuf.s = *r;
+    else
+        memset(&scene_ubuf.s, 0, sizeof scene_ubuf.s);
+    scene_ubuf.slot = (uint8_t)(s & (NSCN - 1u));
     scene_ubuf.on = 1;
 }
 static int scene_copy(uint32_t src, uint32_t dst)
 {
-    scene_fill(src);
+    const project_store_t *r = scn_raw(scn_g(src));
+    project_store_t *w = &proj_wire;
+    if (!r)
+        return 2;
+    memcpy(w, r, sizeof *w);                            /* (the work buffer of scn_raw: scene_keep reads it again) */
     scene_keep(dst);
-    return scene_slot_write(dst, &proj_slot[src & 3u]);
+    return scene_slot_write(dst, w);
 }
 static int scene_clear(uint32_t s)
 {
@@ -1734,8 +1957,156 @@ static void scene_blank(uint32_t slot)
         trk[k].arp_phys = 0;
     }
     undo.trk = 0;                                       /* (ui.c: the undo copy was the scene before) */
-    proj_cur = (uint8_t)(slot & 3u);
-    pat_from_set((slot & 3u) + 1u);
+    proj_cur = (uint8_t)(slot & (NSCN - 1u));
+    pat_from_set((slot & (NSCN - 1u)) + 1u);
+}
+
+/* ---- songs (round 2). Only while stopped: a song is up to nine flash records ---- */
+static void song_pack_live(song_rec_t *r) { song_pack_from(r, song.g, &chain_config, song.mch, (const uint8_t *)proj_name); }
+static void song_apply(const song_rec_t *r)             /* the song-level values of a record become the music's; the tracks stay */
+{
+    uint32_t i, k;
+    chain_config_t c = r->chain;
+    chain_dec(&c);
+    if (!chain_valid(&c))
+        chain_defaults(&c);
+    chain_config = c;
+    ui.song_row = 0;
+    for (i = 0; i < G_COUNT; i++)
+        if (i != G_SLOT && i != G_LOAD && i != G_SAVE)
+            song.g[i] = (int16_t)clamp(r->g[i], GP[i].min, GP[i].max);
+    for (k = 0; k < NTRK; k++)
+        song.mch[k] = (uint8_t)(r->mch[k] < MCH_N ? r->mch[k] : 0u);
+    midi_route = MIDI_ROUTE_AGAIN;
+    proj_name_get(proj_name, (const uint8_t *)r->name);
+    sync_reload = 1;
+    ui.force = 1;
+}
+/* the song the music is in stored as it is: the edited scene (SAVE as ever), then its record. 0 done */
+static int song_store_cur(void)
+{
+    song_rec_t r;
+    if (transport_busy()) {
+        ui_message("STOP TO SAVE");
+        return 1;
+    }
+    scene_flush();
+    if (scene_cur() != SCENE_NONE && scene_edited() && project_save_as(scene_cur(), 0))
+        return 2;
+    song_pack_live(&r);
+    if (song_put(sng_cur, &r)) {
+        ui_message("SAVE ERROR");
+        return 2;
+    }
+    return 0;
+}
+static int song_copy_raw(uint32_t a, uint32_t b)        /* song a's scenes and record over song b's (neither the music's b) */
+{
+    uint32_t s;
+    for (s = 0; s < NSCN; s++) {
+        const project_store_t *r = scn_raw(a * NSCN + s);
+        if (r) {
+            memcpy(&proj_wire, r, sizeof proj_wire);
+            if (scn_store(b * NSCN + s, &proj_wire))
+                return 2;
+        } else if (scn_stored(b * NSCN + s) && scn_store(b * NSCN + s, 0))
+            return 2;
+    }
+    return song_put(b, &song_rec[a]);
+}
+static int song_save(uint32_t n)                        /* the music stored as song n (and it is song n from now on) */
+{
+    if (n >= NSONG)
+        return 1;
+    if (song_store_cur())
+        return 2;
+    if (n != sng_cur) {
+        if (song_copy_raw(sng_cur, n)) {
+            ui_message("SAVE ERROR");
+            return 2;
+        }
+        sng_cur = (uint8_t)n;
+    }
+    ui_message("SONG SAVED");
+    return 0;
+}
+static int song_copy(uint32_t a, uint32_t b)            /* song a copied over song b (not the one the music is in) */
+{
+    if (a >= NSONG || b >= NSONG || a == b || b == sng_cur) {
+        ui_message("NOT OVER THE SONG IN USE");
+        return 1;
+    }
+    if (transport_busy()) {
+        ui_message("STOP TO COPY");
+        return 1;
+    }
+    if (a == sng_cur && song_store_cur())
+        return 2;
+    if (!song_stored(a)) {
+        ui_message("EMPTY SONG");
+        return 1;
+    }
+    if (song_copy_raw(a, b)) {
+        ui_message("COPY ERROR");
+        return 2;
+    }
+    ui_message("SONG COPIED");
+    return 0;
+}
+static int song_load(uint32_t n)                        /* song n becomes the music (the one it was stored first). 0 done */
+{
+    uint32_t s;
+    if (n >= NSONG || !song_stored(n)) {
+        ui_message("EMPTY SONG");
+        return 1;
+    }
+    if (n == sng_cur)
+        return 0;
+    if (song_store_cur())
+        return 2;
+    song_apply(&song_rec[n]);
+    sng_cur = (uint8_t)n;
+    scene_ubuf.on = 0;
+    for (s = 0; s < NSCN && !project_used(s); s++)
+        ;
+    if (s < NSCN && scene_load(s) == 0)
+        scene_based();
+    else {
+        scene_blank(0);
+        scene_based();
+    }
+    ui_message("SONG LOADED");
+    return 0;
+}
+static int song_clear(uint32_t n)                       /* song n and its scenes erased (the music: a blank song 1 scene A) */
+{
+    uint32_t s;
+    if (n >= NSONG)
+        return 1;
+    if (transport_busy()) {
+        ui_message("STOP TO ERASE");
+        return 1;
+    }
+    scene_flush();
+    for (s = 0; s < NSCN; s++)
+        if (scn_stored(n * NSCN + s) && scn_store(n * NSCN + s, 0)) {
+            ui_message("ERASE ERROR");
+            return 2;
+        }
+    if (song_put(n, 0)) {
+        ui_message("ERASE ERROR");
+        return 2;
+    }
+    if (n == sng_cur) {
+        chain_defaults(&chain_config);
+        ui.song_row = 0;
+        memset(proj_name, 0, sizeof proj_name);
+        scene_blank(0);
+        scene_based();
+    }
+    scene_ubuf.on = 0;
+    ui_message("SONG ERASED");
+    return 0;
 }
 #endif
 
@@ -1750,20 +2121,12 @@ _Static_assert(sizeof(persist_t) <= ST_PAYLOAD_MAX, "settings do not fit one fla
 static int proj_slot_info(uint32_t slot, uint32_t *len, uint32_t *parts)
 {
     uint32_t k, i, l = 0, p = 0;
-    if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t)))
+    const scn_inf_t *c = scn_inf_get(scn_g(slot));
+    (void)k; (void)i; (void)l; (void)p;
+    if (!c->used)
         return 0;
-    for (k = 0; k < NTRK; k++) {
-        uint32_t tl = (uint32_t)clamp(proj_scratch.t[k].p[P_SLEN], 1, NSTEP);
-        for (i = 0; i < tl; i++)
-            if ((proj_scratch.t[k].step[i].time == ST_NOTE && proj_scratch.t[k].step[i].n) || proj_scratch.t[k].step[i].hit) {
-                p |= 1u << k;
-                break;
-            }
-        if (tl > l)
-            l = tl;
-    }
-    *len = l;
-    *parts = p;
+    *len = c->len;
+    *parts = c->parts;
     return 1;
 }
 #endif

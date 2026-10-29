@@ -68,9 +68,19 @@ static int check(const char *what, int ok)
     return !ok;
 }
 
+/* round 2: a scene is in flash (project.c scn_raw); this reads scene g of song 1 as a stored image */
+static project_store_t slot_img(uint32_t g)
+{
+    project_store_t z;
+    const project_store_t *r = scn_raw(g);
+    if (r) return *r;
+    memset(&z, 0, sizeof z);
+    return z;
+}
 static void reset(void)
 {
     memset(nor, 0xFF, sizeof nor);
+    scn_used = 0; sng_cur = 0; memset(song_rec, 0, sizeof song_rec); memset(scn_inf, 0, sizeof scn_inf);
     memset(&song, 0, sizeof song);
     memset(trk, 0, sizeof trk);
     memset(&chain, 0, sizeof chain);
@@ -178,17 +188,18 @@ int main(void)
 
     reset();
     trk[0].step[0] = (step_t){{60}, 1, ST_NOTE, 0, 96, 0, 0};
-    bad += check("LIST captures the runtime: 13 objects (id 8 empty, id 9 the FM6 patches), runtime 3840 B (FUN10)",
-                 list(0, &len, &crc) == 0 && rep[2] == 13u && len == sizeof(project_store_t) && len == 3840u &&
+    bad += check("LIST captures the runtime: 33 objects (id 8 empty, id 9 the FM6 patches, 24 scenes, 3 songs), runtime 3840 B (FUN10)",
+                 list(0, &len, &crc) == 0 && rep[2] == 33u && len == sizeof(project_store_t) && len == 3840u &&
                  crc == st_crc32(ED_BK_RAW, len));
-    bad += check("an empty project slot lists as length 0", list(2, &len, &crc) == 0 && len == 0);
+    bad += check("an empty scene lists as length 0", list(64, &len, &crc) == 0 && len == 0);
+    bad += check("an empty song lists as length 0", list(96, &len, &crc) == 0 && len == 0);
     bad += check("GET of the runtime copy", get(0, 0, 64) == 0);
     project_save(0);
     bad += check("a project save after LIST reused the staging RAM: GET of the runtime is stale (5)",
                  get(0, 0, 64) == 5u);
     bad += check("a new LIST makes it readable again", list(0, &len, &crc) == 0 && get(0, 0, 64) == 0);
     usb.resets++;
-    bad += check("a USB reset after LIST: GET is stale (5)", get(2, 0, 16) == 5u);
+    bad += check("a USB reset after LIST: GET is stale (5)", get(64, 0, 16) == 5u);
 
     /* settings */
     reset();
@@ -241,12 +252,15 @@ int main(void)
 
     /* malformed requests */
     bad += check("an unknown object id is refused", put_begin(8, sizeof ps, 0) == 1u);
-    bad += check("a project of the wrong length is refused", put_begin(2, sizeof(project_store_t) - 4u, 0) == 1u);
+    bad += check("a scene of the wrong length is refused", put_begin(64, sizeof(project_store_t) - 4u, 0) == 1u);
+    bad += check("a song of the wrong length is refused", put_begin(96, sizeof(song_rec_t) - 4u, 0) == 1u);
+    bad += check("the old project ids (2..5) and the sample ids (32..34) are not objects any more",
+                 put_begin(2, sizeof(project_store_t), 0) == 1u && put_begin(32, 0, 0) == 1u);
     bad += check("settings of the wrong length are refused", put_begin(1, sizeof ps + 4u, 0) == 1u);
     bad += check("a chunk without a begin is refused (5)", (ed_bk_put = 0, put_chunk(1, 0, (const uint8_t *)&ps, 16)) == 5u);
     put_begin(1, sizeof ps, st_crc32(&ps, sizeof ps));
     bad += check("a chunk at the wrong offset is refused", put_chunk(1, 16, (const uint8_t *)&ps, 16) == 1u);
-    bad += check("a chunk for another object is refused (5)", put_chunk(2, 0, (const uint8_t *)&ps, 16) == 5u);
+    bad += check("a chunk for another object is refused (5)", put_chunk(64, 0, (const uint8_t *)&ps, 16) == 5u);
     {
         uint32_t off = 0, step = sizeof ps - 8u;
         put_begin(1, sizeof ps, st_crc32(&ps, sizeof ps));
@@ -263,11 +277,11 @@ int main(void)
     put_begin(1, sizeof ps, st_crc32(&ps, sizeof ps));
     fm1_ms += 16000u;
     bad += check("16 s without a chunk ends the PUT (5)", put_chunk(1, 0, (const uint8_t *)&ps, 64) == 5u);
-    put_begin(2, sizeof st, 0);
-    put_chunk(2, 0, (const uint8_t *)&ps, 64);
+    put_begin(64, sizeof st, 0);
+    put_chunk(64, 0, (const uint8_t *)&ps, 64);
     project_save(1);
     bad += check("a project save during PUT (the staging RAM) ends it (5)",
-                 put_chunk(2, 64, (const uint8_t *)&ps, 64) == 5u);
+                 put_chunk(64, 64, (const uint8_t *)&ps, 64) == 5u);
     transport_req = 1;
     bad += check("PUT while starting PLAY is refused (3)", put_begin(1, sizeof ps, 0) == 3u);
     transport_req = 0;
@@ -277,9 +291,41 @@ int main(void)
     trk[1].step[3] = (step_t){{64}, 1, ST_NOTE, 0, 96, 0, 0};
     project_capture(&proj_scratch);
     proj_pack(&st, &proj_scratch);
-    bad += check("a FUN10 project restores into slot 3 (flash and RAM)",
-                 put_all(4, &st, sizeof st, st_crc32(&st, sizeof st)) == 0 && project_used(2) &&
-                 !memcmp(&proj_slot[2], &st, sizeof st) && st_load(OBJ_PROJECT0 + 2, &proj_wire, sizeof proj_wire) == (int)sizeof st);
+    bad += check("a FUN10 project restores into scene C (flash)",
+                 put_all(66, &st, sizeof st, st_crc32(&st, sizeof st)) == 0 && project_used(2) &&
+                 st_load(OBJ_PROJECT0 + 2, &proj_wire, sizeof proj_wire) == (int)sizeof st && !memcmp(&proj_wire, &st, sizeof st));
+    {   /* round 2: a scene of song 2 (object OBJ_SCN0 + 4) and a song record */
+        static song_rec_t sr, back;
+        uint32_t l2 = 0, c2 = 0;
+        project_store_t keep = st;
+        bad += check("a FUN10 project restores into scene E of song 1 (id 68: the old sample region)",
+                     put_all(68, &st, sizeof st, st_crc32(&st, sizeof st)) == 0 && project_used(4) &&
+                     st_load(st_scene_obj(4), &proj_wire, sizeof proj_wire) == (int)sizeof st && !memcmp(&proj_wire, &st, sizeof st));
+        bad += check("... and lists with its length and CRC, GET returns it whole",
+                     list(68, &l2, &c2) == 0 && l2 == sizeof st && c2 == st_crc32(&keep, sizeof keep) && get(68, 0, 64) == 0);
+        sng_cur = 1;
+        bad += check("a scene of song 2 (id 64 + 8 + 3 = 75) restores and is in the object of the 12th scene",
+                     put_all(75, &st, sizeof st, st_crc32(&st, sizeof st)) == 0 && ((scn_used >> 11) & 1u) &&
+                     st_load(st_scene_obj(11), &proj_wire, sizeof proj_wire) == (int)sizeof st && project_used(3));
+        sng_cur = 0;
+        memset(&sr, 0, sizeof sr);
+        song_pack_live(&sr);
+        bad += check("a song record restores (id 97), lists and comes back whole",
+                     put_all(97, &sr, sizeof sr, st_crc32(&sr, sizeof sr)) == 0 && song_stored(1) &&
+                     list(97, &l2, &c2) == 0 && l2 == sizeof sr && c2 == st_crc32(&sr, sizeof sr) &&
+                     st_load(OBJ_SONG0 + 1, &back, sizeof back) == (int)sizeof back && !memcmp(&back, &sr, sizeof sr));
+        sr.magic ^= 1u;
+        bad += check("a song record of another layout is refused (2), the song kept",
+                     put_all(97, &sr, sizeof sr, st_crc32(&sr, sizeof sr)) == 2u && song_stored(1));
+        sr.magic ^= 1u;
+        sr.chain.count = 99;
+        bad += check("a song record with an invalid chain is refused (2)",
+                     put_all(97, &sr, sizeof sr, st_crc32(&sr, sizeof sr)) == 2u && song_stored(1));
+        bad += check("an empty song object clears the song (flash and RAM)",
+                     put_all(97, 0, 0, st_crc32(0, 0)) == 0 && !song_stored(1) &&
+                     st_load(OBJ_SONG0 + 1, &back, sizeof back) == 0);
+        put_all(68, 0, 0, st_crc32(0, 0)); put_all(75, 0, 0, st_crc32(0, 0));
+    }
     {   /* FUN8 of 1.0.x (3584 bytes, 91 parameters) and FUN9 of 1.1 (3648, 99): restore as FUN10, E0 at P_E0, lanes
          * 100 %, the four 1.2 parameters at their defaults; a FUN9 with 64 motion records keeps them all */
         static uint8_t v8[3584], v9[3648];
@@ -290,8 +336,8 @@ int main(void)
         proj_scratch.t[2].p[P_LN3] = 127;              /* (FUN8 had no lane levels) */
         bad += check("a FUN8 project (1.0.x) restores as FUN10 into slot 2, E0 at P_E0, lane levels 100 %",
                      old_pack(v8, &proj_scratch, OLD_FUN8, 91u) == sizeof v8 &&
-                     put_all(3, v8, sizeof v8, st_crc32(v8, sizeof v8)) == 0 && ((uint32_t *)proj_slot[1].raw)[0] == PROJ_MAGIC &&
-                     proj_import(&proj_scratch, &proj_slot[1], sizeof st) && proj_scratch.t[2].p[P_E0] == 2 &&
+                     put_all(65, v8, sizeof v8, st_crc32(v8, sizeof v8)) == 0 && ((uint32_t *)slot_img(1).raw)[0] == PROJ_MAGIC &&
+                     scn_get(1, &proj_scratch) && proj_scratch.t[2].p[P_E0] == 2 &&
                      proj_scratch.t[2].p[P_LN3] == 127 && proj_scratch.t[1].step[3].note[0] == 64u);
         project_capture(&proj_scratch);
         for (k = 0; k < 64u; k++)
@@ -299,8 +345,8 @@ int main(void)
         proj_scratch.motion.count = 64;
         proj_scratch.motion.on = 2;
         ok = old_pack(v9, &proj_scratch, OLD_FUN9, 99u) == sizeof v9 &&
-             put_all(4, v9, sizeof v9, st_crc32(v9, sizeof v9)) == 0 && ((uint32_t *)proj_slot[2].raw)[0] == PROJ_MAGIC &&
-             proj_import(&proj_scratch, &proj_slot[2], sizeof st) && proj_scratch.t[2].p[P_E0] == 2 &&
+             put_all(66, v9, sizeof v9, st_crc32(v9, sizeof v9)) == 0 && ((uint32_t *)slot_img(2).raw)[0] == PROJ_MAGIC &&
+             scn_get(2, &proj_scratch) && proj_scratch.t[2].p[P_E0] == 2 &&
              proj_scratch.t[2].p[P_LN3] == 90 && proj_scratch.motion.count == 64u && proj_scratch.motion.event[63].value == 63 &&
              proj_scratch.t[0].p[P_LSYNC] == 0 && proj_scratch.t[0].p[P_LTRIG] == 0 && proj_scratch.t[0].p[P_LPOL] == 0 &&
              proj_scratch.t[0].p[P_SQNT] == 1;
@@ -318,8 +364,8 @@ int main(void)
     memset(&v6.chain, 0, sizeof v6.chain);
     v6.sum = proj_hash(&v6, sizeof v6 - 4u);
     bad += check("a FUN6 project restores as FUN10, bounded, its E0 at P_E0",
-                 put_all(5, &v6, sizeof v6, st_crc32(&v6, sizeof v6)) == 0 && ((uint32_t *)proj_slot[3].raw)[0] == PROJ_MAGIC &&
-                 proj_import(&proj_scratch, &proj_slot[3], sizeof st) && proj_scratch.t[0].step[0].n == 4u &&
+                 put_all(67, &v6, sizeof v6, st_crc32(&v6, sizeof v6)) == 0 && ((uint32_t *)slot_img(3).raw)[0] == PROJ_MAGIC &&
+                 scn_get(3, &proj_scratch) && proj_scratch.t[0].step[0].n == 4u &&
                  proj_scratch.t[0].step[0].note[0] == 127u && proj_scratch.t[0].p[P_E0] ==
                  clamp(3, param_desc_of(trk[0].engine, P_E0)->min, param_desc_of(trk[0].engine, P_E0)->max));
     {   /* 1.0.3: the FM6 patch bank (id 8) is retired; an older archive's bank moves into its user presets (ids 6, 7
@@ -379,16 +425,22 @@ int main(void)
         bad += check("an id 9 of the wrong size is refused at begin (1)", put_begin(9, sizeof got - 4u, 0) == 1u);
         bad += check("an id 10 is refused (1)", put_begin(10, 0, 0) == 1u);
     }
-    memcpy(&st, &proj_slot[2], sizeof st);
+    st = slot_img(2);
     erase_error = 1;
-    proj_slot[2].raw[100] ^= 1;                          /* (marks the RAM copy, to see it is kept) */
-    memcpy(&v6, &proj_slot[2], sizeof v6);
-    bad += check("a flash error on commit (4) keeps the slot's RAM copy",
-                 put_all(4, &st, sizeof st, st_crc32(&st, sizeof st)) == 4u && !memcmp(&proj_slot[2], &v6, sizeof v6));
+    memcpy(&v6, &st, sizeof v6);
+    st.raw[100] ^= 1;                                    /* (a different scene: its write fails) */
+    st.raw[3000] ^= 0;
+    {
+        project_store_t other = st;
+        memcpy(other.raw + sizeof other - 4u, &(uint32_t){proj_hash(other.raw, sizeof other - 4u)}, 4);
+        project_store_t keep = slot_img(2);
+        bad += check("a flash error on commit (4) keeps the scene as it was",
+                     put_all(66, &other, sizeof other, st_crc32(&other, sizeof other)) == 4u && ({ project_store_t now = slot_img(2); !memcmp(&now, &keep, sizeof now); }));
+    }
     erase_error = 0;
-    bad += check("an empty project object clears the slot", put_all(4, 0, 0, st_crc32(0, 0)) == 0 && !project_used(2));
+    bad += check("an empty project object clears the slot", put_all(66, 0, 0, st_crc32(0, 0)) == 0 && !project_used(2));
     st.raw[200] ^= 1;                                    /* hash no longer matches */
-    bad += check("a project whose own hash fails is refused", put_all(4, &st, sizeof st, st_crc32(&st, sizeof st)) == 2u);
+    bad += check("a project whose own hash fails is refused", put_all(66, &st, sizeof st, st_crc32(&st, sizeof st)) == 2u);
 
     /* the runtime */
     reset();

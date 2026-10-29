@@ -541,14 +541,16 @@ static int formats(void)
         for (i = 0; i < CHAIN_ROWS; i++)
             c.chain.row[i] = (chain_row_t){{(uint8_t)(i % 5u), (uint8_t)((i + 1u) % 5u), (uint8_t)((i + 2u) % 5u),
                                             (uint8_t)((i * 3u) % 5u)}, (uint8_t)(1u + i)};
+        c.chain.row[0].slot[0] = 4;                  /* (round 2: E here, stored as 5; and the "-" of a project from before, stored as 4) */
+        c.chain.row[0].slot[1] = CHAIN_SILENT;
         c.sum = proj_sum(&c);
         ok = proj_pack(&st, &c) && proj_import(&d, &st, sizeof st) && !memcmp(&c, &d, sizeof c) && st.raw[at] == CHAIN_ROWS &&
-             st.raw[at + 4u] == 0 && st.raw[at + 5u] == 1 && st.raw[at + 6u] == 2 && st.raw[at + 7u] == 0 && st.raw[at + 8u] == 1 &&
+             st.raw[at + 4u] == 5 && st.raw[at + 5u] == 4 && st.raw[at + 6u] == 2 && st.raw[at + 7u] == 0 && st.raw[at + 8u] == 1 &&
              st.raw[at + 4u + 5u * 15u + 4u] == 16;
-        c.chain.row[3].slot[2] = 5;                   /* past "-": refused (pack and load) */
+        c.chain.row[3].slot[2] = CHAIN_SILENT + 1u;   /* past "-": refused (pack and load) */
         c.sum = proj_sum(&c);
         ok &= !proj_pack(&st, &c);
-        bad += check("FUN10 round trip: 16 sections, a slot per track (A..D, -), the bytes in place", ok);
+        bad += check("FUN10 round trip: 16 sections, a slot per track (A..H, -), the bytes in place (A..D 0..3, - 4 as before, E..H 5..8)", ok);
     }
     project_save(2);
     motion_clear(t); t->p[P_SQNT] = 1; step_set_nudge(&t->step[1], 0);

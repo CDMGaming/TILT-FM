@@ -69,3 +69,17 @@ That is the chip's mask-ROM boot mode (USB `VID_4C4A PID_8057`) — recoverable 
 - [ ] **Three quick restarts**: on 10 s, off; on 10 s, off; on.
 - [ ] Still nothing on USB at all → hard brick: FM-1 Transporter (XIAO RP2040 on the USB data lines;
       <https://github.com/kurogedelic/FM-1-transporter>, MvaveFM1Unbricker's `TRANSPORTER-GUIDE.md`).
+
+## 4. The 8 scenes x 3 songs build (round 2): the flash map changed
+
+The three user sample slots (`0xA0000..0xDBFFF`) are now the scenes' flash (`docs/FLASH-MAP.md`). TFM has no samples.
+
+- [ ] **Back up first in the editor** (the web editor's backup: scenes, songs, presets, settings). The backup of a build
+      before round 2 holds your four scenes as "slots 1-4" and any samples in the three sample slots; the new editor
+      restores the four scenes into song 1 (A..D) and ignores the samples (they are wiped at the first boot).
+- [ ] The first boot after the flash takes a few seconds longer: it wipes the old sample region (every sector that is
+      not blank) and writes the format tag. Do not power off during that boot (a cut is safe: the old scenes stay and
+      the next boot starts again; `tests/persistence_test.c` cuts power at every one of its 66 flash operations).
+- [ ] After it: SCENES shows eight tiles (your A..D, E..H empty), SONGS three slots (song 1 = what you had, 2 and 3 empty).
+- [ ] The migration runs once. If the region ever loses its tag (another firmware wrote there), it runs again and wipes
+      whatever is in the region: scenes E..H and songs 2 and 3 are gone, A..D and song 1's globals come back from A..D.

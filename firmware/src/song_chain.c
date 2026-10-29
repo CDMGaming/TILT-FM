@@ -23,7 +23,7 @@ typedef struct {
 } chain_pattern_t;
 static chain_config_t chain_config;
 static struct {
-    chain_pattern_t source[4];
+    chain_pattern_t source[4];                /* scenes A..D; E..H in chain_src_hi (the pool: RAM is full) */
     chain_config_t config;
     int16_t timing[NTRK][4];                 /* the editable LEN DIV SWING GATE and QUANTIZE, back on STOP */
     uint8_t qnt[NTRK];
@@ -33,6 +33,8 @@ static struct {
     uint8_t rec;
     uint32_t carry;
 } chain;
+static chain_pattern_t chain_src_hi[NSCN - 4u] __attribute__((section(".pool")));
+static chain_pattern_t *chain_src(uint32_t s) { return s < 4u ? &chain.source[s] : &chain_src_hi[s - 4u]; }
 /* a silent lane: its steps (empty: nothing plays) and its timing (a 4/4 bar of 1/16: the section's length when every
  * track is silent) */
 static const step_t chain_silent[NSTEP] = {{{0}}};
@@ -53,7 +55,7 @@ typedef struct {
     uint8_t fm6[NTRK][FP_SIZE + 1u];
 } chain_sound_t;
 static struct {
-    chain_sound_t src[4], live;
+    chain_sound_t src[NSCN], live;
     uint8_t on;
 } chain_snd __attribute__((section(".pool")));
 static int chain_owns(uint32_t id);
@@ -144,8 +146,8 @@ static uint32_t chain_clock(const chain_row_t *r)
 {
     uint32_t k, len48[NTRK];
     for (k = 0; k < NTRK; k++)
-        len48[k] = r->slot[k] < 4u ? len48_of(chain.source[r->slot[k]].timing[k][0], chain.source[r->slot[k]].timing[k][1])
-                                   : 0u;
+        len48[k] = r->slot[k] < NSCN ? len48_of(chain_src(r->slot[k])->timing[k][0], chain_src(r->slot[k])->timing[k][1])
+                                     : 0u;
     return chain_clock_by(r, len48);
 }
 /* the first track not silent in r (every track silent: track 1): the one slot a row of before lanes names (editor v6) */
@@ -165,7 +167,7 @@ static const step_t *seq_steps(const track_t *t)
     if (!chain.running)
         return t->step;
     s = chain.lane[k];
-    return s < 4u ? chain.source[s].step[k] : chain_silent;
+    return s < NSCN ? chain_src(s)->step[k] : chain_silent;
 }
 static void motion_restore(track_t *t);
 /* a section starts (chain_start, chain_tick: once a section, not per block; not inlined: off the audio ISR's loop) */
@@ -177,14 +179,14 @@ static __attribute__((noinline)) void chain_apply(void)
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
         uint32_t s = r->slot[i];
-        chain.lane[i] = (uint8_t)(s < 4u ? s : CHAIN_SILENT);
+        chain.lane[i] = (uint8_t)(s < NSCN ? s : CHAIN_SILENT);
         seq_release(t);
         motion_restore(t);
-        if (s < 4u && chain_snd.on)
+        if (s < NSCN && chain_snd.on)
             chain_sound_put(t, &chain_snd.src[s], i);   /* (TILT-FM: SOUNDS SCENE) */
-        if (s < 4u) {
-            memcpy(&t->p[P_SLEN], chain.source[s].timing[i], sizeof chain.timing[i]);
-            t->p[P_SQNT] = chain.source[s].qnt[i];
+        if (s < NSCN) {
+            memcpy(&t->p[P_SLEN], chain_src(s)->timing[i], sizeof chain.timing[i]);
+            t->p[P_SQNT] = chain_src(s)->qnt[i];
         } else {
             t->p[P_SLEN] = CHAIN_SIL_LEN;
             t->p[P_SDIV] = CHAIN_SIL_DIV;

@@ -755,8 +755,8 @@ static void te_do(uint32_t o)
         transport_req = 1;
         ui_message("THE TAKE");
     } else if (o == TO_SAVE && !tu_classic()) {         /* TFM-UI: KEEP AS A SONG: SONGS, and the NAME screen for it */
-        uint32_t sl = scene_cur() < 4u ? scene_cur() : 0u;
-        for (i = 0; i < 4u && scene_cur() >= 4u; i++)
+        uint32_t sl = scene_cur() < NSCN ? scene_cur() : 0u;
+        for (i = 0; i < NSCN && scene_cur() >= NSCN; i++)
             if (!project_used(i)) {
                 sl = i;
                 break;
@@ -893,7 +893,7 @@ static void tilt_scene_go(uint32_t s, int drop)
 {
     uint32_t cur = scene_cur(), stored = 0, used;
     char b[24] = "SCENE A";
-    s &= 3u;
+    s &= NSCN - 1u;
     b[6] = (char)('A' + s);
     if (chain_busy()) {
         ui_message("STOP TO CHANGE SCENE");
@@ -1014,9 +1014,9 @@ static void tilt_scene_follow(void)
             pat_sig[k] = ~steps_sig(&trk[k]);           /* (a scene's steps are the user's) */
             fm6_adopt(k);
         }
-        pat_from_set((s & 3u) + 1u);
+        pat_from_set((s & (NSCN - 1u)) + 1u);
         sync_reload = 1;                                /* (the editor) */
-        b[6] = (char)('A' + (s & 3u));
+        b[6] = (char)('A' + (s & (NSCN - 1u)));
         ui_message(b);
         ui.force = 1;
     } else if (scene_armed == 1u && chain_busy()) {
@@ -1033,12 +1033,12 @@ static void tilt_scene_follow(void)
 static void scene_keys_poll(void);
 static void tilt_scene_poll(void)
 {
-    uint32_t v = scene_cur() < 4u ? scene_cur() + 1u : 0u;
+    uint32_t v = scene_cur() < NSCN ? scene_cur() + 1u : 0u, m = (uint32_t)(sng_cur & 3u) | 4u | v << 4;
     tilt_scene_follow();
     scene_keys_poll();
-    if (tilt_ns_open == TILT_START || ((ui_prefs3 >> PREF_SCENE_SH) & 7u) == v)
+    if (tilt_ns_open == TILT_START || SCN_MEM == m)
         return;
-    ui_prefs3 = (uint8_t)((ui_prefs3 & ~(7u << PREF_SCENE_SH)) | v << PREF_SCENE_SH);
+    SCN_MEM = (uint8_t)m;                               /* (round 2: the song and the scene, project.c SCN_MEM) */
     settings_save();
 }
 
@@ -1112,6 +1112,7 @@ static void layer_tilt(void)
  * cued one blinking), G4 ADD under them. LEDs: the scene now lit, a stored one at the mid level, the cued one
  * breathing, an empty one dark; G4 breathes when it can add */
 #define SK_SCENE 4u                                     /* C4: the white key place of scene A */
+static uint32_t scene_keys(void) { return tu_classic() ? 4u : NSCN; }   /* the layer has four boxes; TFM's keys are A..H */
 #define SK_ADD 8u                                       /* G4 */
 static struct { uint8_t held, k, used; } skh = {SCENE_NONE, 0, 0};
 /* TFM: QUICK CHAIN: G4 held, the scene keys tapped in order: each tap a section of that scene at the song's end (the
@@ -1141,7 +1142,7 @@ static void quick_chain(uint32_t s)
     }
     n = str_len(b);                                     /* the song's last sections, as letters ("A A B") */
     for (i = chain_config.count > 4u ? chain_config.count - 4u : 0u; i < chain_config.count && n + 4u < sizeof b; i++) {
-        b[n++] = (char)('A' + chain_config.row[i].slot[0] % 4u);
+        b[n++] = (char)('A' + chain_config.row[i].slot[0] % NSCN);
         if (chain_config.row[i].repeat > 1u)
             b[n++] = 'x', b[n++] = (char)('0' + chain_config.row[i].repeat % 10u);
         b[n++] = ' ';
@@ -1153,8 +1154,8 @@ static void quick_chain(uint32_t s)
 static void scene_copy_ui(uint32_t src, uint32_t dst, int sure)
 {
     char b[24] = "A > C COPIED";
-    src &= 3u;
-    dst &= 3u;
+    src &= NSCN - 1u;
+    dst &= NSCN - 1u;
     if (transport_busy()) {
         ui_message("STOP TO COPY SCENE");
         return;
@@ -1172,7 +1173,7 @@ static void scene_copy_ui(uint32_t src, uint32_t dst, int sure)
         return;
     }
     if (project_used(dst) && !sure) {
-        confirm_open(CF_SCENE_OVR, src << 2 | dst);
+        confirm_open(CF_SCENE_OVR, src << 3 | dst);
         return;
     }
     if (scene_copy(src, dst))
@@ -1194,7 +1195,7 @@ static int scene_in_song(uint32_t s)                    /* a SONG section plays 
 static void scene_clear_ui(uint32_t s, int sure)
 {
     char b[24] = "A CLEARED";
-    s &= 3u;
+    s &= NSCN - 1u;
     b[0] = (char)('A' + s);
     if (transport_busy()) {
         ui_message("STOP TO CLEAR SCENE");
@@ -1230,27 +1231,19 @@ static void scene_key(uint32_t k, uint32_t p)
 {
     if (key_black(k))
         return;
-    if (!tu_classic()) {                                /* TFM-UI: C4..C5 are the scenes A..H (E..H: no flash yet), G5 held chains */
-        if (k == 26u) {
-            qc.held = 1;
-            qc.k = (uint8_t)k;
-            qc.used = 0;
-            return;
-        }
-        if (p >= SK_SCENE + 4u && p < SK_SCENE + 8u) {
-            ui_message("E-H: NO FLASH YET");
-            return;
-        }
-        if (p == SK_ADD)
-            return;
-    }
-    if (p == SK_ADD) {                                  /* (TFM: on its release, unless the scenes were tapped) */
+    if (!tu_classic() && k == 26u) {                    /* TFM-UI: C4..C5 are the scenes A..H, G5 held chains */
         qc.held = 1;
         qc.k = (uint8_t)k;
         qc.used = 0;
         return;
     }
-    if (p < SK_SCENE || p >= SK_SCENE + 4u)
+    if (tu_classic() && p == SK_ADD) {                  /* (the layer: on its release, unless the scenes were tapped) */
+        qc.held = 1;
+        qc.k = (uint8_t)k;
+        qc.used = 0;
+        return;
+    }
+    if (p < SK_SCENE || p >= SK_SCENE + scene_keys())
         return;
     p -= SK_SCENE;
     if (qc.held && ((fm1_in.notes >> qc.k) & 1u)) {     /* TFM: QUICK CHAIN */
@@ -1293,18 +1286,19 @@ static void scene_keys_poll(void)
 static int tilt_addable(void) { return scene_cur() != SCENE_NONE && chain_config.count < CHAIN_ROWS && !chain_busy(); }
 static uint32_t scene_can(uint32_t k, uint32_t p)       /* (breathing: the cued scene, G4 when it can add) */
 {
-    return !key_black(k) && ((p == SK_ADD && tilt_addable()) || (p >= SK_SCENE && p < SK_SCENE + 4u && p - SK_SCENE == tsc.cue));
+    return !key_black(k) && ((tu_classic() && p == SK_ADD && tilt_addable()) ||
+                             (p >= SK_SCENE && p < SK_SCENE + scene_keys() && p - SK_SCENE == tsc.cue));
 }
 static uint32_t scene_on(uint32_t k, uint32_t p)
 {
-    return !key_black(k) && p >= SK_SCENE && p < SK_SCENE + 4u && p - SK_SCENE == scene_cur();
+    return !key_black(k) && p >= SK_SCENE && p < SK_SCENE + scene_keys() && p - SK_SCENE == scene_cur();
 }
 /* the keys at the mid level: the stored scenes (not the one now, lit, nor the cued one, breathing) */
 static uint32_t tilt_mid(void)
 {
     uint32_t k, m = 0, p;
     for (k = 0; k < 27u; k++)
-        if (!key_black(k) && (p = key_place(k)) >= SK_SCENE && p < SK_SCENE + 4u && p - SK_SCENE != scene_cur() &&
+        if (!key_black(k) && (p = key_place(k)) >= SK_SCENE && p < SK_SCENE + scene_keys() && p - SK_SCENE != scene_cur() &&
             p - SK_SCENE != tsc.cue && graph_project_used(p - SK_SCENE))
             m |= 1u << k;
     return m;
@@ -1314,7 +1308,7 @@ static uint32_t scene_sig_ui(void)
 {
     uint32_t s, h = scene_cur() * 3u + (uint32_t)scene_edited() * 5u + chain_config.count * 11u + tsc.cue * 13u +
                     scene_blink() * 17u + (uint32_t)chain_busy() * 19u;
-    for (s = 0; s < 4u; s++)
+    for (s = 0; s < NSCN; s++)
         h = h * 7u + (uint32_t)graph_project_used(s);
     return h;
 }

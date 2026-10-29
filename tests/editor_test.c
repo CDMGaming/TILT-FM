@@ -402,44 +402,16 @@ static int steps(void)
 
 static int samples(void)
 {
-    uint8_t a[640] = {0}, data[257], short_group[] = {0, 0, 4, 0, 1};
-    uint32_t n, i;
+    uint8_t a[640] = {0};
     int bad = 0;
-    smp_user_hdr_t h;
     reset(); memset(host_samples, 0, sizeof host_samples);
-    for (i = 0; i < sizeof data; i++) data[i] = (uint8_t)(i * 37u);
-    song.playing = 1; host_progress = 0;
-    bad += check("sample erase waits for STOP and refuses a stalled audio ISR",
-                 request(ED_SMP_BEGIN, a, 1) == 8u && host_wire[6] != 0 && !host_erases && song.playing);
-    host_progress = 1;
-    bad += check("sample erase stops transport before touching flash",
-                 request(ED_SMP_BEGIN, a, 1) == 8u && !host_wire[6] && host_erases == 1 && !song.playing);
-    a[0] = 0; a[1] = 0; a[2] = 4; a[3] = 0;
-    n = pack7(data, 257, a + 4) + 4u;
-    bad += check("257 decoded sample bytes are rejected without a truncated write",
-                 request(ED_SMP_WRITE, a, n) == 11u && host_wire[9] == 1 && !host_writes);
-    bad += check("a dangling packed-data mask is rejected",
-                 request(ED_SMP_WRITE, short_group, sizeof short_group) == 11u && host_wire[9] == 1 && !host_writes);
-    n = pack7(data, 256, a + 4) + 4u;
-    transport_req = 1;
-    bad += check("sample writes cancel a pending PLAY before flash access",
-                 request(ED_SMP_WRITE, a, n) == 11u && !host_wire[9] && transport_req != 1u && host_writes == 1);
-    memset(&h, 0, sizeof h); h.magic = SMP_USER_MAGIC; h.version = 1; h.nz = 1;
-    h.data_len = 256; h.crc = st_crc32(data, 256); h.zone[0].n = 512; h.zone[0].le = 511;
-    h.zone[0].rate = 65536; h.zone[0].hi = 127;
-    a[0] = 0; n = pack7((const uint8_t *)&h, sizeof h, a + 1) + 1u;
-    a[n] = 0; a[n + 1u] = 0;
-    bad += check("an oversized sample header is rejected without programming flash",
-                 request(ED_SMP_END, a, n + 2u) == 8u && host_wire[6] == 1 && host_writes == 1);
-    bad += check("complete sample header and CRC publish a valid slot",
-                 request(ED_SMP_END, a, n) == 8u && !host_wire[6] && usr_nz[0] == 1 && host_writes == 2);
-    bad += check("repeated END of the same published header does not rewrite live zones",
-                 request(ED_SMP_END, a, n) == 8u && !host_wire[6] && host_writes == 2);
-    h.zone[0].rate = 131072;
-    n = pack7((const uint8_t *)&h, sizeof h, a + 1) + 1u;
-    bad += check("END cannot change published sample zones without BEGIN",
-                 request(ED_SMP_END, a, n) == 8u && host_wire[6] == 2 && host_writes == 2 &&
-                 usr_zone[0][0].rate == 65536u);
+    song.playing = 1; host_progress = 1; transport_req = 1;
+    bad += check("round 2: the user sample commands (BEGIN, ERASE, WRITE, END) are refused: no reply, no flash touched, the transport left alone",
+                 !request(ED_SMP_BEGIN, a, 1) && !request(ED_SMP_ERASE, a, 1) && !request(ED_SMP_WRITE, a, 40) &&
+                 !request(ED_SMP_END, a, 40) && !host_erases && !host_writes && song.playing && transport_req == 1u);
+    song.playing = 0; transport_req = 0;
+    bad += check("round 2: the sample slot list is empty (their flash is the scenes')",
+                 request(ED_SMP_INFO, a, 0) == 8u && host_wire[5] == 0 && host_wire[6] == 0);
     song.playing = 1; host_progress = 0; a[0] = 0; a[1] = 0;
     bad += check("user-preset STORE does not mutate RAM when audio cannot stop",
                  request(ED_UP_STORE, a, 2) == 8u && host_wire[6] == 2 && !up_used(0));
@@ -465,8 +437,9 @@ static int song_protocol(void)
     chain.armed = 0; a[0] = 2;
     bad += check("SONG PLAY refuses extra argument bytes", !request(ED_SONG, a, 2) && !transport_req);
     {   /* 1.2 (`57 01 04`): sections with a slot per track, ops 4..7; the v6 ops see each section's clock lane */
-        static const uint8_t set[] = {5, 2, 0, 1, CHAIN_SILENT, 0, 3, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, 1};
-        static const uint8_t q4[] = {4}, q0[] = {0}, bad5[] = {5, 1, 0, 0, 5, 0, 1}, old4[] = {1, 1, CHAIN_SILENT, 1};
+        /* (the wire's slots are a stored project's: A..D 0..3, "-" 4, E..H 5..8; round 2) */
+        static const uint8_t set[] = {5, 2, 0, 1, 4, 0, 3, 4, 4, 4, 4, 1};
+        static const uint8_t q4[] = {4}, q0[] = {0}, bad5[] = {5, 1, 0, 0, 9, 0, 1}, old4[] = {1, 1, 4, 1};
         static const uint8_t info[] = {0};
         uint32_t n, i, tag = 0;
         reset();
@@ -481,7 +454,7 @@ static int song_protocol(void)
         n = request(ED_SONG, q0, 1);
         bad += check("SONG op 0 (v6 editors): a row per section, its clock lane's slot (T1 A; all - : A)",
                      n == 16u && host_wire[11] == 0 && host_wire[12] == 3 && host_wire[13] == 0 && host_wire[14] == 1);
-        bad += check("SONG op 5: a slot past - (5) refused, the sections kept",
+        bad += check("SONG op 5: a slot past H (9) refused, the sections kept",
                      request(ED_SONG, bad5, sizeof bad5) == 22u && host_wire[6] == 1 && chain_config.count == 2);
         bad += check("SONG op 1 (v6): no - in a row of one slot", request(ED_SONG, old4, sizeof old4) == 16u &&
                      host_wire[6] == 1 && chain_config.count == 2);
@@ -812,7 +785,7 @@ static uint32_t put_frame(uint8_t *f, uint32_t op, uint32_t off, uint32_t count)
     static const uint8_t zero[256];
     uint32_t n = 0, i;
     f[n++] = 0xF0; f[n++] = ED_HDR0; f[n++] = ED_HDR1; f[n++] = ED_HDR2; f[n++] = ED_BACKUP_PUT;
-    f[n++] = (uint8_t)op; f[n++] = 2;
+    f[n++] = (uint8_t)op; f[n++] = 64;                  /* (scene A of song 1: round 2's id for the first project slot) */
     if (op == 0u) {
         for (i = 0; i < 5u; i++) f[n++] = (uint8_t)((sizeof(project_store_t) >> (7u * i)) & (i == 4u ? 15u : 127u));
         for (i = 0; i < 5u; i++) f[n++] = 0;
@@ -862,7 +835,7 @@ static int usb_burst(void)
     usb_feed(u, usb_frame(f, n, u)); host_wire_n = 0; ed_service(); host_drain();
     bad += check("... so the next piece is refused (rc 1, offset), as a host that waits never sees",
                  wire_frames(ED_BACKUP_PUT, &x) == 1u && x[2] == 1u && ed_bk_pos == 256u);
-    request(ED_BACKUP_PUT, (const uint8_t[]){3, 2}, 2);
+    request(ED_BACKUP_PUT, (const uint8_t[]){3, 64}, 2);
     return bad;
 }
 

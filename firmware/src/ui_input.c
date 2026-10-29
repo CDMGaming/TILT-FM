@@ -1675,11 +1675,11 @@ static void ui_input(void)
             } else if (kind == CF_ERASE_PROJ) {
                 (void)project_erase(ui.confirm_trk & 3u);
             } else if (kind == CF_SCENE_DROP) {         /* (TILT-FM: the music in no scene left for scene n: tilt.c) */
-                tilt_scene_go(ui.confirm_trk & 3u, 1);
+                tilt_scene_go(ui.confirm_trk & 7u, 1);
             } else if (kind == CF_SCENE_OVR) {          /* (the SCENE layer's copy, its target used) */
-                scene_copy_ui(ui.confirm_trk >> 2, ui.confirm_trk & 3u, 1);
+                scene_copy_ui(ui.confirm_trk >> 3, ui.confirm_trk & 7u, 1);
             } else if (kind == CF_SCENE_CLR) {
-                scene_clear_ui(ui.confirm_trk & 3u, 1);
+                scene_clear_ui(ui.confirm_trk & 7u, 1);
             } else if (kind == CF_LOAD_PAT) {
                 pat_load_ui(&trk[ui.confirm_trk % NTRK], pat_pick());
                 str_cpy(ui.msg2, "[SAVE] HOLD TO UNDO", sizeof ui.msg2);

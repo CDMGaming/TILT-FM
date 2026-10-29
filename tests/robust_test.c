@@ -119,12 +119,11 @@ static int stop_after_checks(void)
     reset();
     song.playing = 1; host_progress = 1;                    /* the transport runs and could be stopped */
     a[0] = 0; a[1] = 1; a[2] = 2;
-    request(ED_SMP_END, a, 3);                              /* a header far too short */
-    bad += check("a malformed SMP_END is refused without stopping the transport", host_wire[6] == 1 && song.playing);
-    a[0] = 0; a[1] = 2;
+    bad += check("SMP_END (no sample slots in round 2) is refused, no reply, the transport runs", !request(ED_SMP_END, a, 3) && song.playing);
+    a[0] = 0; a[1] = 64;
     request(ED_BACKUP_PUT, a, 2);                           /* BEGIN without its arguments */
     bad += check("a malformed BACKUP_PUT is refused without stopping the transport", host_wire[7] == 1 && song.playing);
-    a[0] = 1; a[1] = 2;
+    a[0] = 1; a[1] = 64;
     request(ED_BACKUP_PUT, a, 9);                           /* data with no session */
     bad += check("BACKUP_PUT data without a session: refused, the transport runs", host_wire[7] == 5 && song.playing);
     song.playing = 0;

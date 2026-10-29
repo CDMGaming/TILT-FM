@@ -15,8 +15,8 @@ MEMORY
 {
     XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0x8DFBC
     RAMTEXT (rwx): ORIGIN = 0x01C00000, LENGTH = 0x6000
-    RAM    (rwx) : ORIGIN = 0x01C08000, LENGTH = 72K
-    POOL   (rw)  : ORIGIN = 0x01C1A000, LENGTH = 0x5A000
+    RAM    (rwx) : ORIGIN = 0x01C08000, LENGTH = 66K     /* round 2: 72K before; the 6 K went to the pool (chain_src_hi, chain_snd: 8 scenes) */
+    POOL   (rw)  : ORIGIN = 0x01C18800, LENGTH = 0x5B800
     NOINIT (rw)  : ORIGIN = 0x01C7C000, LENGTH = 0x3D50
 }
 SECTIONS

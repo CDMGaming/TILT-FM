@@ -142,6 +142,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 }
 static struct { uint32_t stage; } felucca_dbg;
 #define FELUCCA_FLASH 0
+#define SCN_RAM 24u                    /* (round 2: all 24 scenes in RAM, no flash here) */
 #ifndef FELUCCA_VERSION
 #define FELUCCA_VERSION "TEST"
 #endif
@@ -1897,6 +1898,7 @@ static int test_menu_project_rows(void)
     uint32_t sig;
     ui_power_on();
     memset(&p0, 0, sizeof p0); memset(&p1, 0, sizeof p1);   /* (export keeps some fields as they were) */
+    tilt_scene_poll();                                    /* (the scene the music is in is remembered: SCN_MEM) */
     settings_export(&p0);
     sig = autosave_sig();
     hold(B_HOME);
@@ -8847,7 +8849,7 @@ static int test_song_lanes(void)
     ok &= chain.running && seq_steps(&trk[1]) == chain_silent;
     seq_stop();
     bad += check("SONG lanes: a lane on an empty slot refuses (PATTERN C EMPTY); a silent song needs none", ok);
-    chain_config.row[0].slot[0] = 5;
+    chain_config.row[0].slot[0] = CHAIN_SILENT + 1u;
     bad += check("SONG lanes: a slot past \"-\" is no section", !chain_valid(&chain_config));
     /* TILT-FM: a 1-bar drum loop on T1 and a 2-bar line on T2 (A: T1 16 x 1/16, T2 16 x 1/8), x1: the section is 2 bars,
      * not 1; and the timeline draws it so (song_unit) */
@@ -9975,7 +9977,7 @@ static int test_tilt_scenes(void)
     ok &= scene_cur() == 1u && str_eq(ui.msg, "SCENE B");
     bad += check("TILT-FM scenes: an unedited scene is left as stored (not written again); its own key: stays", ok);
     tilt_scene_poll();
-    ok = ((ui_prefs3 >> PREF_SCENE_SH) & 7u) == 2u;
+    ok = scene_remembered() == 2u;
     proj_cur = PROJ_NO_SLOT;
     scene_boot(1);
     ok &= scene_cur() == 1u && scene_edited();
@@ -11047,7 +11049,9 @@ static int test_tfm_ui_song(void)
     {   /* SCENES: the scene keys, E..H say so, G5 held + scene keys chain */
         uint32_t kE = key_at(0, 8), kG5 = 26u, kA = key_at(0, 4);
         ui.layer = LAYER_SCENE;
-        scene_key(kE, SK_SCENE + 4u); ok &= str_eq(ui.msg, "E-H: NO FLASH YET");
+        fm1_in.notes |= 1u << kE; scene_key(kE, SK_SCENE + 4u);                /* E: the fifth scene, past the layer's four */
+        fm1_in.notes &= ~(1u << kE); scene_keys_poll();
+        ok &= scene_cur() == 4u && str_eq(ui.msg, "SCENE E");
         chain_config.count = 1; chain_config.row[0] = chain_row_of(0, 1);
         memset(proj_slot, 0, sizeof proj_slot);
         song.playing = 0;
@@ -11058,7 +11062,7 @@ static int test_tfm_ui_song(void)
         ok &= chain_config.row[0].repeat >= 2u;
         ui.layer = 0;
     }
-    bad += check("TFM-UI SCENES: E-H say there is no flash, G5 held + a scene key chains", ok);
+    bad += check("TFM-UI SCENES: E..H are scenes (E taps in), G5 held + a scene key chains", ok);
     return bad;
 }
 /* TFM-UI phase 7: FX (K1 REVERB, K2 DELAY, K3 CHARACTER, K4 AMOUNT; again SPACE), ARP (on and its page, again off; K1 MODE),

@@ -1516,14 +1516,14 @@ static void confirm_text(char *a, char *b)
         break;
     case CF_SCENE_OVR:                               /* TILT-FM: the SCENE layer's copy into a used one */
         str_cpy(a, "OVERWRITE C?", 24);
-        a[10] = (char)('A' + (k & 3u));
+        a[10] = (char)('A' + (k & 7u));
         str_cpy(b, "WITH A", 24);
-        b[5] = (char)('A' + ((k >> 2) & 3u));
+        b[5] = (char)('A' + ((k >> 3) & 7u));
         break;
     case CF_SCENE_CLR:                               /* .. its clear */
         str_cpy(a, "CLEAR C?", 24);
-        a[6] = (char)('A' + (k & 3u));
-        if (scene_in_song(k & 3u))
+        a[6] = (char)('A' + (k & 7u));
+        if (scene_in_song(k & 7u))
             str_cpy(b, "USED IN SONG", 24);
         break;
     case CF_SCENE_DROP:                              /* TILT-FM: the music in no scene, edited (tilt.c) */

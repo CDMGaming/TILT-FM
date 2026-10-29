@@ -18,7 +18,8 @@
 #define ST_PAYLOAD_MAX (ST_SECTOR - ST_PAYLOAD_OFF)
 
 /* flash map (FL_DATA 0x97000..0xDFFFF, FL_GLOB 0xFC000.., FL_AUTO 0xE5000..0xE6FFF, FL_VBANK 0xE7000): settings 0xFC000, projects
- * 0x97000..0x9EFFF, user sample slots 0xA0000..0xDBFFF (eng_sample.c), user preset banks 0xDC000..0xDFFFF (upreset.c),
+ * (scenes A..D of song 1) 0x97000..0x9EFFF, round 2: scenes 5..24, the songs and the format tag in what were the user
+ * sample slots, 0xA0000..0xCFFFF (docs/FLASH-MAP.md; 0xD0000..0xDBFFF stays blank), user preset banks 0xDC000..0xDFFFF (upreset.c),
  * the user presets' FM6 patches (up_fm6.c, since 1.0.3): copy A 0x9F000, copy B 0xFE000; the autosave (project.c,
  * 1.2): A 0xE5000, B 0xE6000, above the OTA staging (0xE0000..0xE4FFF), in the margin the stock firmware's own update
  * stages into (only ever while the stock firmware runs: a later Felucca finds no valid copy and starts as without one).
@@ -30,8 +31,19 @@
  * kind (type OBJ_FM6VB, not an st_load object); a new bank is first staged in the autosave's older copy (fm6_vbank.c). */
 enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_FM6BANK = OBJ_UPRESET0 + 2, OBJ_UPFM6,
        OBJ_AUTOSAVE, OBJ_COUNT };
-#define OBJ_FM6VB 32u                          /* the voice bank's commit records (fm6_vbank.c; >= OBJ_COUNT: st_load
-                                                * never takes one, no object here takes its sectors) */
+#define OBJ_FM6VB 32u                          /* the voice bank's commit records (fm6_vbank.c; not an object here:
+                                                * st_obj_ok refuses it, no object takes its sectors) */
+/* TFM-UI round 2, 8 scenes x 3 songs: the scene (a project record of the same format) of song n, scene s is global scene
+ * g = 8n + s. g 0..3 are the four PROJECT objects as ever (song 1's A..D stay where they were: a migration moves
+ * nothing); g 4..23 are OBJ_SCN0 + (g - 4) in the old user-sample region from 0xA0000, 2 sectors (A/B) each:
+ * 0xA0000..0xC7FFF; the three songs (a project record, whose tracks are ignored: the song's globals, chain, MIDI channels,
+ * name) at 0xC8000 + 0x2000 n; the format tag (OBJ_SCFMT) at 0xCE000; 0xD0000..0xDBFFF stays unused. Types are the
+ * commit record's, above the retired ones and apart from OBJ_FM6VB. */
+enum { OBJ_SCN0 = 40, NSCN_FLASH = 20, OBJ_SONG0 = 64, OBJ_SCFMT = 67, OBJ_TOP = 68 };
+#define SCN_REGION 0xA0000u
+#define SCN_REGION_END 0xDC000u                /* (the old user-sample region's end: eng_sample.c's 3 slots) */
+static int st_obj_ok(uint32_t obj) { return obj < OBJ_COUNT || (obj >= OBJ_SCN0 && obj < OBJ_TOP); }
+static uint32_t st_scene_obj(uint32_t g) { return g < 4u ? OBJ_PROJECT0 + g : OBJ_SCN0 + (g - 4u); }
 
 typedef struct {
     uint32_t magic;
@@ -63,6 +75,9 @@ static uint32_t st_crc32(const void *p, uint32_t n) { return ~st_crc32_add(0xFFF
 
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
+    if (obj >= OBJ_SCN0)
+        return (obj < OBJ_SONG0 ? 0xA0000u + (obj - OBJ_SCN0) * 2u * ST_SECTOR :
+                obj < OBJ_SCFMT ? 0xC8000u + (obj - OBJ_SONG0) * 2u * ST_SECTOR : 0xCE000u) + copy * ST_SECTOR;
     if (obj == OBJ_SETTINGS)
         return 0xFC000u + copy * ST_SECTOR;
     if (obj == OBJ_FM6BANK || obj == OBJ_UPFM6)          /* (the same pair: see the flash map) */
@@ -78,7 +93,7 @@ static uint8_t st_buf[ST_PAYLOAD_MAX] __attribute__((aligned(4), section(".pool"
 
 static int st_head(uint32_t obj, uint32_t copy, st_hdr_t *h)   /* commit record valid: 0 */
 {
-    if (obj >= OBJ_COUNT || copy > 1u)
+    if (!st_obj_ok(obj) || copy > 1u)
         return -1;
     if (st_read(st_sector(obj, copy), h, sizeof *h))
         return -1;
@@ -125,7 +140,7 @@ static int st_load(uint32_t obj, void *dst, uint32_t max)
 {
     uint32_t i;
     st_hdr_t h;
-    if (obj >= OBJ_COUNT || st_current(obj, &h) < 0 || h.len > max)
+    if (!st_obj_ok(obj) || st_current(obj, &h) < 0 || h.len > max)
         return -1;
     for (i = 0; i < h.len; i++)
         ((uint8_t *)dst)[i] = st_buf[i];
@@ -138,7 +153,7 @@ static int st_save_to(uint32_t obj, const void *src, uint32_t len, int to)
     uint32_t seq, base, off;
     int cur, rc;
     st_hdr_t h;
-    if (obj >= OBJ_COUNT || len > ST_PAYLOAD_MAX || to > 1)
+    if (!st_obj_ok(obj) || len > ST_PAYLOAD_MAX || to > 1)
         return -1;
     cur = st_current(obj, &h);
     seq = cur < 0 ? 0u : h.seq;

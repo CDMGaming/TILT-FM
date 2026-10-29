@@ -76,6 +76,10 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 /* TILT-FM: a fourth byte of MENU's two-valued settings, another no engine uses (settings_persist.c keeps it as saved; 0
  * in every older setting = the default, append-only as the others): bit 0 SYSTEM > START SCREEN OFF (tilt.c; 0 = ON) */
 #define ui_prefs3 (favorites.factory[15][13])
+/* round 2: the song (bits 0..1) and the scene (bits 4..7: scene + 1, 0 none) the music is in, bit 2 set when written; a byte of
+ * favorites.factory[13], whose first byte is all SLICE uses (project.c scene_remembered). sng_cur: the song 0..2 */
+#define SCN_MEM (favorites.factory[13][8])
+static uint8_t sng_cur;
 #define PREF_T 0xFF000000u                     /* (menu_items.c MENU_FLAGS: a bit of ui_prefs3, << 24) */
 #define PREF_START_OFF (0x01u << 24)
 #define PREF_SCENE_SEEN 0x20u                  /* TILT-FM: bit 5 of ui_prefs3: the SCENE layer opened once (ui_layer.c) */
@@ -492,13 +496,13 @@ static void autosave_rebase(void);                      /* (project.c: the music
 static int autosave_boot(int allowed);
 static void tilt_start_boot(int clean);                 /* (tilt.c: the start screen, from main.c's power-on) */
 /* TILT-FM: SCENES (project.c, tilt.c): the PROJECT slots are the song's scenes A..D */
-#define SCENE_NONE 4u
+#define SCENE_NONE NSCN
 #define TFM_PRE0 0x20u                                  /* TFM: a preset byte from here (tfm_instr.c): an instrument's sound */
 static struct {
     uint32_t sig;                                       /* project.c scene_sig as the scene was loaded, stored, begun */
     uint8_t pend;                                       /* bit s: scene s stored in RAM while playing, not in flash yet */
     uint8_t cue;                                        /* the scene staged (seq.c scene_armed), SCENE_NONE none */
-} tsc = {0, 0, 4u};
+} tsc = {0, 0, NSCN};
 static uint32_t scene_sig(void);
 static uint32_t scene_cur(void);                        /* 0..3 A..D, SCENE_NONE */
 static int scene_edited(void);
