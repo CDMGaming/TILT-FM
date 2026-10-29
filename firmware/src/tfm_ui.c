@@ -64,8 +64,7 @@ static void tu_sound_input(uint32_t busy);
 static void tu_sound_draw(void);
 static void tu_deep(void);
 /* ---- the screens ---- */
-enum { TU_JAM, TU_MIX, TU_SOUND, TU_STEP, TU_NOTES, TU_DRUMS, TU_SCENES, TU_SONG, TU_SONGS, TU_FX, TU_SPACE, TU_ARP,
-       TU_CLOCK, TU_CLOCK2, TU_MOTION, TU_DEEP, TU_N };
+/* (the screens' numbers: ui.c) */
 #define TU_ZONES 8u
 static struct {
     uint8_t scr, prev;                                  /* the screen (TU_*), the one before (DEEP's way back) */

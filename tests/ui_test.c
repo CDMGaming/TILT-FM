@@ -11120,6 +11120,63 @@ static int test_tfm_ui_jam_day(void)
     bad += check("TFM-UI START: TODAY'S JAM (A3) starts the jam of the day once: its instruments, key, tempo", ok);
     return bad;
 }
+/* TFM-UI acceptance (TFM-UI-SPEC 7): five minutes from power-on, no Felucca page at any point: START > NEW SONG > DICE (hold a
+ * row, re-roll) > PLAY > JAM (K1-K4) > EDIT (the face, macros, PRESETS) > SEQ (STEP, NOTES, a note, G5 a rest) > hold ARP (go to scene
+ * B, copy B to C) > GLO (a song row) > FX > HOME again (MIX) > the TIMER runs out > TIME > KEEP AS A SONG. After every step the
+ * screen is a TFM one (or a modal screen of TFM's: START, DICE, TIME, NAME): never DEEP, never Felucca's menu */
+static int tfm_only(void)
+{
+    return !tu_classic() && tu.scr != TU_DEEP && !ui.menu && (tu_on() || name_on());
+}
+static int test_tfm_ui_acceptance(void)
+{
+    int bad = 0, ok;
+    uint32_t i, kF3 = key_at(0, 0), seen = 0;
+    ui_power_on();
+    tu_off = 0;
+    memset(&ns, 0, sizeof ns);
+    st.has = 0; st.crash = 0; st.pick = SO_NEW; tilt_ns_open = TILT_START; ui.force = 1; frame();
+    ok = tfm_only();
+    fm1_in.notes |= 1u << kF3; host_notes |= 1u << kF3; frame(); fm1_in.notes &= ~(1u << kF3); frame();   /* F3: NEW SONG */
+    ok &= tilt_ns_open == TILT_NS && tfm_only();
+    fm1_in.notes |= 1u << kF3; host_notes |= 1u << kF3; frame(); fm1_in.notes &= ~(1u << kF3); frame();   /* hold the key row */
+    ok &= (ns.hold & 1u) != 0u;
+    press(B_OCTUP); ok &= tfm_only();                    /* re-roll */
+    press(B_PLAY); ok &= tilt_ns_open == 0 && tu.scr == TU_JAM && tfm_only();
+    for (i = 0; i < 4u; i++) { turn(EN_K1 + i, 3); ok &= tfm_only(); }
+    stap(B_EDIT); ok &= tu.scr == TU_SOUND && tfm_only(); turn(EN_K1, 3); turn(EN_PRESET, 1);
+    stap(B_EDIT); ok &= tu.scr == TU_SOUND && tu.page == 1u && tfm_only();
+    stap(B_SEQ); ok &= tu.scr == TU_STEP && tfm_only();
+    song.playing = 0;
+    {
+        uint32_t kC4 = key_at(0, 4);
+        fm1_in.notes |= 1u << kC4; host_notes |= 1u << kC4; frame(); fm1_in.notes &= ~(1u << kC4); frame();
+        fm1_in.notes |= 1u << 26; host_notes |= 1u << 26; frame(); fm1_in.notes &= ~(1u << 26); frame();    /* G5: a rest */
+    }
+    stap(B_SEQ); ok &= (tu.scr == TU_NOTES || tu.scr == TU_DRUMS) && tfm_only(); turn(EN_K2, 1);
+    {   /* hold ARP: SCENES, scene keys; the layer is TFM's SCENES screen */
+        uint32_t q;
+        btn_down(B_ARP);
+        for (q = 0; q < 52u; q++) frame();
+        ok &= ui.layer == LAYER_SCENE && tfm_only();
+        ui.force = 1; ui_draw();
+        btn_up(B_ARP); fm1_ms += 3000u; frames(30);
+    }
+    stap(B_GLO); ok &= tu.scr == TU_SONG && tfm_only();
+    stap(B_FX); ok &= tu.scr == TU_FX && tfm_only();
+    stap(B_HOME); ok &= tu.scr == TU_JAM && tfm_only();
+    stap(B_HOME); ok &= tu.scr == TU_MIX && tfm_only();
+    tilt_timer_set(5); tm.end = fm1_ms; tilt_timer_poll(); frames(2);                  /* the TIMER runs out */
+    ok &= tilt_ns_open == TILT_TIME && tfm_only();
+    {
+        uint32_t kG3 = key_at(0, 1);
+        fm1_in.notes |= 1u << kG3; host_notes |= 1u << kG3; frame(); fm1_in.notes &= ~(1u << kG3); frame();   /* G3: KEEP AS A SONG */
+        ok &= tu.scr == TU_SONGS && name_on() && tfm_only();                            /* named on the NAME screen */
+    }
+    (void)seen;
+    bad += check("TFM-UI acceptance: from power-on to KEEP AS A SONG, no Felucca page at any step", ok);
+    return bad;
+}
 static int test_tfm_nosample(void)
 {
     int bad = 0, ok;
@@ -11245,6 +11302,7 @@ int main(void)
     bad += test_tfm_ui_song();
     bad += test_tfm_ui_pages();
     bad += test_tfm_ui_jam_day();
+    bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

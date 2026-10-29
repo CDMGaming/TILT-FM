@@ -1745,6 +1745,7 @@ _Static_assert(sizeof(persist_t) <= ST_PAYLOAD_MAX, "settings do not fit one fla
 #endif
 #endif /* PROJ_HOST */
 
+#ifndef PROJ_HOST                                      /* (the project host test has no UI) */
 /* TFM-UI (tfm_song.c): a stored scene's longest pattern (steps) and which tracks have a note or a hit (bit k) */
 static int proj_slot_info(uint32_t slot, uint32_t *len, uint32_t *parts)
 {
@@ -1765,3 +1766,4 @@ static int proj_slot_info(uint32_t slot, uint32_t *len, uint32_t *parts)
     *parts = p;
     return 1;
 }
+#endif

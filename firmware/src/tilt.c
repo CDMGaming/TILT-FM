@@ -753,6 +753,15 @@ static void te_do(uint32_t o)
     if (o == TO_PLAY) {
         transport_req = 1;
         ui_message("THE TAKE");
+    } else if (o == TO_SAVE && !tu_classic()) {         /* TFM-UI: KEEP AS A SONG: SONGS, and the NAME screen for it */
+        uint32_t sl = scene_cur() < 4u ? scene_cur() : 0u;
+        for (i = 0; i < 4u && scene_cur() >= 4u; i++)
+            if (!project_used(i)) {
+                sl = i;
+                break;
+            }
+        tu_goto(TU_SONGS);
+        name_open(NK_PROJ_SAVE, sl);
     } else if (o == TO_SAVE) {
         for (i = 0; i < NPAGES && PAGES[i].graph != GR_SLOTS; i++)
             ;
@@ -1427,6 +1436,9 @@ static void st_do(uint32_t o)
         tfm_jam_has = 0;
         ns_start();
         ui_message("TODAY'S JAM");
+    } else if (!tu_classic()) {                         /* TFM-UI: SONGS */
+        tilt_start_pending = 1;
+        tu_goto(TU_SONGS);
     } else {
         uint32_t i;
         tilt_start_pending = 1;
