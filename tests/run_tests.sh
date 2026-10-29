@@ -481,7 +481,7 @@ elif ! san_ok; then
 else
     mkdir -p "$OUT/asan"
     A="$OUT/asan"
-    SCC="${CC%% *} $SAN -Ibuild/gen -Ifirmware/src"
+    SCC="${CC%% *} $SAN -DTU_OFF_DEFAULT=1 -Ibuild/gen -Ifirmware/src"   # (TFM-UI: the Felucca checks on CLASSIC)
     export ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}"
     $SCC -o "$A/ldr_test" tests/ldr_test.c
     run "ASan/UBSan: update loader (other app -> this build)" "$A/ldr_test" "$OUT/old.fwsc" build/felucca.fwsc

@@ -28,6 +28,7 @@ async function device(saved, start = true) {
   ex._initialize();
   ex.web_nor_erase();
   if (saved) restoreSectors(new Uint8Array(mem.buffer, ex.web_nor(), ex.web_nor_size()), saved);
+  ex.web_classic(1);                    // (TFM-UI: these checks drive Felucca's own UI; TFM's has its own, tests/ui_test.c)
   ex.web_boot();
   const d = { ex, mem, peak: 0, sig: 0, rec: false, frames: 0, kept: [] };
   d.render = (ms) => {

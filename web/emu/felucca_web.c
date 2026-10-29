@@ -377,6 +377,7 @@ EXPORT void web_boot(void)
 /* input, by the printed labels: buttons bit b = B_FX .. B_OCTUP (panel.c), keys bit k = key k (F3 .. G5),
  * encoders by role (EN_SELECT .. EN_K4), MASTER 0..1023 */
 static uint32_t web_btn_labels, web_key_mask;
+EXPORT void web_classic(int on) { tu_off = on != 0; }   /* TFM-UI: 1 = Felucca's own UI (emu_test.mjs drives that one); 0 = TFM's */
 EXPORT void web_buttons(uint32_t labels)
 {
     uint32_t m = 0, b, old = fm1_in.buttons;
