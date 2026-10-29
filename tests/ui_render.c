@@ -783,7 +783,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_TFM_JAM, S_TFM_JAM_LARGE, S_TFM_TOY_DRUM, S_TFM_TOY_SQUELCH,
        S_UI_JAM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_SETUP, S_UI_TIME,
        S_UI_SND0, S_UI_SND1, S_UI_SND2, S_UI_SND3, S_UI_SND4, S_UI_SND5, S_UI_SND6, S_UI_SND7, S_UI_SND8, S_UI_SND9, S_UI_SND10,
-       S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_COUNT };
+       S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_UI_SCENES, S_UI_SONG, S_UI_SONGS, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -823,7 +823,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large", "tfm_toy_drum", "tfm_toy_squelch",
     "ui_jam", "ui_mix", "ui_start", "ui_dice", "ui_setup", "ui_time",
     "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
-    "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_step", "ui_notes", "ui_drums", "ui_sheet"};
+    "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_step", "ui_notes", "ui_drums", "ui_sheet", "ui_scenes", "ui_song", "ui_songs"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1458,6 +1458,24 @@ static void setup(int s)
         song.sel = s == S_UI_DRUMS ? 0 : 2; ui.cursor = 5; ui.lane = 1;
         tu_goto(s == S_UI_NOTES ? TU_NOTES : s == S_UI_DRUMS ? TU_DRUMS : TU_STEP);
         if (s == S_UI_SHEET) fm1_in.buttons |= 1u << panel.btn[B_OCTUP];
+        ui.force = 1;
+        break;
+    }
+    case S_UI_SCENES: case S_UI_SONG: case S_UI_SONGS: {   /* TFM-UI: the song's screens over three stored scenes */
+        uint32_t i;
+        tu_off = 0; song.playing = 0; go_home();
+        tfm_load(&trk[0], TI_THUMP, 0); tfm_load(&trk[1], TI_SQUELCH, 0); tfm_load(&trk[2], TI_CHORDETTE, 0); tfm_load(&trk[3], TI_HAZE, 0);
+        for (i = 0; i < 4u; i++) { trk[i].p[P_SLEN] = i == 3u ? 32 : 16; trk[i].step[0].time = ST_NOTE; trk[i].step[0].n = 1; trk[i].step[0].note[0] = 60; trk[i].step[0].hit = 1; }
+        memset(proj_slot, 0, sizeof proj_slot);
+        project_save_as(0, "NEON DRIFT"); trk[3].p[P_SLEN] = 64; trk[0].step[0].n = 0; trk[0].step[0].hit = 0;
+        project_save_as(1, "NEON DRIFT"); project_save_as(2, "NEON DRIFT");
+        chain_config.count = 6;
+        chain_config.row[0] = chain_row_of(0, 2); chain_config.row[1] = chain_row_of(1, 1); chain_config.row[2] = chain_row_of(2, 4);
+        chain_config.row[3] = chain_row_of(1, 1); chain_config.row[4] = chain_row_of(0, 1); chain_config.row[5] = chain_row_of(2, 2);
+        chain_config.row[4].slot[1] = CHAIN_SILENT; chain_config.row[4].slot[3] = 3;
+        ui.msg_t = 0; ui.frame++; song.playing = 1;
+        if (s == S_UI_SCENES) { ui.layer = LAYER_SCENE; }
+        else { tu_goto(s == S_UI_SONG ? TU_SONG : TU_SONGS); ui.song_row = 4; tsg_sel = 0; }
         ui.force = 1;
         break;
     }

@@ -1203,6 +1203,20 @@ static void scene_key(uint32_t k, uint32_t p)
 {
     if (key_black(k))
         return;
+    if (!tu_classic()) {                                /* TFM-UI: C4..C5 are the scenes A..H (E..H: no flash yet), G5 held chains */
+        if (k == 26u) {
+            qc.held = 1;
+            qc.k = (uint8_t)k;
+            qc.used = 0;
+            return;
+        }
+        if (p >= SK_SCENE + 4u && p < SK_SCENE + 8u) {
+            ui_message("E-H: NO FLASH YET");
+            return;
+        }
+        if (p == SK_ADD)
+            return;
+    }
     if (p == SK_ADD) {                                  /* (TFM: on its release, unless the scenes were tapped) */
         qc.held = 1;
         qc.k = (uint8_t)k;
@@ -1528,3 +1542,4 @@ static void st_draw(void)
 #include "tfm_dice.c"                                      /* TFM-UI: START, DICE, SETUP, TIME */
 #include "tfm_faces.c"                                     /* TFM-UI: the instruments' faces, SOUND */
 #include "tfm_seq.c"                                       /* TFM-UI: STEP, NOTES, DRUMS */
+#include "tfm_song.c"                                      /* TFM-UI: SCENES, SONG, SONGS */

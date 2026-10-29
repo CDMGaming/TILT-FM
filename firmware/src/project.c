@@ -1744,3 +1744,24 @@ _Static_assert(sizeof(project_store_t) <= ST_PAYLOAD_MAX, "project does not fit 
 _Static_assert(sizeof(persist_t) <= ST_PAYLOAD_MAX, "settings do not fit one flash sector");
 #endif
 #endif /* PROJ_HOST */
+
+/* TFM-UI (tfm_song.c): a stored scene's longest pattern (steps) and which tracks have a note or a hit (bit k) */
+static int proj_slot_info(uint32_t slot, uint32_t *len, uint32_t *parts)
+{
+    uint32_t k, i, l = 0, p = 0;
+    if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t)))
+        return 0;
+    for (k = 0; k < NTRK; k++) {
+        uint32_t tl = (uint32_t)clamp(proj_scratch.t[k].p[P_SLEN], 1, NSTEP);
+        for (i = 0; i < tl; i++)
+            if ((proj_scratch.t[k].step[i].time == ST_NOTE && proj_scratch.t[k].step[i].n) || proj_scratch.t[k].step[i].hit) {
+                p |= 1u << k;
+                break;
+            }
+        if (tl > l)
+            l = tl;
+    }
+    *len = l;
+    *parts = p;
+    return 1;
+}

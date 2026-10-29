@@ -43,6 +43,12 @@ static uint16_t tu_mix(uint16_t over, uint16_t c, uint32_t pct)
     return (uint16_t)(r << 11 | g << 5 | b);
 }
 
+static void tu_song_input(uint32_t oct);                /* (tfm_song.c) */
+static void tu_songs_input(uint32_t oct);
+static void tu_song_draw(void);
+static void tu_songs_draw(void);
+static void tu_song_delete(void);
+static void tu_song_sounds(void);
 static uint8_t tq_bar;                                  /* (tfm_seq.c: the bar NOTES and DRUMS show) */
 static void tq_input(uint32_t notes, uint32_t busy);
 static void tq_step_draw(void);
@@ -345,7 +351,7 @@ static void tu_foot(uint32_t n, const char *k0, const char *a0, const char *k1, 
 
 /* ---- the scene letters: A..H (the first four are the stored scenes; phase 6 widens it to eight) ---- */
 #define TU_NSCENE 8u
-static uint32_t tu_scene_cur(void) { return scene_cur(); }
+static uint32_t tu_scene_cur(void) { uint32_t c = scene_cur(); return c < 4u ? c : 0xFFu; }
 static int tu_scene_used(uint32_t s) { return s < 4u && project_used(s); }
 
 /* ---- bars: the longest pattern, where it plays ---- */
@@ -520,6 +526,11 @@ static void tu_black_mute(uint32_t notes)               /* MIX: the black keys, 
         n++;
     }
 }
+static int tu_song_on(void) { return tu.scr == TU_SONG; }
+static int tu_oct_ok(void)                              /* OCT+ is OK and OCT- BACK here (no octave) */
+{
+    return !tu_classic() && !ui.menu && (tu.scr == TU_SONG || tu.scr == TU_SONGS);
+}
 static void tu_deep(void)                               /* SOUND > DEEP: Felucca's own pages for this track */
 {
     tu.prev = TU_SOUND;
@@ -555,6 +566,12 @@ static void tu_screen_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint
         break;
     case TU_STEP: case TU_NOTES: case TU_DRUMS:
         tq_input(notes, busy);
+        break;
+    case TU_SONG:
+        tu_song_input(oct);
+        break;
+    case TU_SONGS:
+        tu_songs_input(oct);
         break;
     case TU_MIX:
         for (k = 0; k < 4u; k++)
@@ -617,8 +634,19 @@ static void tu_tap(uint32_t b)
         else
             tu_goto(TU_STEP);
         break;
-    case B_EDIT:                                        /* SOUND: the face; again: macros 2; again: DEEP (NOTES: delete) */
-        if (tu.scr == TU_NOTES) {
+    case B_GLO:                                         /* SONG; again: SOUNDS SCENE / CURRENT */
+        if (tu.scr == TU_SONG)
+            tu_song_sounds();
+        else
+            tu_goto(TU_SONG);
+        break;
+    case B_SAVE:                                        /* SONGS */
+        tu_goto(TU_SONGS);
+        break;
+    case B_EDIT:                                        /* SOUND: the face; again: macros 2; again: DEEP (NOTES: delete; SONG: delete the section) */
+        if (tu.scr == TU_SONG) {
+            tu_song_delete();
+        } else if (tu.scr == TU_NOTES) {
             tq_notes_delete();
         } else if (tu.scr != TU_SOUND) {
             tu_goto(TU_SOUND);
@@ -671,6 +699,12 @@ static void tu_draw_screen(void)
         break;
     case TU_DRUMS:
         tq_drums_draw();
+        break;
+    case TU_SONG:
+        tu_song_draw();
+        break;
+    case TU_SONGS:
+        tu_songs_draw();
         break;
     default:
         tu_jam_draw();

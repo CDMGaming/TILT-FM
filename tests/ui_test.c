@@ -11008,6 +11008,55 @@ static int test_tfm_ui_seq(void)
     bad += check("TFM-UI DRUMS: white keys the steps, black keys the lane, K2 LANE, K3 VELO, K4 CHANCE", ok);
     return bad;
 }
+/* TFM-UI phase 6: GLO the SONG (sections in a window of four: K1-K4 each track's scene, SELECT scrolls, OCT+ adds, EDIT
+ * deletes, PRESETS the repeats, GLO again SOUNDS SCENE / CURRENT, PLAY plays the song), SAVE the SONGS (OCT- back), hold
+ * ARP the SCENES (the scene keys; G5 held and the scene keys chain) */
+static int test_tfm_ui_song(void)
+{
+    int bad = 0, ok;
+    uint32_t n0;
+    ui_power_on();
+    tu_off = 0;
+    tu_goto(TU_JAM);
+    chain_config.count = 2;
+    chain_config.row[0] = chain_row_of(0, 1); chain_config.row[1] = chain_row_of(1, 2);
+    stap(B_GLO); ok = tu.scr == TU_SONG && tu_on();
+    ui.song_row = 0;
+    turn(EN_K1, 1); ok &= chain_config.row[0].slot[0] == 1u;                 /* K1: T1's scene B */
+    turn(EN_K3, 2); ok &= chain_config.row[0].slot[2] == 1u;
+    turn(EN_K4, -1); ok &= chain_config.row[0].slot[3] == 0u;
+    turn(EN_K1, 5); ok &= chain_config.row[0].slot[0] == CHAIN_SILENT || chain_config.row[0].slot[0] <= 3u;
+    turn(EN_PRESET, 1); ok &= chain_config.row[0].repeat == 2u;
+    turn(EN_SELECT, 1); ok &= ui.song_row == 1u;
+    n0 = chain_config.count;
+    press(B_OCTUP); ok &= chain_config.count == n0 + 1u && !song.octave;      /* OCT+: a section (no octave) */
+    stap(B_EDIT); ok &= chain_config.count == n0 && tu.scr == TU_SONG;         /* EDIT: delete it */
+    stap(B_GLO); ok &= ((ui_prefs3 & PREF_SONG_SCENE) != 0u) && tu.scr == TU_SONG;   /* GLO again: SOUNDS SCENE */
+    stap(B_GLO); ok &= !(ui_prefs3 & PREF_SONG_SCENE);
+    bad += check("TFM-UI SONG: K1-K4 each track's scene, PRESETS the repeats, SELECT scrolls, OCT+ adds (no octave), EDIT deletes, GLO again SOUNDS", ok);
+    ok = 1;
+    stap(B_SAVE); ok &= tu.scr == TU_SONGS && tu_on();
+    turn(EN_SELECT, 1); ok &= tsg_sel == 1u;
+    press(B_OCTDN); ok &= tu.scr == TU_JAM && !song.octave;                    /* OCT-: back (no octave) */
+    bad += check("TFM-UI SONGS: SAVE opens it, SELECT picks, OCT- back", ok);
+    ok = 1;
+    {   /* SCENES: the scene keys, E..H say so, G5 held + scene keys chain */
+        uint32_t kE = key_at(0, 8), kG5 = 26u, kA = key_at(0, 4);
+        ui.layer = LAYER_SCENE;
+        scene_key(kE, SK_SCENE + 4u); ok &= str_eq(ui.msg, "E-H: NO FLASH YET");
+        chain_config.count = 1; chain_config.row[0] = chain_row_of(0, 1);
+        memset(proj_slot, 0, sizeof proj_slot);
+        song.playing = 0;
+        project_save_as(0, "SCN");
+        scene_key(kG5, 12u); fm1_in.notes |= 1u << kG5;
+        scene_key(kA, SK_SCENE); scene_key(kA, SK_SCENE);                      /* A, A: the song's last section x2, x3 */
+        fm1_in.notes &= ~(1u << kG5); scene_keys_poll();
+        ok &= chain_config.row[0].repeat >= 2u;
+        ui.layer = 0;
+    }
+    bad += check("TFM-UI SCENES: E-H say there is no flash, G5 held + a scene key chains", ok);
+    return bad;
+}
 static int test_tfm_nosample(void)
 {
     int bad = 0, ok;
@@ -11130,6 +11179,7 @@ int main(void)
     bad += test_tfm_ui_jam_rec();
     bad += test_tfm_ui_sound();
     bad += test_tfm_ui_seq();
+    bad += test_tfm_ui_song();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

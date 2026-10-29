@@ -1554,7 +1554,7 @@ static void ui_input(void)
     if (((pressed >> panel.btn[B_REC]) & 1u) && ui.ly == LAYER_REC)
         ui.rec_t0 |= 2u;                                /* (REC is its layer's button now: its tap is layer_tap's) */
     layer_oct_open(pressed);                            /* (OCT± with a SET layer's button down: it opens now) */
-    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on);
+    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on || tu_oct_ok());
     oct = layer_oct(pressed, oct);                      /* (a SET layer's OCT-: put back) */
     layer_masks();                                      /* seq.c: keys pressed with a layer's button are its own */
     lay = layer_held();
@@ -1738,7 +1738,7 @@ static void ui_input(void)
                 break;
             if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
                 transport_req = 2;
-            else if (!ui.home && cur_page()->graph == GR_SONG)
+            else if ((!ui.home && cur_page()->graph == GR_SONG) || (tu_on() && tu_song_on()))   /* (TFM-UI: SONG plays the chain) */
                 chain_play_ui();
             else
                 transport_req = 1;
@@ -1756,7 +1756,7 @@ static void ui_input(void)
         case B_OCTDN:
         case B_OCTUP: {
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
-            if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-; */
+            if (act_cols() || layer_set_open() || ui.ml.on || tu_oct_ok())   /* action pages: enter / back (below); SET layers: OCT-; */
                 break;                                  /* MIDI LEARN: clear / done (below) */
             oct_pre = (int8_t)song.octave;             /* (TFM: OCT+ / OCT- then a modifier: oct_as_mod) */
             if ((fm1_in.buttons & both) == both)
