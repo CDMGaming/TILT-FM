@@ -541,6 +541,8 @@ static void tu_screen_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint
             if ((s = panel_enc(EN_K1 + k)) != 0) {
                 track_t *t = &trk[k];
                 const param_desc_t *d = track_desc(t, P_LEVEL);
+                if (k != song.sel && ((song.rec >> k) & 1u))
+                    track_select(k);
                 t->p[P_LEVEL] = (int16_t)param_turn(d, t->p[P_LEVEL], accel(EN_K1 + k, s, d->max - d->min));
                 motion_capture(t, P_LEVEL, t->p[P_LEVEL]);
                 ml_knob(t, P_LEVEL);

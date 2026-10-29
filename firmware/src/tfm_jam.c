@@ -31,6 +31,8 @@ static int32_t jam_pos(const track_t *t)
 static void jam_turn(uint32_t k, int32_t s)
 {
     track_t *t = &trk[k & 3u];
+    if ((k & 3u) != song.sel && ((song.rec >> (k & 3u)) & 1u))   /* REC armed there: the move is recorded on that track */
+        track_select(k & 3u);                           /* (motion_capture records the selected track) */
     if (jam_macro(t)) {
         tfm_macro_turn_k(t, 0, k, s);
     } else {

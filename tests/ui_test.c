@@ -10848,6 +10848,30 @@ static int test_tfm_ui_dice(void)
     (void)kG3;
     return bad;
 }
+/* TFM-UI phase 3: REC records the jam knob moves (the macro and the LEVEL on JAM, the faders on MIX) as automation */
+static int test_tfm_ui_jam_rec(void)
+{
+    int bad = 0, ok;
+    uint32_t n0, n1;
+    ui_power_on();
+    tu_off = 0;
+    tu_goto(TU_JAM);
+    tfm_load(&trk[0], TI_SQUELCH, 0);
+    song.rec = 0xFu; song.playing = 1;                  /* (all four armed) */
+    n0 = motion_count(&trk[0]);
+    turn(EN_K1, 5); frame();
+    n1 = motion_count(&trk[0]);
+    ok = n1 > n0;                                       /* the macro's targets: automation on the playing step */
+    n0 = motion_count(&trk[3]);
+    turn(EN_K4, 3); frame();                            /* a track with no instrument: its LEVEL */
+    ok &= motion_count(&trk[3]) > n0;
+    press(B_HOME);                                      /* MIX: K2 is T2's fader */
+    n0 = motion_count(&trk[1]);
+    turn(EN_K2, -4); frame();
+    ok &= motion_count(&trk[1]) > n0;
+    bad += check("TFM-UI JAM / MIX: REC records the jam knob moves (the macro, the LEVEL, the faders) as automation", ok);
+    return bad;
+}
 static int test_tfm_nosample(void)
 {
     int bad = 0, ok;
@@ -10967,6 +10991,7 @@ int main(void)
     bad += test_tfm_jam_menu();
     bad += test_tfm_ui_shell();
     bad += test_tfm_ui_dice();
+    bad += test_tfm_ui_jam_rec();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */
