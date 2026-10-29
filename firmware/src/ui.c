@@ -131,6 +131,8 @@ static void graph_jam(void);
 #endif
 static int tu_on(void);
 static int tu_classic(void);
+static void tu_picker_key(uint32_t p);
+static void tu_picker_draw(void);
 static int tu_deep_on(void);
 static void tu_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint32_t busy);
 static void tu_draw(void);

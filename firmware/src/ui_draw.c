@@ -1675,6 +1675,10 @@ static void ui_draw_page(uint32_t counting)
             name_draw();
         return;
     }
+    if (ui.layer == LAYER_EDIT && !tu_classic() && tu_on()) {   /* TFM-UI: the instrument picker (tfm_faces.c) */
+        tu_picker_draw();
+        return;
+    }
     if (ui.layer) {                                     /* a layer's map over the page (ui_layer.c) */
         if (ui.force)
             draw_frame();

@@ -678,6 +678,8 @@ static void layer_key(uint32_t l, uint32_t k)
         }
     } else if (l == LAYER_SCL) {
         TSEL->p[P_ROOT] = (int16_t)((k + 5u) % 12u);    /* the key's note name (F3 = F) */
+    } else if (l == LAYER_EDIT && !key_black(k) && !tu_classic()) {   /* TFM-UI: the instruments (tfm_faces.c) */
+        tu_picker_key(p);
     } else if (l == LAYER_EDIT && !key_black(k)) {
         if (p < NENG_SHOWN && p < LY_INIT)
             edit_load(eng_vis(p), 0);

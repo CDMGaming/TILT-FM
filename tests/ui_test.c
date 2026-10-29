@@ -10893,6 +10893,51 @@ static int test_tfm_ui_jam_rec(void)
     bad += check("TFM-UI JAM / MIX: REC records the jam knob moves (the macro, the LEVEL, the faders) as automation", ok);
     return bad;
 }
+/* TFM-UI phase 4: EDIT opens the instrument's face; the knobs are the macros (page 1: K1-K4 = 1-4, page 2: 5-8), PRESETS
+ * its sounds, ALGORITHM the track; EDIT again macros 2, again DEEP (Felucca's pages), HOME back to the face, again JAM;
+ * hold EDIT: the picker (a white key an instrument) */
+static int test_tfm_ui_sound(void)
+{
+    int bad = 0, ok;
+    int32_t m0;
+    uint32_t snd;
+    ui_power_on();
+    tu_off = 0;
+    tu_goto(TU_JAM);
+    tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[1], TI_WHEEL, 2);
+    press(B_EDIT); ok = tu.scr == TU_SOUND && tu.page == 0u && tu_on();
+    m0 = tfm_macro_get(&trk[0], 0);
+    turn(EN_K1, 6); ok &= tfm_macro_get(&trk[0], 0) > m0;                 /* K1: macro 1 (CUTOFF) */
+    m0 = tfm_macro_get(&trk[0], 4);
+    turn(EN_K1, 6); ok &= tfm_macro_get(&trk[0], 4) == m0;                /* (page 1: K1 is not macro 5) */
+    snd = tfm_snd_of(&trk[0]);
+    turn(EN_PRESET, 1); ok &= tfm_snd_of(&trk[0]) == snd + 1u && tfm_ins_of(&trk[0]) == TI_SQUELCH;
+    turn(EN_PRESET, -1); ok &= tfm_snd_of(&trk[0]) == snd;
+    turn(EN_ALGO, 1); ok &= song.sel == 1u && tfm_ins_of(&trk[song.sel]) == TI_WHEEL;   /* the face is WHEELHOUSE's */
+    turn(EN_ALGO, -1);
+    press(B_EDIT); ok &= tu.scr == TU_SOUND && tu.page == 1u;
+    m0 = tfm_macro_get(&trk[0], 4);
+    turn(EN_K1, 6); ok &= tfm_macro_get(&trk[0], 4) != m0;                /* page 2: K1 is macro 5 (BITE) */
+    press(B_EDIT); ok &= tu.scr == TU_DEEP && tu_deep_on() && !tu_on();
+    press(B_HOME); ok &= tu.scr == TU_SOUND && tu_on();
+    press(B_HOME); ok &= tu.scr == TU_JAM;
+    bad += check("TFM-UI SOUND: EDIT the face, K1-K4 the macros (page 2: 5-8), PRESETS the sounds, ALGORITHM the track; EDIT on to DEEP, HOME back", ok);
+    ok = 1;
+    tu_picker_key(3);                                   /* the picker: a white key (B3) is the fourth instrument */
+    ok &= tfm_ins_of(&trk[0]) == TI_CHORDETTE && tfm_snd_of(&trk[0]) == 0u;
+    tu_picker_key(11);
+    ok &= tfm_ins_of(&trk[0]) == TI_WHEEL;
+    {   /* hold EDIT: the layer opens, the picker is drawn (no Felucca layer) */
+        uint32_t q;
+        btn_down(B_EDIT);
+        for (q = 0; q < 52u; q++) frame();
+        ok &= ui.layer == LAYER_EDIT;
+        ui.force = 1; ui_draw();
+        btn_up(B_EDIT); frames(2);
+    }
+    bad += check("TFM-UI SOUND: hold EDIT opens the instrument picker; a white key picks the instrument (its first sound)", ok);
+    return bad;
+}
 static int test_tfm_nosample(void)
 {
     int bad = 0, ok;
@@ -11013,6 +11058,7 @@ int main(void)
     bad += test_tfm_ui_shell();
     bad += test_tfm_ui_dice();
     bad += test_tfm_ui_jam_rec();
+    bad += test_tfm_ui_sound();
     bad += test_no_flash();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

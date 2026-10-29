@@ -43,6 +43,10 @@ static uint16_t tu_mix(uint16_t over, uint16_t c, uint32_t pct)
     return (uint16_t)(r << 11 | g << 5 | b);
 }
 
+static void tu_sound_step(int32_t s);                    /* (tfm_faces.c) */
+static void tu_sound_input(uint32_t busy);
+static void tu_sound_draw(void);
+static void tu_deep(void);
 /* ---- the screens ---- */
 enum { TU_JAM, TU_MIX, TU_SOUND, TU_STEP, TU_NOTES, TU_DRUMS, TU_SCENES, TU_SONG, TU_SONGS, TU_FX, TU_SPACE, TU_ARP,
        TU_CLOCK, TU_CLOCK2, TU_MOTION, TU_DEEP, TU_N };
@@ -212,7 +216,8 @@ static void tu_arrow(int32_t x, int32_t ymid, int left, uint16_t c)   /* â—‚ / â
         cv_rect(left ? x + 2 - i : x + i, ymid - 2 + i, 1, 5 - 2 * i, c);
 }
 
-/* ---- the layout grammar: header 22, footer 25 ---- */
+/* ---- the layout grammar: header 22, footer 25 (an instrument's face has its own page colours: tfm_faces.c) ---- */
+static uint16_t tu_pbg = TC_BG, tu_pline = TC_SURF, tu_pq = TC_QUIET;   /* the page, its rules, the hints' words */
 #define TU_HY 22
 #define TU_FY 215
 #define TU_W 240
@@ -260,8 +265,8 @@ static void tu_head_draw(void)
 {
     char t[8];
     int32_t x = 9;
-    tu_rect(0, 0, TU_W, TU_HY, TC_BG);
-    tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
+    tu_rect(0, 0, TU_W, TU_HY, tu_pbg);
+    tu_rect(0, TU_HY - 1, TU_W, 1, tu_pline);
     if (tu_hd.badge >= 0) {
         tu_badge(x, 10, (uint32_t)tu_hd.badge, TC_BG);
         x += 15;
@@ -295,25 +300,25 @@ static void tu_head(int badge, const char *l, const char *l2, const char *r, int
     tu_hd.sig = str_hash(1u, l ? l : "") * 31u + str_hash(2u, l2 ? l2 : "") + str_hash(3u, r ? r : "") * 7u +
                 str_hash(4u, t) * 13u + (uint32_t)(badge + 1) * 977u + (uint32_t)(song.g[G_BPM]) * 4099u +
                 (uint32_t)(tu_hd.play + 1) * 65537u + (tm.on ? tm_level() * 131071u : 0u);
-    tu_zone(0, 0, TU_HY, TC_BG, tu_hd.sig, tu_head_draw);
+    tu_zone(0, 0, TU_HY, tu_pbg, tu_hd.sig + tu_pbg * 7u, tu_head_draw);
 }
 /* the footer: `KEY ACTION` hints centred, the key amber; a message (ui.msg) replaces them while it shows */
 static struct { const char *k[5], *a[5]; uint32_t n; } tu_ft;
 static void tu_foot_draw(void)
 {
     int32_t w = 0, x, i;
-    tu_rect(0, TU_FY, TU_W, 25, TC_BG);
-    tu_rect(0, TU_FY, TU_W, 1, TC_SURF);
+    tu_rect(0, TU_FY, TU_W, 25, tu_pbg);
+    tu_rect(0, TU_FY, TU_W, 1, tu_pline);
     if (ui.msg_t && ui.msg[0]) {
-        tu_text_c(120, TU_FY + 13, &AF_TL, ui.msg, TC_AMBER, TC_BG);
+        tu_text_c(120, TU_FY + 13, &AF_TL, ui.msg, TC_AMBER, tu_pbg);
         return;
     }
     for (i = 0; i < (int32_t)tu_ft.n; i++)
         w += text_w(&AF_TS, tu_ft.k[i]) + 3 + text_w(&AF_TS, tu_ft.a[i]) + (i ? 8 : 0);
     x = (TU_W - w) / 2;
     for (i = 0; i < (int32_t)tu_ft.n; i++) {
-        x = tu_text(x, TU_FY + 13, &AF_TS, tu_ft.k[i], TC_AMBER, TC_BG) + 3;
-        x = tu_text(x, TU_FY + 13, &AF_TS, tu_ft.a[i], TC_QUIET, TC_BG) + 8;
+        x = tu_text(x, TU_FY + 13, &AF_TS, tu_ft.k[i], TC_AMBER, tu_pbg) + 3;
+        x = tu_text(x, TU_FY + 13, &AF_TS, tu_ft.a[i], tu_pq, tu_pbg) + 8;
     }
 }
 static void tu_foot(uint32_t n, const char *k0, const char *a0, const char *k1, const char *a1, const char *k2, const char *a2,
@@ -326,7 +331,7 @@ static void tu_foot(uint32_t n, const char *k0, const char *a0, const char *k1, 
     for (i = 0; i < n; i++)
         sig = sig * 31u + str_hash(1u, tu_ft.k[i]) + str_hash(2u, tu_ft.a[i]) * 3u;
     sig += ui.msg_t ? str_hash(5u, ui.msg) * 131u + 1u : 0u;
-    tu_zone(1, TU_FY, 25, TC_BG, sig, tu_foot_draw);
+    tu_zone(1, TU_FY, 25, tu_pbg, sig + tu_pbg * 7u + tu_pq * 3u, tu_foot_draw);
 }
 
 /* ---- the scene letters: A..H (the first four are the stored scenes; phase 6 widens it to eight) ---- */
@@ -536,6 +541,9 @@ static void tu_screen_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint
                 ui.force = 0;
             }
         break;
+    case TU_SOUND:
+        tu_sound_input(busy);
+        break;
     case TU_MIX:
         for (k = 0; k < 4u; k++)
             if ((s = panel_enc(EN_K1 + k)) != 0) {
@@ -562,6 +570,8 @@ static void tu_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint32_t bu
     int32_t s;
     if (!busy && (s = panel_enc(EN_ALGO)) != 0)         /* ALGORITHM: the track, everywhere */
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
+    if (!busy && tu.scr != TU_SOUND && tu.scr != TU_NOTES && tu.scr != TU_SONG && (s = panel_enc(EN_PRESET)) != 0)
+        tu_sound_step(s);                               /* PRESETS: the track's sound, everywhere it is not a list */
     tu_screen_input(pressed, notes, oct, busy);
     enc_drop();                                         /* (the knobs nobody took) */
     ui_notices();
@@ -584,6 +594,17 @@ static void tu_tap(uint32_t b)
         break;
     case B_ENV:                                         /* DICE (a modal screen of tilt.c) */
         tilt_ns_show();
+        break;
+    case B_EDIT:                                        /* SOUND: the face; again: macros 2; again: DEEP */
+        if (tu.scr != TU_SOUND) {
+            tu_goto(TU_SOUND);
+            tu.page = 0;
+        } else if (tu.page == 0u) {
+            tu.page = 1;
+            ui.force = 1;
+        } else {
+            tu_deep();
+        }
         break;
     default:
         tu_fallback(b);
@@ -611,6 +632,9 @@ static void tu_draw_screen(void)
     switch (tu.scr) {
     case TU_MIX:
         tu_mix_draw();
+        break;
+    case TU_SOUND:
+        tu_sound_draw();
         break;
     default:
         tu_jam_draw();

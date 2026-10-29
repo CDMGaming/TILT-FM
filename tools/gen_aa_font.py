@@ -42,7 +42,7 @@ CODE = {0x2026: 0x85}                  # characters outside Latin-1 -> their one
 PHASES, PHASES_L = 4, 2                # horizontal phases per glyph (aa_raster.raster_font): S M, L
 # faces stored Huffman-coded (--huff): M and L. S, the most drawn and the least compressible (-15 %), stays
 # 2 px per byte, so the labels draw at full speed
-HUFF = [("M", "L", "TM", "TL", "TX", "PS", "PM", "PL")]
+HUFF = [("M", "L", "TM", "TL", "TX", "PS", "PN", "PM", "PL")]
 # L draws only "FELUCCA", the UPDATE MODE countdown digit, the calibration's control names (panel.c
 # B_NAME / E_NAME) and MENU > LARGE's card values and page titles (ui_draw.c draw_column_tall, ui_graph.c
 # graph_title: # . / J W too; a value with another character is set in M): a sparse face of those glyphs, the
@@ -65,7 +65,7 @@ def preset(name):
         up = [ord(c) for c in "-.:!'/0123456789?+ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
         return [("TS", bc[0], 8, (32, 126), TFM_EX, 0.0, 2), ("TM", bc[1], 10, (32, 126), TFM_EX, 0.0, 2),
                 ("TL", bc[1], 12, (32, 126), TFM_EX, 0.0, 2), ("TX", bc[1], 19, (32, 32), big, 0.0, 1),
-                ("PS", sil, 10, (32, 32), up, 0.0, 1), ("PM", sil, 17, (32, 32), up, 0.0, 1),
+                ("PS", sil, 10, (32, 32), up, 0.0, 1), ("PN", sil, 13, (32, 32), up, 0.0, 1), ("PM", sil, 17, (32, 32), up, 0.0, 1),
                 ("PL", sil, 32, (32, 32), up, 0.0, 1)]
     if name == "standin":
         if os.path.exists(LOCAL_INTER):

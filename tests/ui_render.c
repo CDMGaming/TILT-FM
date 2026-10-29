@@ -781,7 +781,9 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_START, S_START_BLANK, S_START_NONE, S_START_CRASH,
        S_TILT_SCENES, S_SCENE_DROP, S_TILT_CUED, S_SCENE_PEND, S_SCENE_OVR, S_SCENE_CLR,
        S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_TFM_JAM, S_TFM_JAM_LARGE, S_TFM_TOY_DRUM, S_TFM_TOY_SQUELCH,
-       S_UI_JAM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_SETUP, S_UI_TIME, S_COUNT };
+       S_UI_JAM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_SETUP, S_UI_TIME,
+       S_UI_SND0, S_UI_SND1, S_UI_SND2, S_UI_SND3, S_UI_SND4, S_UI_SND5, S_UI_SND6, S_UI_SND7, S_UI_SND8, S_UI_SND9, S_UI_SND10,
+       S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -819,7 +821,9 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "start", "start_blank", "start_none", "start_crash",
     "tilt_scenes", "scene_drop", "tilt_cued", "scene_pending", "scene_overwrite", "scene_clear",
     "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large", "tfm_toy_drum", "tfm_toy_squelch",
-    "ui_jam", "ui_mix", "ui_start", "ui_dice", "ui_setup", "ui_time"};
+    "ui_jam", "ui_mix", "ui_start", "ui_dice", "ui_setup", "ui_time",
+    "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
+    "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1416,6 +1420,20 @@ static void setup(int s)
         trk[0].p[P_LEVEL] = 100; trk[1].p[P_LEVEL] = 70; trk[2].p[P_LEVEL] = 89; trk[3].p[P_LEVEL] = 76;
         song.playing = 1; song.g[G_BPM] = 118; proj_cur = 1;
         break;
+    case S_UI_SND0: case S_UI_SND1: case S_UI_SND2: case S_UI_SND3: case S_UI_SND4: case S_UI_SND5: case S_UI_SND6:
+    case S_UI_SND7: case S_UI_SND8: case S_UI_SND9: case S_UI_SND10: case S_UI_SND11: case S_UI_SND_P2: case S_UI_PICKER: {
+        uint32_t ins = s == S_UI_SND_P2 ? TI_WOBBLER : s == S_UI_PICKER ? TI_SQUELCH : (uint32_t)(s - S_UI_SND0), kk;
+        tu_off = 0; song.playing = 1; go_home();
+        tfm_load(&trk[0], ins, 1);
+        song.sel = 0; tu_goto(TU_SOUND); tu.page = s == S_UI_SND_P2 ? 1 : 0;
+        trk[0].peak = 6000; trk[0].nheld = 2; trk[0].held[0] = 57; trk[0].held[1] = 60;
+        for (kk = 0; kk < 8; kk++) fs[0].lane[kk] = (kk == 0 || kk == 3) ? 6 : 0;
+        fs[0].flash = 5; fs[0].vel = 100; fs[0].note = 60; fs[0].env = 6000; fs[0].acc = 1;
+        for (kk = 0; kk < 5; kk++) fs[0].lit[kk] = (kk & 1) ? 12 : 4;
+        if (s == S_UI_PICKER) { ui.layer = LAYER_EDIT; tu_picker_draw(); }
+        ui.force = 1;
+        break;
+    }
     case S_UI_START: case S_UI_DICE: case S_UI_SETUP: case S_UI_TIME:   /* TFM-UI: the modal screens */
         tu_off = 0; song.playing = 0; go_home();
         memset(proj_slot, 0, sizeof proj_slot);
