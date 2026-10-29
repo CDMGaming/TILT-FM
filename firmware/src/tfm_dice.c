@@ -71,13 +71,36 @@ static int cfg_default(void)
     return 1;
 }
 
+/* a rule asks for the drum kit: TYPE DRUMS, or the instrument itself */
+static int ro_asks_drums(uint32_t opt) { return opt == 1u || (opt >= 7u && (TY_INS[(opt - 7u) % TI_N] & 1u)); }
+static int ins_is_kit(uint32_t ins) { return (TY_INS[ins % TI_N] & 1u) != 0u; }
+/* RANDOM never rolls a second drum kit: another track has one (rolled before it, held, or its rule asks for it) */
+static int kit_taken(const tfm_setup_t *s, uint32_t i)
+{
+    uint32_t j;
+    for (j = 0; j < NTRK; j++) {
+        if (j == i)
+            continue;
+        if (j < i || ((ns.hold >> (3u + j)) & 1u) ? ins_is_kit(s->ins[j]) : ro_asks_drums(cfg_opt(j)))
+            return 1;
+    }
+    return 0;
+}
 /* a track's instrument by its rule; the same instrument and sound twice never */
 static void tu_roll_track(tfm_rng_t *r, tfm_setup_t *s, uint32_t i)
 {
     uint32_t opt = cfg_opt(i), k, tries, n, j, ins = TI_SQUELCH;
     for (tries = 0; tries < 8u; tries++) {
-        if (opt == 0u) {
-            ins = tfm_pick(r, TI_N);
+        if (opt == 0u) {                                /* RANDOM: any instrument, a second kit never */
+            int nokit = kit_taken(s, i);
+            for (j = 0, n = 0; j < TI_N; j++)
+                n += !(nokit && ins_is_kit(j));
+            k = tfm_pick(r, n ? n : 1u);
+            for (j = 0; j < TI_N; j++)
+                if (!(nokit && ins_is_kit(j)) && !k--) {
+                    ins = j;
+                    break;
+                }
         } else if (opt <= 6u) {
             uint32_t bit = 1u << (opt - 1u);
             for (j = 0, n = 0; j < TI_N; j++)
@@ -439,6 +462,21 @@ static void tu_su_step(uint32_t row, int32_t s)
             if (!tm.on)
                 tilt_timer_min = TM_[CFG(CF_TIMER) % 5u];
         }
+    }
+    if (row < 4u) {                                     /* (a rule changed: that track rolls at once, unless held) */
+        if (!((ns.hold >> (3u + row)) & 1u)) {
+            tfm_rng_t r;
+            r.s = rng();
+            tu_roll_track(&r, &ns.s, row);
+        }
+    } else if (row == 4u && CFG(CF_KEY) && !(ns.hold & 1u)) {
+        ns.s.key = (uint8_t)(CFG(CF_KEY) - 1u);
+    } else if (row == 5u && CFG(CF_SCALE) && !(ns.hold & 2u)) {
+        ns.s.scale = TILT_SCALE[(CFG(CF_SCALE) - 1u) % 11u];
+    } else if (row == 6u && !(ns.hold & 4u)) {
+        uint32_t lo, hi;
+        cfg_lohi(&lo, &hi);
+        ns.s.bpm = (uint16_t)clamp((int32_t)ns.s.bpm, (int32_t)lo, (int32_t)hi);
     }
     ui.force = 1;
 }

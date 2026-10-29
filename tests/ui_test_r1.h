@@ -342,3 +342,66 @@ static int test_r1_jam_frames(void)
     bad += check("TFM-UI fix 5: JAM redraws only the zone that changed (idle: none; a knob turn: the bumpers' band only)", ok);
     return bad;
 }
+/* 7: TYPE rules pick from their own group (a LEAD track never shows a pad); changing a rule in SETUP rolls that track at
+ * once; RANDOM never rolls a second drum kit unless a rule asks for it */
+static int test_r1_rules(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t opt, i, n, j, kits;
+    tfm_rng_t r;
+    ui_power_on();
+    tu_off = 0;
+    memset(&favorites.factory[13][16], 0, 16);
+    r.s = 12345u;
+    for (opt = 1; opt <= 6u; opt++)                     /* TYPE rules: every roll has the type's bit, on every track */
+        for (i = 0; i < NTRK; i++) {
+            CFG(CF_RULE + i) = (uint8_t)(opt + 1u);
+            ns.hold = 0;
+            for (n = 0; n < 60u; n++) {
+                tu_roll_track(&r, &ns.s, i);
+                if (!(TY_INS[ns.s.ins[i] % TI_N] & (1u << (opt - 1u)))) { R1(0); break; }
+            }
+        }
+    memset(&favorites.factory[13][16], 0, 16);          /* the default band: T4 LEAD never HAZE (a pad) */
+    for (n = 0; n < 300u; n++) {
+        tu_dice_nudge();
+        if (ns.s.ins[3] == TI_HAZE || !(TY_INS[ns.s.ins[3] % TI_N] & 8u)) { R1(0); break; }
+        if (!(TY_INS[ns.s.ins[0] % TI_N] & 1u) || !(TY_INS[ns.s.ins[1] % TI_N] & 2u) || !(TY_INS[ns.s.ins[2] % TI_N] & 4u)) { R1(0); break; }
+    }
+    /* SETUP: a rule changed rolls that track at once */
+    ns.s.ins[3] = TI_HAZE; ns.hold = 0;
+    CFG(CF_RULE + 3) = 4u;                              /* TYPE CHORDS */
+    tu_su_step(3, 1);                                   /* -> TYPE LEAD */
+    R1(CFG(CF_RULE + 3) == 5u && (TY_INS[ns.s.ins[3] % TI_N] & 8u) && ns.s.ins[3] != TI_HAZE);
+    ns.s.ins[3] = TI_HAZE; ns.hold = 1u << 6;           /* T4 held: kept */
+    tu_su_step(3, 1);
+    R1(ns.s.ins[3] == TI_HAZE);
+    /* RANDOM: no second kit unless a rule asks */
+    memset(&favorites.factory[13][16], 0, 16);
+    ns.hold = 0;
+    for (i = 0; i < NTRK; i++) CFG(CF_RULE + i) = 1u;   /* RANDOM x4 */
+    kits = 0;
+    for (n = 0; n < 2000u; n++) {
+        uint32_t k = 0;
+        tu_dice_nudge();
+        for (j = 0; j < NTRK; j++)
+            k += (TY_INS[ns.s.ins[j] % TI_N] & 1u) != 0u;
+        if (k > 1u) { R1(0); break; }
+        kits += k;
+    }
+    R1(kits > 100u);                                    /* (a kit still comes up sometimes) */
+    CFG(CF_RULE + 0) = 2u;                              /* T1 TYPE DRUMS asks for a kit: the RANDOM ones have none */
+    for (n = 0; n < 500u; n++) {
+        uint32_t k = 0;
+        tu_dice_nudge();
+        for (j = 0; j < NTRK; j++)
+            k += (TY_INS[ns.s.ins[j] % TI_N] & 1u) != 0u;
+        if (k != 1u || !(TY_INS[ns.s.ins[0] % TI_N] & 1u)) { R1(0); break; }
+    }
+    CFG(CF_RULE + 1) = 2u;                              /* T2 asks too: two kits are the player's rule */
+    tu_dice_nudge();
+    R1((TY_INS[ns.s.ins[0] % TI_N] & 1u) && (TY_INS[ns.s.ins[1] % TI_N] & 1u));
+    memset(&favorites.factory[13][16], 0, 16);
+    bad += check("TFM-UI fix 7: TYPE rules pick from their own group (LEAD never HAZE), a SETUP change rolls the track, RANDOM never rolls a second kit", ok);
+    return bad;
+}
