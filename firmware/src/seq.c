@@ -166,7 +166,7 @@ static volatile uint8_t jam_silent;               /* round 5: JAM's black keys l
 static uint32_t kb_map(const track_t *t, uint32_t k)
 {
     int32_t n;
-    if (jam_silent && key_black(k))
+    if (jam_silent && ((0x252A52Au >> k) & 1u))
         return KB_SILENT;
     n = kb_engine(t, k);
     return n >= 0 ? (uint32_t)n : kb_pitch(t, k, song.octave);
@@ -633,7 +633,7 @@ static uint8_t roll_held;
 typedef struct { uint32_t t_on; uint16_t len; uint8_t note, vel; } cap_ev_t;
 static cap_ev_t cap_ev[NTRK][CAP_N];
 static uint8_t cap_w[NTRK];
-static void cap_log(track_t *t, uint32_t note, uint32_t vel)
+static __attribute__((noinline)) void cap_log(track_t *t, uint32_t note, uint32_t vel)
 {
     uint32_t i = trk_index(t);
     cap_ev_t *e = &cap_ev[i][cap_w[i] % CAP_N];
@@ -643,10 +643,10 @@ static void cap_log(track_t *t, uint32_t note, uint32_t vel)
     e->vel = (uint8_t)vel;
     cap_w[i] = (uint8_t)((cap_w[i] + 1u) % CAP_N);
 }
-static void cap_end(track_t *t, uint32_t note)
+static __attribute__((noinline)) void cap_end(track_t *t, uint32_t note)
 {
     uint32_t i = trk_index(t), k;
-    for (k = 1; k <= CAP_N; k++) {
+    for (k = 1; k <= 6u; k++) {                       /* (the last six: a note let go is a recent one) */
         cap_ev_t *e = &cap_ev[i][(uint32_t)(cap_w[i] + CAP_N - k) % CAP_N];
         if (e->len == CAP_OPEN && e->note == note) {
             uint32_t l = (cap_clock - e->t_on) >> 6;
@@ -797,7 +797,7 @@ static __attribute__((noinline)) void kb_lat(uint32_t k)
 static void keyboard_block(void)
 {
     uint32_t cur = fm1_in.notes, ch, k;
-    uint32_t lay, fx, mute;
+    uint32_t lay, fx, mute, roll_mask;
     ch = cur ^ kb_prev;                          /* keys also sound while entering steps */
     if (perf_remap)
         perf_key_remap();
@@ -810,6 +810,7 @@ static void keyboard_block(void)
         kb_prev = cur;
         return;
     }
+    roll_mask = perf_roll_on ? ~0x252A52Au : 0u;          /* (PERFORM: the white keys are not the layer's) */
     lay = (fm1_in.buttons & kb_mask) || kb_lock;  /* (#83: kb_lock, a layer locked open with no button held) */
     fx = (fm1_in.buttons & perf_mask) || (kb_lock & 2u);
     mute = song.grid == 2u ? ~0u : song.grid == 3u ? SONG_KEYS : 0u;   /* the keys that never sound here */
@@ -822,7 +823,7 @@ static void keyboard_block(void)
                 kb_note[k] = KB_SILENT;
                 continue;
             }
-            if (lay && !(perf_roll_on && !key_black(k))) {   /* a layer's button held (or locked): the key is the layer's (round 5: PERFORM's white keys roll) */
+            if (lay && !((roll_mask >> k) & 1u)) {   /* a layer's button held (or locked): the key is the layer's (round 5: PERFORM's white keys roll) */
                 kb_note[k] = KB_SILENT;           /* (ui_layer.c), with FX an effect (perform.c) */
                 kb_layer |= 1u << k;
                 if (fx)
@@ -1378,20 +1379,13 @@ static __attribute__((noinline)) void scene_flip(uint32_t carry)   /* (once a sc
     scene_carry = carry;
     scene_armed = 2;
 }
-static void scene_tick(uint32_t n)                /* (round 5: a cued scene starts when the playing one has finished its loop, its */
+static volatile uint8_t scene_clk;
+static __attribute__((noinline)) void scene_tick(uint32_t n)                /* (round 5: a cued scene starts when the playing one has finished its loop, its */
 {                                                 /* longest track's: not at the next bar) */
-    uint32_t k, c = 0, best = 0, length;
-    const track_t *t;
+    uint32_t length;
+    const track_t *t = &trk[scene_clk % NTRK];       /* (the longest loop: the main loop keeps it, tfm_live.c jl_poll) */
     if (scene_armed != 1u || !song.playing || chain.running || clk_pos == CLK_START)
         return;
-    for (k = 0; k < NTRK; k++) {
-        uint32_t l = len48_of(trk[k].p[P_SLEN], trk[k].p[P_SDIV]);
-        if (l > best) {
-            best = l;
-            c = k;
-        }
-    }
-    t = &trk[c];
     if (t->seq_pos >= 0x7FFFFFFFu || t->seq_idx + 1u != (uint32_t)t->p[P_SLEN])
         return;
     length = step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), t->seq_idx);
@@ -1400,16 +1394,17 @@ static void scene_tick(uint32_t n)                /* (round 5: a cued scene star
 }
 
 static const uint8_t ROLL_UNITS[5] = {24, 16, 12, 8, 6};   /* 1/8, 1/8T, 1/16, 1/16T, 1/32 in 1/48 quarters */
-static void roll_tick(uint32_t n)
+static __attribute__((noinline)) void roll_tick(uint32_t n)
 {
-    uint32_t k, held = 0, period;
+    uint32_t k, held, period, m;
     if (!perf_roll_on) {
         roll_held = 0;
         return;
     }
-    for (k = 0; k < 27u; k++)
-        if (((kb_prev >> k) & 1u) && !key_black(k) && !((kb_layer >> k) & 1u) && kb_note[k] != KB_SILENT)
-            held |= 1u << k;
+    held = kb_prev & ~kb_layer & ~0x252A52Au & 0x7FFFFFFu;     /* (the white keys held) */
+    for (m = held; m; m &= m - 1u)
+        if (kb_note[__builtin_ctz(m)] == KB_SILENT)
+            held &= ~(m & -m);
     if (!held) {
         roll_held = 0;
         roll_pos = 0;
@@ -1425,9 +1420,10 @@ static void roll_tick(uint32_t n)
     if (roll_pos < period)
         return;
     roll_pos -= period;
-    for (k = 0; k < 27u; k++)
-        if ((held >> k) & 1u) {
-            track_t *t = &trk[kb_trk[k] % NTRK];
+    for (m = held; m; m &= m - 1u) {
+            track_t *t;
+            k = (uint32_t)__builtin_ctz(m);
+            t = &trk[kb_trk[k] % NTRK];
             trk_note_off(t, kb_note[k]);
             input_on(t, kb_note[k], 100);
             if (rec_on(t)) {                           /* REC: recorded as a ratchet of the step (the hits a step holds at this rate) */
@@ -1546,8 +1542,10 @@ static void events_block(uint32_t n)
     if (aud_req)
         seq_audition();                               /* (STEP PREVIEW: a step sounds, stopped) */
     cap_clock += n;
-    roll_tick(n);
-    scene_tick(seq_n);                                /* (TILT-FM: a scene cued: its flip at the bar's end) */
+    if (perf_roll_on || roll_held)
+        roll_tick(n);
+    if (scene_armed == 1u)
+        scene_tick(seq_n);                                /* (TILT-FM: a scene cued: its flip at the bar's end) */
     chain_tick(seq_n);
     for (i = 0; i < NTRK; i++)
         seq_tick(&trk[i], seq_n);

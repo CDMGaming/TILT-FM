@@ -209,6 +209,17 @@ static void jl_input(uint32_t pressed, uint32_t oct)
 static void jl_poll(void)
 {
     const track_t *t = &trk[jl_clock()];
+    {   /* the loop a cued scene waits for: the longest track's (seq.c scene_tick) */
+        uint32_t k, c = 0, best = 0;
+        for (k = 0; k < NTRK; k++) {
+            uint32_t l = len48_of(trk[k].p[P_SLEN], trk[k].p[P_SDIV]);
+            if (l > best) {
+                best = l;
+                c = k;
+            }
+        }
+        scene_clk = (uint8_t)c;
+    }
     uint32_t idx = t->seq_idx;
     if (song.playing && !jl_playing)
         jl_push(chain.running ? chain.config.row[chain.row].slot[0] : scene_cur());
