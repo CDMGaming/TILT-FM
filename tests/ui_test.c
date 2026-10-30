@@ -2408,8 +2408,12 @@ static int test_chain(void)
     chain_config.count = 2;
     chain_config.row[0] = chain_row_of(0, 2);
     chain_config.row[1] = chain_row_of(3, 1);
-    bad += check("SONG missing source: refuses before changing any track", chain_prepare() == 6 && !chain.armed &&
+    /* (round 4: a blank scene is no error: its lanes play silence; the song as written is untouched) */
+    bad += check("SONG blank scene: no refusal, its lanes silent, no track changed", chain_prepare() == 0 && chain.armed &&
+        chain.config.row[1].slot[0] == CHAIN_SILENT && chain.config.row[1].slot[3] == CHAIN_SILENT &&
+        chain.config.row[0].slot[0] == 0u && chain_config.row[1].slot[0] == 3u &&
         !memcmp(trk[0].step, before[0], sizeof before[0]));
+    chain.armed = 0; transport_req = 0;
     chain_config.row[1] = chain_row_of(1, 1);
     project_save(2);
     chain_defaults(&chain_config);
@@ -8841,14 +8845,15 @@ static int test_song_lanes(void)
                  "patterns, LEN DIV and QUANTIZE back", ok);
     chain_config.count = 1;
     chain_config.row[0] = (chain_row_t){{CHAIN_SILENT, 2, CHAIN_SILENT, CHAIN_SILENT}, 1};
-    ok = chain_prepare() == 3u + 2u && !chain.armed;
+    ok = chain_prepare() == 0 && chain.armed && chain.config.row[0].slot[1] == CHAIN_SILENT;   /* (round 4: blank = silent) */
+    chain.armed = 0; transport_req = 0;
     chain_config.row[0].slot[1] = CHAIN_SILENT;
     memset(proj_slot, 0, sizeof proj_slot);
     ok &= chain_prepare() == 0 && chain.armed;
     events_block(32);
     ok &= chain.running && seq_steps(&trk[1]) == chain_silent;
     seq_stop();
-    bad += check("SONG lanes: a lane on an empty slot refuses (PATTERN C EMPTY); a silent song needs none", ok);
+    bad += check("SONG lanes: a lane on a blank scene plays silence (no refusal); a silent song needs no scene", ok);
     chain_config.row[0].slot[0] = CHAIN_SILENT + 1u;
     bad += check("SONG lanes: a slot past \"-\" is no section", !chain_valid(&chain_config));
     /* TILT-FM: a 1-bar drum loop on T1 and a 2-bar line on T2 (A: T1 16 x 1/16, T2 16 x 1/8), x1: the section is 2 bars,
@@ -11035,7 +11040,7 @@ static int test_tfm_ui_song(void)
     ui.song_row = 0;
     turn(EN_K1, 1); ok &= chain_config.row[0].slot[0] == 1u;                 /* K1: T1's scene B */
     turn(EN_K3, 2); ok &= chain_config.row[0].slot[2] == 1u;
-    turn(EN_K4, -1); ok &= chain_config.row[0].slot[3] == 0u;
+    turn(EN_K4, -1); ok &= chain_config.row[0].slot[3] == CHAIN_SILENT;      /* (round 4: "-" is left of A) */
     turn(EN_K1, 5); ok &= chain_config.row[0].slot[0] == CHAIN_SILENT || chain_config.row[0].slot[0] <= 3u;
     turn(EN_PRESET, 1); ok &= chain_config.row[0].repeat == 2u;
     turn(EN_SELECT, 1); ok &= ui.song_row == 1u;
@@ -11143,6 +11148,7 @@ static int tfm_only(void)
 #include "ui_test_r1.h"
 #include "ui_test_r2.h"
 #include "ui_test_r3.h"
+#include "ui_test_r4.h"
 static int test_tfm_ui_acceptance(void)
 {
     int bad = 0, ok;
@@ -11333,6 +11339,7 @@ int main(void)
     bad += test_r3_rec();
     bad += test_r3_newsong();
     bad += test_r3_pitch();
+    bad += test_r4_blank();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

@@ -60,13 +60,14 @@ static int test_r2_song_chain(void)
     tu_goto(TU_SONG);
     ui.song_row = 1;
     frames(32);
-    for (s = 1; s <= 9u; s++) {                         /* K1 up: B, C, .. H, then "-", and no further */
+    for (s = 1; s <= 9u; s++) {                         /* K1 up: B, C, .. H, and no further (round 4: "-" is left of A) */
         turn(EN_K1, 1);
-        R2(chain_config.row[1].slot[0] == (s < 8u ? s : CHAIN_SILENT));
+        R2(chain_config.row[1].slot[0] == (s < 7u ? s : 7u));
     }
     R2(chain_valid(&chain_config));
     turn(EN_K1, -2);
-    R2(chain_config.row[1].slot[0] == 7u);               /* back to H */
+    R2(chain_config.row[1].slot[0] == 6u);               /* back to G */
+    chain_config.row[1].slot[0] = 7;
     chain_config.row[1].slot[1] = 4;                     /* T2 on E, T3 on F, T4 on G */
     chain_config.row[1].slot[2] = 5;
     chain_config.row[1].slot[3] = 6;

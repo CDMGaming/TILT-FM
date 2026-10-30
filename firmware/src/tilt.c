@@ -1173,10 +1173,6 @@ static void quick_chain(uint32_t s)
         ui_message("STOP TO EDIT");
         return;
     }
-    if (!project_used(s)) {
-        ui_message("SCENE EMPTY");
-        return;
-    }
     if (last && !memcmp(last->slot, chain_row_of(s, 1).slot, sizeof last->slot) && last->repeat < 16u) {
         last->repeat++;
     } else if (chain_config.count >= CHAIN_ROWS) {

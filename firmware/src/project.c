@@ -1453,11 +1453,14 @@ static uint32_t chain_prepare(void)
             uint32_t s = chain_config.row[i].slot[k];
             if (s >= NSCN || ((used >> s) & 1u))
                 continue;
-            if (!project_used(s))
-                return 3u + s;
-            used |= 1u << s;
+            if (project_used(s))                        /* (round 4: a blank scene is no error: its lanes play silence) */
+                used |= 1u << s;
         }
     chain.config = chain_config;
+    for (i = 0; i < chain.config.count; i++)
+        for (k = 0; k < NTRK; k++)
+            if (chain.config.row[i].slot[k] < NSCN && !((used >> chain.config.row[i].slot[k]) & 1u))
+                chain.config.row[i].slot[k] = CHAIN_SILENT;
 #ifdef PREF_SONG_SCENE
     chain_snd.on = 0;
     for (k = 0; k < NTRK; k++) {                        /* (TILT-FM: SOUNDS SCENE, the sounds as PLAY finds them) */
@@ -1471,7 +1474,14 @@ static uint32_t chain_prepare(void)
     for (i = 0; i < NSCN; i++)
         if ((used >> i) & 1u) {
             project_t *p = &proj_scratch;
-            if (!scn_get(scn_g(i), p)) return 3u + i;
+            if (!scn_get(scn_g(i), p)) {                /* (unreadable: as blank, silent) */
+                uint32_t r, q;
+                for (r = 0; r < chain.config.count; r++)
+                    for (q = 0; q < NTRK; q++)
+                        if (chain.config.row[r].slot[q] == i)
+                            chain.config.row[r].slot[q] = CHAIN_SILENT;
+                continue;
+            }
 #ifdef PREF_SONG_SCENE
             if (ui_prefs3 & PREF_SONG_SCENE)            /* (each scene's sounds, as a load would make them) */
                 for (k = 0; k < NTRK; k++) {

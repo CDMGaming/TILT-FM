@@ -39,7 +39,7 @@ static uint32_t tsg_row_bars(const chain_row_t *r)
             uint32_t b = tsg_info(r->slot[k], 0);
             if (b > best) best = b;
         }
-    return best * r->repeat;
+    return (best ? best : 1u) * r->repeat;              /* (round 4: every lane silent or blank: 1 bar) */
 }
 static uint32_t tsg_song_bars(void)
 {
@@ -173,7 +173,7 @@ static void tsg_song_rows(void)                         /* y 22 .. 215 */
 {
     uint32_t n = chain_config.count, top, r, k;
     int32_t y;
-    char b[16];
+    char b[16], blank;
     tu_rect(0, 22, TU_W, 193, TC_BG);
     top = ui.song_row >= 4u ? ui.song_row - 3u : 0u;
     for (r = top; r < top + 4u; r++) {
@@ -188,17 +188,27 @@ static void tsg_song_rows(void)                         /* y 22 .. 215 */
         }
         fmt_int(b, (int32_t)r + 1);
         tu_text(16, y + 17, &AF_TX, b, chain.running && chain.row == r ? TC_AMBER : TC_TEXT, sel ? RGB(58, 42, 16) : TC_SURF);
+        blank = 0;
         for (k = 0; k < NTRK; k++) {
             uint8_t sl = chain_config.row[r].slot[k];
+            int dim = sl < TS_N && !project_used(sl);   /* (round 4: a blank scene plays silence: dim, EMPTY) */
             char l[2] = {sl < TS_N ? (char)('A' + sl) : '-', 0};
             int32_t x = 46 + (int32_t)k * 34;
-            tu_rrect(x, y + 5, 30, 24, 5, sl < TS_N ? TU_TC[k] : RGB(46, 37, 24), sel ? RGB(58, 42, 16) : TC_SURF);
-            tu_text_c(x + 15, y + 17, &AF_TL, l, sl < TS_N ? TC_BG : TC_QUIET, sl < TS_N ? TU_TC[k] : RGB(46, 37, 24));
+            uint16_t cbg = sl < TS_N && !dim ? TU_TC[k] : RGB(46, 37, 24);
+            tu_rrect(x, y + 5, 30, 24, 5, cbg, sel ? RGB(58, 42, 16) : TC_SURF);
+            tu_text_c(x + 15, y + 17, &AF_TL, l, sl < TS_N && !dim ? TC_BG : TC_QUIET, cbg);
+            if (dim && !blank)
+                blank = l[0];
         }
         str_cpy(b, "\xD7", 3);
         fmt_int(b + 1, chain_config.row[r].repeat);
         tu_text(186, y + 12, &AF_TL, b, TC_TEXT, sel ? RGB(58, 42, 16) : TC_SURF);
-        tsg_text_len(b, tsg_row_bars(&chain_config.row[r]));
+        if (blank) {
+            b[0] = blank;
+            str_cpy(b + 1, " EMPTY", 8);
+        } else {
+            tsg_text_len(b, tsg_row_bars(&chain_config.row[r]));
+        }
         tu_text_r(226, y + 25, &AF_TS, b, TC_QUIET, sel ? RGB(58, 42, 16) : TC_SURF);
     }
     tu_text(10, 190, &AF_TS, "SOUNDS", TC_QUIET, TC_BG);
@@ -248,9 +258,11 @@ static void tu_song_input(uint32_t oct)
     for (k = 0; k < 4u; k++)
         if ((s = panel_enc(EN_K1 + k)) != 0 && r) {
             if (chain_busy()) { ui_message("STOP TO EDIT"); continue; }
-            r->slot[k] = (uint8_t)clamp((int32_t)r->slot[k] + (s > 0 ? 1 : -1), 0, (int32_t)CHAIN_SILENT);
-            if (r->slot[k] > TS_N - 1u && r->slot[k] != CHAIN_SILENT)
-                r->slot[k] = (uint8_t)(s > 0 ? CHAIN_SILENT : TS_N - 1u);
+            {                                           /* (round 4: the knob runs "-" A B .. H: "-" first, no wrap) */
+                int32_t p = r->slot[k] >= TS_N ? 0 : (int32_t)r->slot[k] + 1;
+                p = clamp(p + (s > 0 ? 1 : -1), 0, (int32_t)TS_N);
+                r->slot[k] = p ? (uint8_t)(p - 1) : (uint8_t)CHAIN_SILENT;
+            }
         }
     if ((s = panel_enc(EN_PRESET)) != 0 && r && !chain_busy())
         r->repeat = (uint8_t)clamp((int32_t)r->repeat + (s > 0 ? 1 : -1), 1, 16);
