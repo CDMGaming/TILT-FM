@@ -339,6 +339,7 @@ static void menu_row(uint32_t k, uint32_t row)
         char b[8] = {'T', (char)('1' + song.sel % NTRK), 0, 0};
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row value centred up/down");
         cv_text_r(MR_VR, vy, &AF_M, tu_classic() ? "TFM" : b, val, bg);
+        return;                                         /* (no empty value after it: its hook would measure the next row's text) */
     }
     if (row == MI_LCLEAR) {                            /* LEARN CLEAR (1.5): how many CCs are learned, "NONE" */
         char b[8] = "NONE";
