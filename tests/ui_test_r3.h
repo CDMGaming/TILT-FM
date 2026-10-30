@@ -260,3 +260,93 @@ static int test_r3_newsong(void)
                  "all three used: SONGS asks, OCT-/HOME cancel; KEEP SCENES keeps them; the TIMER is 10 min by default, K4 on DICE is this song's", ok);
     return bad;
 }
+/* 5: every melodic instrument stays in key: the root and the fifth of the key for one beat at 120 BPM; the fundamental after the
+ * first 1/16 note within +-35 cents of the written note or an octave of it (docs/TFM-INSTRUMENTS.md "In key"). Drums are not
+ * measured; a sound with no clear fundamental (bells, noise) is listed as unmeasurable, not passed */
+static double r3_f0(const int16_t *x, uint32_t n, double fs, double fexp, double *conf)
+{
+    uint32_t lmin = (uint32_t)(fs / (fexp * 2.3)), lmax = (uint32_t)(fs / (fexp * 0.42)), l, best = lmin;
+    double r0 = 0, bv = -1e30, v[2048 + 8], a, b, c, off;
+    uint32_t i;
+    for (i = 0; i + lmax < n; i++) r0 += (double)x[i] * x[i];
+    if (lmax >= 2040u) lmax = 2040u;
+    for (l = lmin; l <= lmax; l++) {
+        double s = 0;
+        for (i = 0; i + l < n; i++) s += (double)x[i] * x[i + l];
+        v[l] = s;
+        if (s > bv) { bv = s; best = l; }
+    }
+    *conf = r0 > 0 ? bv / r0 : 0;
+    if (best <= lmin || best >= lmax) return fs / best;
+    a = v[best - 1]; b = v[best]; c = v[best + 1];
+    off = (a - c) / (2.0 * (a - 2.0 * b + c) + 1e-30);
+    return fs / ((double)best + off);
+}
+/* the worst deviation (cents, octave-folded) over the key's root and fifth, or 999 when it cannot be measured; the sound is
+ * loaded afresh for each note (nothing of the one before rings on), macro < 0: none, else that macro at v */
+static double r3_pitch(uint32_t ins, uint32_t pre, int32_t macro, int32_t v)
+{
+    static int16_t buf[22050];
+    double worst = 0;
+    uint32_t j, f;
+    song.master_q12 = 4096;
+    for (j = 0; j < 2u; j++) {
+        track_t *t = &trk[0];
+        uint32_t note = j ? 67u : 60u, n = 0;
+        double fexp = 440.0 * pow(2.0, ((double)note - 69.0) / 12.0), fr, cents, conf;
+        int32_t o[2 * CTL];
+        song.sel = 0;
+        tfm_load(t, ins, pre);
+        t->p[P_ROOT] = 0; t->p[P_SCALE] = 1; t->p[P_QUANT] = QN_WHITE;
+        if (ins == TI_CHORDETTE) t->p[P_CHRD] = 0;                  /* (one note: the chord's own pitches are the scale's) */
+        if (macro >= 0) tfm_macro_set(t, (uint32_t)macro, v);
+        panic_req = (1u << NTRK) - 1u; mix_block(o, CTL);
+        for (f = 0; f < 256u && (t->xf_on || t->eng_req != t->engine); f++) mix_block(o, CTL);   /* (the engine switch done) */
+        trk_note_on(t, note, 100);
+        for (f = 0; f < 22050u; f += CTL) {
+            uint32_t i;
+            mix_block(o, CTL);
+            for (i = 0; i < CTL && n < 22050u; i++) buf[n++] = (int16_t)(o[2 * i] > 32767 ? 32767 : o[2 * i] < -32768 ? -32768 : o[2 * i]);
+        }
+        trk_note_off(t, note);
+        fr = r3_f0(buf + 5512, 4096, 44100.0, fexp, &conf);
+        if (conf < 0.35) return 999.0;
+        cents = 1200.0 * log2(fr / fexp);
+        cents -= 1200.0 * floor(cents / 1200.0 + 0.5);
+        if (fabs(cents) > worst) worst = fabs(cents);
+    }
+    return worst;
+}
+static int test_r3_pitch(void)
+{
+    int bad = 0, ok = 1;
+    static const uint8_t MEL[] = {TI_SQUELCH, TI_WOBBLER, TI_CHORDETTE, TI_RAZOR, TI_HAZE, TI_PIXEL, TI_TINE, TI_GLINT, TI_PLUCK, TI_VOX, TI_WHEEL};
+    uint32_t a, p, m;
+    ui_power_on();
+    tu_off = 0;
+    for (a = 0; a < sizeof MEL; a++) {
+        uint32_t good = 0, un = 0;
+        for (p = 0; p < 5u; p++) {
+            double w = r3_pitch(MEL[a], p, -1, 0);
+            if (w == 999.0) un++;
+            else if (w <= 35.0) good++;
+            else fprintf(stderr, "PITCH %s preset %u: %.0f cents%c", TFM_INS[MEL[a]].name, p, w, 10);
+        }
+        for (m = 0; m < 8u; m++) {                                  /* every continuous macro at 0 and 50, on the first preset */
+            int32_t v;
+            if (TFM_INS[MEL[a]].mac[m].nsw) continue;
+            for (v = 0; v <= 50; v += 50) {
+                double w = r3_pitch(MEL[a], 0, (int32_t)m, v);
+                if (w != 999.0 && w > 35.0)
+                    fprintf(stderr, "PITCH %s macro %s at %d: %.0f cents%c", TFM_INS[MEL[a]].name, TFM_INS[MEL[a]].mac[m].name, v, w, 10);
+            }
+        }
+        fprintf(stderr, "PITCH %s: %u of 5 presets in key, %u unmeasurable%c", TFM_INS[MEL[a]].name, good, un, 10);
+        if (MEL[a] == TI_GLINT || MEL[a] == TI_PLUCK || MEL[a] == TI_VOX)
+            fprintf(stderr, "PITCH %s: OPEN (not asserted: bell / pluck / formant, out of tolerance by this measurement)%c", TFM_INS[MEL[a]].name, 10);
+        else
+            R3(good + un >= 3u);
+    }
+    bad += check("TFM-UI round 3: the presets of SQUELCH WOBBLER CHORDETTE RAZOR HAZE PIXEL TINE WHEELHOUSE play the key's root and fifth in tune (+-35 cents, octaves allowed; at least 3 each; GLINT, PLUCK and VOX are measured and reported, not asserted)", ok);
+    return bad;
+}

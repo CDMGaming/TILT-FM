@@ -51,7 +51,7 @@ Presets: HALF STEP, YOY, TRASH FLOOR, LASER WOB, SUBWAY.
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
-| 1 | CHORD (SWITCH) | CHRD: MAJ MIN 7 MAJ7 MIN7 SUS2 SUS4 ADD9 POWER | MAJ | 7 | MIN7 | SUS4 | POWER |  |
+| 1 | CHORD (SWITCH) | CHRD: AUTO AUTO 7 MAJ MIN 7 MAJ7 MIN7 SUS4 POWER | AUTO | MAJ | 7 | MIN7 | POWER |  |
 | 2 | VOICE (SWITCH) | VOIC: CLOSE OPEN DROP2 SPREAD STACK | CLOSE | OPEN | DROP2 | SPREAD | STACK |  |
 | 3 | WARM (JAM) | CUT 30..110; RES 40..10 | 30/40 | 50/32 | 70/25 | 90/18 | 110/10 |  |
 | 4 | SWELL | ATK 0..90 EXP; REL 10..110 | 0/10 | 6/35 | 22/60 | 51/85 | 90/110 |  |
@@ -72,7 +72,7 @@ Presets: HOUSE STAB, SUNDAY, VELVET, PUMPER, MIXTAPE.
 | 4 | GLIDE | GLIDE 0..80 | 0 | 20 | 40 | 60 | 80 |  |
 | 5 | WIDTH | DETUNE 0..80; SPRD 0..127 | 0/0 | 20/32 | 40/64 | 60/95 | 80/127 |  |
 | 6 | ATTACK | ATK 0..80 | 0 | 20 | 40 | 60 | 80 |  |
-| 7 | VIB | LD>PIT 0..20 | 0 | 5 | 10 | 15 | 20 |  |
+| 7 | VIB | LD>PIT 0..2 | 0 | 0 | 1 | 2 | 2 |  |
 | 8 | ECHO | DLY 0..90 | 0 | 22 | 45 | 68 | 90 |  |
 
 Presets: HERO, TRANCE GATE, ARENA, SINE RIDER, HOT WIRE.
@@ -81,7 +81,7 @@ Presets: HERO, TRANCE GATE, ARENA, SINE RIDER, HOT WIRE.
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
-| 1 | DRIFT | LD>PIT 0..14; DTN 5..30 | 0/5 | 4/11 | 7/18 | 10/24 | 14/30 |  |
+| 1 | DRIFT | LD>PIT 0..2 >70%; DTN 5..30 | 0/5 | 0/11 | 0/18 | 0/24 | 2/30 |  |
 | 2 | DUST | IMIX 0..100 | 0 | 25 | 50 | 75 | 100 |  |
 | 3 | SPACE | REV 10..127 | 10 | 39 | 68 | 98 | 127 |  |
 | 4 | BLOOM (JAM) | ATK 10..120 EXP; REL 30..120 | 10/30 | 17/52 | 38/75 | 72/98 | 120/120 |  |
@@ -96,14 +96,14 @@ Presets: FOG, MORNING, VHS, AURORA, DEEP END.
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
-| 1 | JUMP (SWITCH) | ARP: OFF OCT 5TH TRIAD | OFF | OFF | OCT | 5TH | TRIAD |  |
+| 1 | JUMP (SWITCH) | ARP: OFF OCT 5TH | OFF | OFF | OCT | 5TH | 5TH |  |
 | 2 | WAVE (SWITCH) | WAVE: PULSE TRI SAW NOISE WAVE | PULSE | TRI | SAW | NOISE | WAVE |  |
-| 3 | SWEEP (JAM) | SWP 0..110 | 0 | 28 | 55 | 82 | 110 |  |
+| 3 | SWEEP (JAM) | SWP 0..25 | 0 | 6 | 12 | 19 | 25 |  |
 | 4 | CRUSH | CRSH 0..120 | 0 | 30 | 60 | 90 | 120 |  |
 | 5 | VIB | VIB 0..110 | 0 | 28 | 55 | 82 | 110 |  |
 | 6 | DECAY | DEC 15..100 | 15 | 36 | 58 | 79 | 100 |  |
 | 7 | TONE | TONE 20..127 | 20 | 47 | 74 | 100 | 127 |  |
-| 8 | COIN | ED>PIT 0..60 | 0 | 15 | 30 | 45 | 60 |  |
+| 8 | DUTY | DUTY 0..120 | 0 | 30 | 60 | 90 | 120 |  |
 
 Presets: 1UP, BOSS LEVEL, WARP ZONE, HIGH SCORE, GLITCH.
 
@@ -127,7 +127,7 @@ Presets: SUITCASE, LOUNGE, BARK BARK, DREAMY, CHURCH BASEMENT.
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
 | 1 | METAL (JAM) | MLVL -40..50 | -40 | -18 | 5 | 28 | 50 |  |
-| 2 | RATIO (SWITCH) | MRAT: -8 -6 -4 -2 0 2 4 6 8 | -8 | -4 | 0 | 4 | 8 |  |
+| 2 | RATIO (SWITCH) | MRAT: -4 -2 0 2 4 | -4 | -2 | 0 | 2 | 4 |  |
 | 3 | BLOOM | MEG -40..50 | -40 | -18 | 5 | 28 | 50 |  |
 | 4 | DECAY | DEC 30..120 | 30 | 52 | 75 | 98 | 120 |  |
 | 5 | BITE | FB -5..7 | -5 | -2 | 1 | 4 | 7 |  |

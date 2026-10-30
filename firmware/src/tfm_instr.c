@@ -65,9 +65,9 @@ enum { TI_THUMP, TI_SQUELCH, TI_WOBBLER, TI_CHORDETTE, TI_RAZOR, TI_HAZE, TI_PIX
 
 static const char *const SWN_2_1[] = {"1/1", "1/2", "1/4", "1/8", "8T", "1/16", "16T", "1/32"};
 static const char *const SWN_2_6[] = {"0", "-1 OCT", "-2 OCT"};
-static const char *const SWN_3_0[] = {"MAJ", "MIN", "7", "MAJ7", "MIN7", "SUS2", "SUS4", "ADD9", "POWER"};
+static const char *const SWN_3_0[] = {"AUTO", "AUTO 7", "MAJ", "MIN", "7", "MAJ7", "MIN7", "SUS4", "POWER"};   /* (round 3: AUTO follows the scale) */
 static const char *const SWN_3_1[] = {"CLOSE", "OPEN", "DROP2", "SPREAD", "STACK"};
-static const char *const SWN_6_0[] = {"OFF", "OCT", "5TH", "TRIAD"};
+static const char *const SWN_6_0[] = {"OFF", "OCT", "5TH"};   /* (round 3: no major arp: it is out of key in minor modes) */
 static const char *const SWN_6_1[] = {"PULSE", "TRI", "SAW", "NOISE", "WAVE"};
 static const char *const SWN_11_2[] = {"OFF", "SLOW", "FAST"};
 static const tfm_instr_t TFM_INS[TI_N] = {
@@ -151,8 +151,8 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"FAT STAB", 0, NOV},
     }},
     /* CHORDETTE */
-    {"CHORDETTE", "one key, whole chords \xB7 targets drop per note", IG_HARMONY, E_ANALOG, 2, 0, 14, 4, {RGB(18, 10, 20), RGB(36, 20, 42), RGB(255, 143, 208), RGB(184, 152, 172), RGB(255, 238, 247)}, {{P_VOICE, 0}, {P_CHRD, 3}, {P_FTYPE, 0}, {P_E0, 0}, {P_E2, 64}, {P_CHOR, 20}, {P_ITYPE, 5}, {P_IMIX, 0}, {P_LSYNC, 5}, {P_LD_AMP, 0}, {X, 0}}, {
-        {"CHORD", 9, {3, 4, 5, 6, 7, 1, 8, 2, 9}, SWN_3_0, {{P_CHRD, 0, 0, 0}, NT, NT, NT}},
+    {"CHORDETTE", "one key, whole chords \xB7 targets drop per note", IG_HARMONY, E_ANALOG, 2, 0, 14, 4, {RGB(18, 10, 20), RGB(36, 20, 42), RGB(255, 143, 208), RGB(184, 152, 172), RGB(255, 238, 247)}, {{P_VOICE, 0}, {P_CHRD, 1}, {P_FTYPE, 0}, {P_E0, 0}, {P_E2, 64}, {P_CHOR, 20}, {P_ITYPE, 5}, {P_IMIX, 0}, {P_LSYNC, 5}, {P_LD_AMP, 0}, {X, 0}}, {
+        {"CHORD", 9, {1, 2, 3, 4, 5, 6, 7, 8, 9}, SWN_3_0, {{P_CHRD, 0, 0, 0}, NT, NT, NT}},
         {"VOICE", 5, {0, 1, 2, 3, 4}, SWN_3_1, {{P_VOIC, 0, 0, 0}, NT, NT, NT}},
         {"WARM", 0, {0}, 0, {{P_E4, 30, 110, 0}, {P_E5, 40, 10, 0}, NT, NT}},
         {"SWELL", 0, {0}, 0, {{P_ATK, 0, 90, TCV_EXP}, {P_REL, 10, 110, 0}, NT, NT}},
@@ -167,24 +167,24 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"PUMPER", 1, {{X, 0}}, 1, {0, 0, 70, 20, 30, 20, 90, 0}},
         {"MIXTAPE", 1, {{X, 0}}, 1, {20, 20, 45, 40, 70, 30, 30, 80}},
         {"WARM STAB", 1, {{P_CHRD, 2}, {P_ATK, 4}, {P_REL, 40}, {X, 0}}},
-        {"HOUSE ORGAN", 1, {{P_CHRD, 7}, {P_E0, 1}, {P_ATK, 0}, {P_DEC, 40}, {P_SUS, 60}, {X, 0}}},
+        {"HOUSE ORGAN", 1, {{P_CHRD, 1}, {P_E0, 1}, {P_ATK, 0}, {P_DEC, 40}, {P_SUS, 60}, {X, 0}}},
         {"PWM CHORDS", 3, {{P_CHRD, 1}, {X, 0}}},
         {"STRING PAD", 11, {{P_CHRD, 2}, {X, 0}}},
-        {"DUB CHORD", 1, {{P_CHRD, 7}, {P_DLY, 60}, {P_DEC, 35}, {P_SUS, 20}, {X, 0}}},
+        {"DUB CHORD", 1, {{P_CHRD, 2}, {P_DLY, 60}, {P_DEC, 35}, {P_SUS, 20}, {X, 0}}},
         {"BRIGHT 7TH", 0, {{P_CHRD, 2}, {P_VOICE, 0}, {P_ATK, 2}, {P_REL, 50}, {X, 0}}},
         {"SOFT TRIAD", 1, {{P_CHRD, 1}, {P_VOIC, 1}, {X, 0}}},
         {"POWER", 0, {{P_CHRD, 9}, {P_VOICE, 0}, {P_E6, 60}, {X, 0}}},
         {"SUS GLOW", 3, {{P_CHRD, 8}, {P_ATK, 30}, {X, 0}}},
     }},
     /* RAZOR */
-    {"RAZOR", "unison lead \xB7 the ball rides the ramp", IG_LEAD, E_ANALOG, 3, 0, 14, 8, {RGB(11, 16, 20), RGB(20, 32, 40), RGB(79, 212, 255), RGB(135, 162, 176), RGB(232, 248, 255)}, {{P_VOICE, 3}, {P_E0, 0}, {P_FTYPE, 0}, {P_LRATE, 20}, {P_LD_PIT, 3}, {P_LFADE, 60}, {P_DLY, 0}, {P_ITYPE, 2}, {P_IMIX, 0}, {X, 0}}, {
+    {"RAZOR", "unison lead \xB7 the ball rides the ramp", IG_LEAD, E_ANALOG, 3, 0, 14, 8, {RGB(11, 16, 20), RGB(20, 32, 40), RGB(79, 212, 255), RGB(135, 162, 176), RGB(232, 248, 255)}, {{P_VOICE, 3}, {P_E0, 0}, {P_FTYPE, 0}, {P_LRATE, 20}, {P_LD_PIT, 0}, {P_LFADE, 60}, {P_DLY, 0}, {P_ITYPE, 2}, {P_IMIX, 0}, {X, 0}}, {
         {"SCREAM", 0, {0}, 0, {{P_E5, 10, 110, 0}, {P_E6, 0, 70, 0}, {P_LEVEL, 108, 92, 0}, NT}},
         {"SWEEP", 0, {0}, 0, {{P_ED_FLT, -20, 60, 0}, {P_DEC, 20, 70, 0}, NT, NT}},
         {"CUT", 0, {0}, 0, {{P_E4, 30, 120, TCV_EXP}, NT, NT, NT}},
         {"GLIDE", 0, {0}, 0, {{P_GLIDE, 0, 80, 0}, NT, NT, NT}},
         {"WIDTH", 0, {0}, 0, {{P_DETUNE, 0, 80, 0}, {P_SPRD, 0, 127, 0}, NT, NT}},
         {"ATTACK", 0, {0}, 0, {{P_ATK, 0, 80, 0}, NT, NT, NT}},
-        {"VIB", 0, {0}, 0, {{P_LD_PIT, 0, 20, 0}, NT, NT, NT}},
+        {"VIB", 0, {0}, 0, {{P_LD_PIT, 0, 2, 0}, NT, NT, NT}},
         {"ECHO", 0, {0}, 0, {{P_DLY, 0, 90, 0}, NT, NT, NT}},
     }, {
         {"HERO", 0, {{X, 0}}, 1, {45, 40, 60, 30, 60, 30, 40, 30}},
@@ -204,7 +204,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* HAZE */
     {"HAZE", "slow pad \xB7 the lights glow and drift", IG_HARMONY, E_TRIO, 6, 0, 13, 16, {RGB(14, 12, 20), RGB(28, 24, 40), RGB(185, 166, 255), RGB(154, 146, 180), RGB(242, 238, 255)}, {{P_VOICE, 0}, {P_ATK, 60}, {P_REL, 70}, {P_LRATE, 15}, {P_LTRIG, 1}, {P_LD_PIT, 0}, {P_REV, 60}, {P_ITYPE, 5}, {P_IMIX, 0}, {X, 0}}, {
-        {"DRIFT", 0, {0}, 0, {{P_LD_PIT, 0, 14, 0}, {P_E3, 5, 30, 0}, NT, NT}},
+        {"DRIFT", 0, {0}, 0, {{P_LD_PIT, 0, 2, TCV_GATE}, {P_E3, 5, 30, 0}, NT, NT}},
         {"DUST", 0, {0}, 0, {{P_IMIX, 0, 100, 0}, NT, NT, NT}},
         {"SPACE", 0, {0}, 0, {{P_REV, 10, 127, 0}, NT, NT, NT}},
         {"BLOOM", 0, {0}, 0, {{P_ATK, 10, 120, TCV_EXP}, {P_REL, 30, 120, 0}, NT, NT}},
@@ -221,28 +221,28 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"WARM HAZE", 4, {{P_ATK, 70}, {P_REL, 90}, {P_REV, 70}, {X, 0}}},
         {"DUSTY", 4, {{P_ATK, 60}, {P_ITYPE, 5}, {P_IA, 80}, {P_IMIX, 70}, {P_REV, 60}, {X, 0}}},
         {"GLASS AIR", 3, {{P_ATK, 80}, {P_REL, 100}, {P_REV, 90}, {X, 0}}},
-        {"DARK DRIFT", 0, {{P_E5, 30}, {P_ATK, 90}, {P_LD_PIT, 4}, {P_REV, 80}, {X, 0}}},
+        {"DARK DRIFT", 0, {{P_E5, 30}, {P_ATK, 90}, {P_REV, 80}, {X, 0}}},
         {"CHOIR FOG", 4, {{P_ATK, 100}, {P_CHOR, 80}, {P_REV, 90}, {X, 0}}},
-        {"TAPE PAD", 4, {{P_LD_PIT, 6}, {P_LRATE, 30}, {P_ATK, 70}, {P_REV, 60}, {X, 0}}},
+        {"TAPE PAD", 4, {{P_LRATE, 30}, {P_ATK, 70}, {P_REV, 60}, {X, 0}}},
         {"BRIGHT SWELL", 1, {{P_ATK, 90}, {P_REL, 100}, {P_E5, 90}, {X, 0}}},
         {"LOW CLOUD", 0, {{P_E1, -12}, {P_E5, 40}, {P_ATK, 80}, {P_REV, 70}, {X, 0}}},
     }},
     /* PIXEL */
     {"PIXEL", "chip lead \xB7 the sprite jumps on notes", IG_LEAD, E_LOFI, 7, 0, 14, 8, {RGB(8, 16, 12), RGB(16, 32, 24), RGB(92, 255, 143), RGB(134, 168, 146), RGB(234, 255, 240)}, {{P_VOICE, 1}, {P_E1, 0}, {P_DEC, 30}, {P_ED_PIT, 0}, {X, 0}}, {
-        {"JUMP", 4, {0, 1, 2, 3}, SWN_6_0, {{P_E6, 0, 0, 0}, NT, NT, NT}},
+        {"JUMP", 3, {0, 1, 2}, SWN_6_0, {{P_E6, 0, 0, 0}, NT, NT, NT}},
         {"WAVE", 5, {0, 1, 2, 3, 4}, SWN_6_1, {{P_E1, 0, 0, 0}, NT, NT, NT}},
-        {"SWEEP", 0, {0}, 0, {{P_E4, 0, 110, 0}, NT, NT, NT}},
+        {"SWEEP", 0, {0}, 0, {{P_E4, 0, 25, 0}, NT, NT, NT}},
         {"CRUSH", 0, {0}, 0, {{P_E3, 0, 120, 0}, NT, NT, NT}},
         {"VIB", 0, {0}, 0, {{P_E5, 0, 110, 0}, NT, NT, NT}},
         {"DECAY", 0, {0}, 0, {{P_DEC, 15, 100, 0}, NT, NT, NT}},
         {"TONE", 0, {0}, 0, {{P_E7, 20, 127, 0}, NT, NT, NT}},
-        {"COIN", 0, {0}, 0, {{P_ED_PIT, 0, 60, 0}, NT, NT, NT}},
+        {"DUTY", 0, {0}, 0, {{P_E2, 0, 120, 0}, NT, NT, NT}},
     }, {
-        {"1UP", 0, {{X, 0}}, 1, {0, 0, 10, 30, 20, 25, 70, 70}},
-        {"BOSS LEVEL", 0, {{P_E1, 2}, {X, 0}}, 1, {30, 0, 40, 50, 30, 15, 60, 20}},
+        {"1UP", 0, {{X, 0}}, 1, {0, 0, 0, 30, 20, 25, 70, 70}},
+        {"BOSS LEVEL", 0, {{P_E1, 2}, {X, 0}}, 1, {30, 0, 0, 50, 30, 15, 60, 20}},
         {"WARP ZONE", 0, {{X, 0}}, 1, {0, 40, 90, 20, 40, 30, 80, 10}},
-        {"HIGH SCORE", 0, {{X, 0}}, 1, {60, 0, 20, 10, 60, 40, 90, 80}},
-        {"GLITCH", 0, {{X, 0}}, 1, {90, 80, 60, 90, 70, 20, 50, 30}},
+        {"HIGH SCORE", 0, {{X, 0}}, 1, {60, 0, 0, 10, 60, 40, 90, 80}},
+        {"GLITCH", 0, {{X, 0}}, 1, {90, 80, 0, 90, 70, 20, 50, 30}},
         {"PULSE LEAD", 0, NOV},
         {"COIN ARP", 2, NOV},
         {"WAVE LEAD", 3, NOV},
@@ -251,7 +251,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"1BIT BUZZ", 0, {{P_E0, 3}, {X, 0}}},
         {"VIBRATO", 0, {{P_E5, 70}, {X, 0}}},
         {"LASER", 0, {{P_E4, 90}, {P_DEC, 30}, {X, 0}}},
-        {"MAJ ARP", 0, {{P_E6, 2}, {X, 0}}},
+        {"MAJ ARP", 0, {{P_E6, 1}, {X, 0}}},
     }},
     /* TINE */
     {"TINE", "electric piano \xB7 notes light the rollovers", IG_HARMONY, E_FM6, 11, 0, 13, 4, {RGB(20, 16, 10), RGB(38, 30, 18), RGB(255, 197, 107), RGB(180, 164, 134), RGB(255, 246, 230)}, {{P_LRATE, 60}, {P_LD_AMP, 0}, {P_CHOR, 20}, {P_ITYPE, 1}, {P_IMIX, 0}, {X, 0}}, {
@@ -279,9 +279,9 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"FAR EP", 0, {{P_DLY, 50}, {P_REV, 80}, {X, 0}}},
     }},
     /* GLINT */
-    {"GLINT", "FM bells \xB7 stars sparkle on notes", IG_HARMONY, E_FM6, 8, 0, 13, 40, {RGB(10, 18, 20), RGB(20, 36, 40), RGB(127, 240, 230), RGB(134, 170, 166), RGB(234, 255, 252)}, {{P_E3, 5}, {P_REV, 40}, {P_ITYPE, 8}, {P_IMIX, 0}, {X, 0}}, {
+    {"GLINT", "FM bells \xB7 stars sparkle on notes", IG_HARMONY, E_FM6, 8, 0, 13, 40, {RGB(10, 18, 20), RGB(20, 36, 40), RGB(127, 240, 230), RGB(134, 170, 166), RGB(234, 255, 252)}, {{P_E7, 1}, {P_E3, 5}, {P_REV, 40}, {P_ITYPE, 8}, {P_IMIX, 0}, {X, 0}}, {
         {"METAL", 0, {0}, 0, {{P_E2, -40, 50, 0}, NT, NT, NT}},
-        {"RATIO", 9, {-8, -6, -4, -2, 0, 2, 4, 6, 8}, 0, {{P_E3, 0, 0, 0}, NT, NT, NT}},
+        {"RATIO", 5, {-4, -2, 0, 2, 4}, 0, {{P_E3, 0, 0, 0}, NT, NT, NT}},
         {"BLOOM", 0, {0}, 0, {{P_E4, -40, 50, 0}, NT, NT, NT}},
         {"DECAY", 0, {0}, 0, {{P_DEC, 30, 120, 0}, NT, NT, NT}},
         {"BITE", 0, {0}, 0, {{P_E1, -5, 7, 0}, NT, NT, NT}},
@@ -673,7 +673,7 @@ static void tfm_tag_name(uint32_t k, char *tag, char *nm)
 static const char *tfm_ins_name(const track_t *t) { return TFM_INS[tfm_ins_of(t) % TI_N].name; }
 /* JAM's knob turns this macro of the instrument, never a switch: THUMP PUNCH, SQUELCH CUTOFF, WOBBLER WOB, CHORDETTE WARM,
  * RAZOR CUT, HAZE BLOOM, PIXEL SWEEP, TINE BARK, GLINT METAL, PLUCK BRIGHT, VOX VOWEL, WHEELHOUSE DRIVE */
-static const uint8_t TFM_JAMM[TI_N] = {0, 0, 0, 2, 2, 3, 2, 0, 0, 0, 0, 1};
+static const uint8_t TFM_JAMM[TI_N] = {0, 0, 0, 2, 2, 3, 6, 0, 0, 0, 0, 1};
 static uint32_t tfm_jam_m(const track_t *t) { return TFM_JAMM[tfm_ins_of(t) % TI_N]; }
 static void tfm_snd_label(const track_t *t, char *b)
 {

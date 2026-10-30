@@ -331,3 +331,12 @@ banks can stay behind them, renamed only if a name clashes.
   (for example THUMP LAB, plus a vintage machine kit and a lo-fi kit).
 - MACROS-TO-TUNE should be regenerated from the new table so Felix can tick each macro
   off by ear.
+
+## In key (round 3)
+Melodic notes land on the written pitch or an exact octave of it. Detune, vibrato and drift are seasoning: at macro 50 within
++-10 cents, at 100 within +-35 cents. Pitch sweeps and pitch envelopes are back on pitch within a 1/16 note. Chords follow the
+scale (CHORDETTE's CHORD switch: AUTO, AUTO 7, then MAJ MIN 7 MAJ7 MIN7 SUS4 POWER). Done in round 3: CHORDETTE AUTO; PIXEL's SWEEP
+default 0 (range cut), JUMP OFF / OCT / 5TH, COIN replaced by DUTY, JAM macro TONE; RAZOR no always-on LD_PIT, VIB at most 2 steps;
+HAZE DRIFT 0..2 steps, gated (nothing below 70 %); GLINT on FM6 slot 1 (BELL), RATIO -4..+4. Measured by tests/ui_test_r3.h
+(a host render of every preset and every continuous macro at 0 and 50, root and fifth, autocorrelation after the first 1/16):
+see NIGHT-REPORT-UI.md for what still misses (GLINT, PLUCK, VOX; HAZE and others on a few presets and macros).

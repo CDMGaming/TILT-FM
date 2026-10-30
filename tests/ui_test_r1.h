@@ -233,7 +233,7 @@ static int test_r1_jam_sel(void)
 static int test_r1_macros(void)
 {
     int bad = 0, ok = 1;
-    static const char *const JN[TI_N] = {"PUNCH", "CUTOFF", "WOB", "WARM", "CUT", "BLOOM", "SWEEP", "BARK", "METAL", "BRIGHT", "VOWEL", "DRIVE"};
+    static const char *const JN[TI_N] = {"PUNCH", "CUTOFF", "WOB", "WARM", "CUT", "BLOOM", "TONE", "BARK", "METAL", "BRIGHT", "VOWEL", "DRIVE"};
     uint32_t i, m, k, nswitch = 0, ncont = 0;
     ui_power_on();
     tu_off = 0;

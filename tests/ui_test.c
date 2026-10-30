@@ -11332,6 +11332,7 @@ int main(void)
     bad += test_r3_notes();
     bad += test_r3_rec();
     bad += test_r3_newsong();
+    bad += test_r3_pitch();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4
