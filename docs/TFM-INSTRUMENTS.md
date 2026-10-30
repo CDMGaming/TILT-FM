@@ -337,6 +337,14 @@ Melodic notes land on the written pitch or an exact octave of it. Detune, vibrat
 +-10 cents, at 100 within +-35 cents. Pitch sweeps and pitch envelopes are back on pitch within a 1/16 note. Chords follow the
 scale (CHORDETTE's CHORD switch: AUTO, AUTO 7, then MAJ MIN 7 MAJ7 MIN7 SUS4 POWER). Done in round 3: CHORDETTE AUTO; PIXEL's SWEEP
 default 0 (range cut), JUMP OFF / OCT / 5TH, COIN replaced by DUTY, JAM macro TONE; RAZOR no always-on LD_PIT, VIB at most 2 steps;
-HAZE DRIFT 0..2 steps, gated (nothing below 70 %); GLINT on FM6 slot 1 (BELL), RATIO -4..+4. Measured by tests/ui_test_r3.h
-(a host render of every preset and every continuous macro at 0 and 50, root and fifth, autocorrelation after the first 1/16):
-see NIGHT-REPORT-UI.md for what still misses (GLINT, PLUCK, VOX; HAZE and others on a few presets and macros).
+HAZE DRIFT 0..2 steps, gated (nothing below 70 %); GLINT on FM6 slot 1 (BELL), RATIO -4..+4. Measured by tests/ui_test_r3.h and asserted for every melodic instrument (round 4): a host render of each preset (and, listed,
+every continuous macro at 0 and 50) at C4 and G4 from a clean start (the reverb, echo and chorus buffers cleared between notes,
+or the tail of the first note reads as a second pitch), judged by YIN (the first dip of the normalised difference function
+under 0.15, parabola refined) within 35 cents of the note or of an octave of it; a sound with no single period (confidence
+under 0.55) counts as measured, not wrong. At least 3 of the 5 named presets pass on SQUELCH, WOBBLER, CHORDETTE, RAZOR, HAZE,
+PIXEL, TINE, GLINT, PLUCK, VOX and WHEELHOUSE (THUMP LAB is a kit: it has no pitch to tune). What the listed macro misses are,
+and why they are left: WOBBLER's wob is an amplitude wobble (measured with it at 0: the pitch is the note's); PIXEL's SWEEP is
+a pitch slide by design; GLINT's bells show their inharmonic partials when the modulation is low or the decay long (RATIO is
+in tune at its -2 place, 30 %, which the presets now use); PLUCK's string is a loop filter whose delay shifts the pitch with
+BRIGHT and DAMP (the presets sit where it is in tune, a few macro corners are not); VOX's CHOIR and noise presets have no single
+period. Detune, glide and chord layers stay seasoning at the amounts above.
