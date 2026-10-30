@@ -306,3 +306,46 @@ static int test_r6_live_scene(void)
     bad += check("round 6 item 1: SONG plays the scene now as it sounds (unsaved notes of B, a chain A B: B sounds)", ok);
     return bad;
 }
+/* round 6 item 3: the meters in dB: -48..0 dBFS over 14 LEDs, a typical preset mid-meter, fast up, slow fall, the peak dot */
+static int test_r6_meters(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t n, top = 0, t0;
+    R5(tu_db16(32767) >= 216u && tu_db16(129) == 0u);
+    R5(tu_db16(16384) / 16u == 12u);                                         /* -6 dBFS: the 13th LED (yellow) */
+    R5(tu_db16(32767 / 4) / 16u >= 10u && tu_db16(32767 / 4) / 16u <= 11u);  /* -12 dBFS: green's end */
+    R5(tu_db16(32767 / 64) / 16u >= 3u && tu_db16(32767 / 64) / 16u <= 5u);  /* -36 dBFS: low */
+    ui_power_on();
+    tu_off = 0;
+    song.sel = 0;
+    tfm_load(&trk[0], TI_SQUELCH, 0);
+    {
+        int32_t o[2 * CTL];
+        uint32_t f;
+        song.master_q12 = 4096;
+        panic_req = (1u << NTRK) - 1u; mix_block(o, CTL);
+        for (f = 0; f < 256u && (trk[0].xf_on || trk[0].eng_req != trk[0].engine); f++) mix_block(o, CTL);
+    }
+    trk_note_on(&trk[0], 48, 100);
+    for (n = 0; n < 60u; n++) {
+        uint32_t q;
+        int32_t o[2 * CTL];
+        for (q = 0; q < 24u; q++) mix_block(o, CTL);
+        fm1_ms += 16u;
+        tu_meter_poll();
+        if (tu.mlv[0] > top) top = tu.mlv[0];
+    }
+    fprintf(stderr, "METER SQUELCH: %u of 14 LEDs%c", (unsigned)(top / 16u), 10);
+    R5(top >= 4u * 16u && top <= 12u * 16u);                                 /* (mid-meter, not red) */
+    R5(tu.mpk[0] >= top / 16u);
+    trk_note_off(&trk[0], 48);
+    trk_all_off(&trk[0]);
+    t0 = fm1_ms;
+    for (n = 0; n < 40u && tu.mlv[0] > 16u; n++) { int32_t o[2 * CTL]; mix_block(o, CTL); fm1_ms += 16u; tu_meter_poll(); }
+    R5(fm1_ms - t0 <= 600u);                                                 /* (it falls within a few hundred ms) */
+    R5(tu.mpk[0] >= 4u);                                                     /* (the peak dot still there) */
+    fm1_ms += 1500u; tu_meter_poll();
+    R5(tu.mpk[0] <= 1u);                                                     /* (and goes after about a second) */
+    bad += check("round 6 item 3: the level meters in dB (-48..0 dBFS, 14 LEDs, a typical SQUELCH mid-meter, fast up, slow fall, the peak dot held ~1 s)", ok);
+    return bad;
+}

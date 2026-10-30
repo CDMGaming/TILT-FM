@@ -42,7 +42,7 @@ static int32_t tu_cos(uint32_t a256) { return tu_sin(a256 + 64u); }
 static void tu_toy_poll(uint32_t k)
 {
     track_t *t = &trk[k];
-    int32_t p = t->peak;
+    int32_t p = tu.raw[k];                              /* (round 6: this frame's peak; tu_meter_poll reads and resets it) */
     uint32_t l;
     fs[k].on = 0;
     if (t->nheld > fs[k].nh || p > fs[k].prev * 3 / 2 + 900) {

@@ -86,6 +86,11 @@ static struct {
     uint8_t flash[NTRK];                                /* JAM: a note's flash, frames */
     uint8_t lvl[NTRK];                                  /* JAM: the level meter's LEDs lit (0..14) */
     int32_t prev_peak[NTRK];
+    uint8_t mlv[NTRK];                                  /* round 6: the meters, 1/16 LED (0..224 = 14 LEDs, -48..0 dBFS) */
+    uint8_t mpk[NTRK];                                  /* the peak dot: an LED 1..14, held about 1 s */
+    uint32_t mpt[NTRK];
+    int32_t raw[NTRK];                                  /* the track's peak this frame (Q15), read and reset once a frame */
+    uint32_t mms;
     uint32_t sig[TU_ZONES];
 } tu;
 static uint8_t tu_off = TU_OFF_DEFAULT;                 /* 1: CLASSIC (set by the menu, by the tests) */
@@ -692,7 +697,9 @@ static void tu_cab_draw(uint32_t c)
     tu_text_c(x0 + 29, y0 + 12, &AF_TS, nm, ink, tu_mat_at(m, 12, CAB_H));
     for (i = 0; i < 14; i++)                            /* the level meter, the left edge: 14 LEDs, green to red */
         tu_rect(x0 + 3, y0 + 8 + (13 - i) * 5, 3, 3,
-                i < lvl ? (i >= 12 ? TC_REC : i >= 9 ? TC_AMBER : TC_GOOD) : tu_mix(tu_mat_at(m, (uint32_t)(8 + (13 - i) * 5), CAB_H), ink, 12));
+                i < lvl ? (i >= 13 ? TC_REC : i >= 10 ? TC_AMBER : TC_GOOD) :
+                i + 1 == (int32_t)tu.mpk[c] ? (i >= 13 ? TC_REC : i >= 10 ? TC_AMBER : TC_GOOD) :      /* (the peak dot) */
+                tu_mix(tu_mat_at(m, (uint32_t)(8 + (13 - i) * 5), CAB_H), ink, 12));
     if (!prf_on()) {                                    /* (PERFORM: the dial gives way to its ON / MUTED panel) */
     acc = ins ? TFM_INS[tfm_ins_of(t) % TI_N].col[2] : TC_AMBER;
     if (mute)
@@ -824,14 +831,8 @@ static void tu_jam_draw(void)
         str_cpy(hl, prf_on() ? "HOLD ARP \xB7 PERFORM" : jw.held ? "HOLD F#5 \xB7 CHAIN" : tn, sizeof hl);
         tu_head(-1, hl, 0, 0, 1);
     }
-    for (i = 0; i < NTRK; i++) {                        /* a note's flash and the level: up at once, down by one LED a frame */
-        const track_t *t = &trk[i];
-        int32_t p = t->peak, want = clamp(p * 14 / 10000, 0, 14);
-        if (p > tu.prev_peak[i] * 3 / 2 + 900)
-            tu.flash[i] = 5;
-        tu.prev_peak[i] = p;
-        tu.lvl[i] = (uint8_t)(want > tu.lvl[i] ? want : tu.lvl[i] > 0 ? tu.lvl[i] - 1 : 0);
-    }
+    for (i = 0; i < NTRK; i++)                          /* (the meters: tu_meter_poll, in dB) */
+        tu.lvl[i] = (uint8_t)(tu.mlv[i] / 16u);
     dsig = (tm.on ? tm.left * 31u : 0u) + (uint32_t)tilt_timer_min * 977u + bar * 7u + tot * 131u + (uint32_t)song.g[G_BPM] * 4099u +
            (uint32_t)TSEL->p[P_ROOT] * 17u + (uint32_t)TSEL->p[P_SCALE] * 19u + cur * 6151u + (chain.running ? chain.row + 1u : 0u) * 53u +
            str_hash(5u, nmb) + (uint32_t)song.sel * 2999u + (uint32_t)jw.held * 977u + jw.n * 31u + (tsc.cue < NSCN ? 1u + tsc.cue * 13u + jl_bars_left() * 101u : 0u) +
@@ -839,7 +840,7 @@ static void tu_jam_draw(void)
     tu_zone(1, TU_HY, 57, TC_BG, dsig, tu_jam_dmd);
     for (i = 0; i < NTRK; i++) {
         sig = sig * 131u + (uint32_t)jam_pos(&trk[i]) * 7u + (uint32_t)(trk[i].p[P_MUTE] != 0) * 3u + trk[i].eng_req +
-              (uint32_t)tfm_ins_of(&trk[i]) * 257u + (uint32_t)tu.flash[i] * 1031u + (uint32_t)tu.lvl[i] * 4001u +
+              (uint32_t)tfm_ins_of(&trk[i]) * 257u + (uint32_t)tu.flash[i] * 1031u + (uint32_t)tu.lvl[i] * 4001u + (uint32_t)tu.mpk[i] * 37u +
               (uint32_t)((song.rec >> i) & 1u) * 8209u + (uint32_t)prf_on() * 65537u;
     }
     sig = sig * 31u + song.sel * 6151u + (song.playing ? 977u : 0u);
@@ -878,7 +879,7 @@ static void tu_mix_body(void)                           /* y 22 .. 126 and 126 .
         fh = h * lvl / 100;
         if (fh > 3)
             tu_rrect(cx - 11, top + h - fh, 23, fh, 6, col, TC_DEEP);
-        mh = mute ? 0 : h * clamp(t->peak * 100 / 12000, 0, 100) / 100;
+        mh = mute ? 0 : h * (int32_t)tu.mlv[c] / 224;      /* (round 6: the dB meter, tu_meter_poll) */
         if (mh > 0)
             tu_rect(cx - 8, top + h - mh - 1, 17, 2, TC_TEXT);
         fmt_int(b, lvl);
@@ -893,7 +894,7 @@ static void tu_mix_draw(void)
     tu_head(-1, "MIX", ". JAM page 2", 0, 1);
     for (i = 0; i < NTRK; i++)
         sig = sig * 131u + (uint32_t)(trk[i].p[P_LEVEL] + 200) + (uint32_t)(trk[i].p[P_MUTE] != 0) * 977u +
-              (uint32_t)(trk[i].peak / 400) * 3u;
+              (uint32_t)tu.mlv[i] * 3u;
     if (sig == 0)
         sig = 1;
     tu_zone(2, TU_HY, 62, TC_BG, sig, tu_mix_body);     /* (one pass: the faders reach 215: the band is cut below) */
@@ -904,8 +905,47 @@ static void tu_mix_draw(void)
 
 /* ================================================================== routing =================================== */
 static void tu_draw_screen(void);
+/* round 6: the level meters in dB (as Felucca's own, ui_graph.c meter_px): the track's peak read and reset once a frame,
+ * 8 log2 of it over -48..0 dBFS on 14 LEDs (green to -12, yellow to -3, red above), up at once, down over about 300 ms, a peak
+ * dot held about a second. JAM's cabinets, MIX and the dial's flash on a note all read it */
+static uint32_t tu_db16(int32_t a)                       /* |sample| Q15 -> 1/16 LED: 0 at -48 dBFS, 224 at 0 dBFS */
+{
+    int32_t lg = 0, v;
+    if (a < 130)
+        return 0;
+    while ((a >> lg) > 1)
+        lg++;
+    v = lg * 8 + (((a << 3) >> lg) & 7);                 /* 8 log2(a): 56 (-48 dB) .. 120 (0 dB) */
+    return (uint32_t)clamp((v - 56) * 224 / 64, 0, 224);
+}
+static void tu_meter_poll(void)
+{
+    uint32_t i, dt = fm1_ms - tu.mms, fall;
+    tu.mms = fm1_ms;
+    fall = dt > 1000u ? 224u : dt * 224u / 300u;
+    for (i = 0; i < NTRK; i++) {
+        track_t *t = &trk[i];
+        int32_t p = t->peak;
+        uint32_t now;
+        t->peak = 0;
+        tu.raw[i] = p;
+        now = t->p[P_MUTE] ? 0u : tu_db16(p);
+        if (now > (uint32_t)tu.prev_peak[i] + 48u)      /* (a jump of three LEDs: a note: the dial flashes) */
+            tu.flash[i] = 5;
+        tu.prev_peak[i] = (int32_t)now;
+        if (now >= tu.mlv[i])
+            tu.mlv[i] = (uint8_t)now;
+        else
+            tu.mlv[i] = (uint8_t)(tu.mlv[i] > fall ? tu.mlv[i] - fall : 0u);
+        if ((now + 15u) / 16u >= tu.mpk[i] || fm1_ms - tu.mpt[i] > 1000u) {
+            tu.mpk[i] = (uint8_t)((now + 15u) / 16u);
+            tu.mpt[i] = fm1_ms;
+        }
+    }
+}
 static void tu_draw(void)
 {
+    tu_meter_poll();
     tu_draw_screen();
     ui.force = 0;
 }
