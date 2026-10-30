@@ -1,0 +1,127 @@
+/* TFM-UI round 6: the presets audit (item 4) and the loudness (item 10): a host render of each preset playing a phrase from a
+ * clean start, simple features of the sound, the distances between the presets of one instrument. Included after round 5 */
+#define R6(c) do { if (!(c)) { ok = 0; fprintf(stderr, "R6 line %d ", __LINE__); } } while (0)
+#define R6_FS 44100u
+#define R6_N (R6_FS * 2u)
+static int16_t r6_buf[R6_N];
+/* a preset rendered: C4 E4 G4 eighths then C5 held (a kit: kick, snare, hat, kick held), 2 s from a clean start */
+static void r6_render(uint32_t ins, uint32_t pre)
+{
+    static const uint8_t MEL[4] = {60, 64, 67, 72}, KIT[4] = {36, 38, 42, 36};
+    static const uint32_t ON[4] = {0, 11025, 22050, 33075}, OFF[4] = {8820, 19845, 30870, 66150};
+    track_t *t = &trk[0];
+    int32_t o[2 * CTL];
+    uint32_t f, n = 0, k;
+    ui_power_on();
+    memset(dly_buf, 0, sizeof dly_buf);
+    memset(cho_buf, 0, sizeof cho_buf);
+    rev_clear();
+    tu_off = 0;
+    song.master_q12 = 4096;
+    song.sel = 0;
+    tfm_load(t, ins, pre);
+    t->p[P_ROOT] = 0; t->p[P_SCALE] = 1; t->p[P_QUANT] = QN_WHITE;
+    panic_req = (1u << NTRK) - 1u; mix_block(o, CTL);
+    for (f = 0; f < 256u && (t->xf_on || t->eng_req != t->engine); f++) mix_block(o, CTL);
+    for (n = 0; n < R6_N; n += CTL) {
+        uint32_t i;
+        for (k = 0; k < 4u; k++) {
+            uint32_t nt = ins == TI_THUMP ? KIT[k] : MEL[k];
+            if (ON[k] >= n && ON[k] < n + CTL) trk_note_on(t, nt, 100);
+            if (OFF[k] >= n && OFF[k] < n + CTL) trk_note_off(t, nt);
+        }
+        mix_block(o, CTL);
+        for (i = 0; i < CTL && n + i < R6_N; i++)
+            r6_buf[n + i] = (int16_t)clamp((o[2 * i] + o[2 * i + 1]) / 2, -32768, 32767);
+    }
+}
+/* the features: 0 brightness (log2 of the RMS frequency, early), 1 its change late vs early (octaves), 2 attack (log2 ms to
+ * 90 % of the first note's top), 3 sustain (the held note at 0.6 s over its top), 4 motion (the held note's level wobble), 5 level (dB / 6) */
+#define R6_NF 6u
+static double r6_rmsf(uint32_t a, uint32_t b)            /* sqrt(sum d^2 / sum x^2) * fs / 2pi: the spectrum's RMS frequency */
+{
+    double sx = 0, sd = 0;
+    uint32_t i;
+    for (i = a + 1u; i < b && i < R6_N; i++) {
+        double x = r6_buf[i], d = (double)r6_buf[i] - r6_buf[i - 1u];
+        sx += x * x;
+        sd += d * d;
+    }
+    return sx > 1e3 ? sqrt(sd / sx) * R6_FS / 6.2831853 : 20.0;
+}
+static double r6_rms(uint32_t a, uint32_t b)
+{
+    double s = 0;
+    uint32_t i;
+    for (i = a; i < b && i < R6_N; i++)
+        s += (double)r6_buf[i] * r6_buf[i];
+    return sqrt(s / (double)(b - a)) + 1e-3;
+}
+static void r6_features(double *v)
+{
+    uint32_t i, fr = 441u, at = 0;                      /* 10 ms frames */
+    double top = 0, hold_top = 0, w = 0, m = 0, mm = 0, n = 0;
+    for (i = 0; i < 25u; i++) {                         /* the first note: its top and when it gets to 90 % of it */
+        double r = r6_rms(i * fr, (i + 1u) * fr);
+        if (r > top) top = r;
+    }
+    for (i = 0; i < 25u; i++)
+        if (r6_rms(i * fr, (i + 1u) * fr) >= 0.9 * top) { at = i; break; }
+    for (i = 75; i < 85u; i++) {                        /* the held note's top (0.75 .. 0.85 s) */
+        double r = r6_rms(i * fr, (i + 1u) * fr);
+        if (r > hold_top) hold_top = r;
+    }
+    for (i = 100; i < 140u; i++) {                      /* its wobble (1.0 .. 1.4 s): the frames' spread over their mean */
+        double r = r6_rms(i * fr, (i + 1u) * fr);
+        m += r; mm += r * r; n++;
+    }
+    m /= n;
+    w = sqrt(mm / n - m * m > 0 ? mm / n - m * m : 0) / (m + 1.0);
+    v[0] = log2(r6_rmsf(0, 33075));
+    v[1] = log2(r6_rmsf(44100, 66150) / r6_rmsf(0, 33075));
+    v[2] = log2(10.0 * at + 5.0);
+    v[3] = r6_rms(60 * fr, 61 * fr) / (hold_top + 1.0) * 2.0;   /* (x2: a sustain counts as much as an octave) */
+    v[4] = w * 4.0;
+    v[5] = 20.0 * log10(r6_rms(0, 66150) / 32768.0) / 6.0;
+}
+static double r6_dist(const double *a, const double *b)
+{
+    double s = 0;
+    uint32_t i;
+    for (i = 0; i < R6_NF; i++)
+        s += (a[i] - b[i]) * (a[i] - b[i]);
+    return sqrt(s);
+}
+#define R6_CLOSE 0.60                                   /* two presets nearer than this sound like one (from the table: see the report) */
+static double r6_feat[TI_N][5][R6_NF];
+static int test_r6_presets(void)
+{
+    int bad = 0, ok = 1, verbose = getenv("R6AUDIT") != 0;
+    uint32_t i, a, b, f;
+    double dmin_all = 1e9;
+    for (i = 0; i < TI_N; i++)
+        for (a = 0; a < 5u; a++) {
+            r6_render(i, a);
+            r6_features(r6_feat[i][a]);
+            if (verbose) {
+                fprintf(stderr, "AUDIT %-10s %u %-14s", TFM_INS[i].name, a, TFM_INS[i].snd[a].name);
+                for (f = 0; f < R6_NF; f++) fprintf(stderr, " %6.2f", r6_feat[i][a][f]);
+                fprintf(stderr, "%c", 10);
+            }
+        }
+    for (i = 0; i < TI_N; i++) {
+        double dmin = 1e9;
+        uint32_t pa = 0, pb = 0;
+        for (a = 0; a < 5u; a++)
+            for (b = a + 1u; b < 5u; b++) {
+                double d = r6_dist(r6_feat[i][a], r6_feat[i][b]);
+                if (verbose) fprintf(stderr, "DIST %-10s %u-%u %.2f%c", TFM_INS[i].name, a, b, d, 10);
+                if (d < dmin) { dmin = d; pa = a; pb = b; }
+            }
+        fprintf(stderr, "PRESETS %-10s nearest %s / %s %.2f%c", TFM_INS[i].name, TFM_INS[i].snd[pa].name, TFM_INS[i].snd[pb].name, dmin, 10);
+        if (dmin < dmin_all) dmin_all = dmin;
+        R6(dmin >= R6_CLOSE);
+    }
+    bad += check("round 6 item 4: the five named presets of every instrument sound apart (brightness, its change, attack, sustain, motion, level: no two nearer than R6_CLOSE)", ok);
+    return bad;
+}

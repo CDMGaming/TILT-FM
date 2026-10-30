@@ -348,3 +348,34 @@ a pitch slide by design; GLINT's bells show their inharmonic partials when the m
 in tune at its -2 place, 30 %, which the presets now use); PLUCK's string is a loop filter whose delay shifts the pitch with
 BRIGHT and DAMP (the presets sit where it is in tune, a few macro corners are not); VOX's CHOIR and noise presets have no single
 period. Detune, glide and chord layers stay seasoning at the amounts above.
+
+## The named presets (round 6)
+Audited on the host (tests/ui_test_r6.h: a phrase from a clean start; brightness and its change, attack, sustain, motion,
+level): no two presets of one instrument are nearer than 0.60 in that space (the closest pair before was 0.36). One line
+each:
+
+- **THUMP LAB.** WAREHOUSE: a round kick, dry snare, closed hats, medium room. BOOM BAP: dusty, swung, a fat snare with a
+  long tail. DISCO: a tight four-on-the-floor kick, bright snare and open hats, big room and an echo on the hats. TRASH CAN:
+  crushed, distorted, short and loud. ARCADE: tuned-up toy drums, bright and clicky.
+- **SQUELCH.** RUBBER: a round resonant acid bass. ACID RAIN: brighter, more envelope, squelchier. LOW RIDER: dark and
+  sub-heavy with a slow filter. ZAPPER: short zappy plucks. GNARLY: driven, resonant and growling.
+- **WOBBLER.** HALF STEP: a slow half-time wob. YOY: a talking yoy-yoy wob. TRASH FLOOR: distorted, fast and wide. LASER
+  WOB: a sharp, fast laser sweep. SUBWAY: deep, sub-heavy, slow.
+- **CHORDETTE.** HOUSE STAB: a short bright organ stab. SUNDAY: a warm soft chord with a slow swell. VELVET: dark pad-like
+  chords. PUMPER: a sidechained pumping chord. MIXTAPE: a lo-fi wobbly tape chord.
+- **RAZOR.** HERO: a bright unison lead with a slow attack. TRANCE GATE: a gated, rhythmic supersaw. ARENA: big, wide, with
+  space. SINE RIDER: a soft, round, gliding lead. HOT WIRE: hot, bright and biting.
+- **HAZE.** FOG: a dark, soft drifting pad. MORNING: a bright airy pad. VHS: a worn, wobbly pad. AURORA: a slowly opening,
+  shimmering pad. DEEP END: a long, dark, deep swell.
+- **PIXEL.** 1UP: a short bright square blip. BOSS LEVEL: a slow, dramatic square lead. WARP ZONE: a falling pitch-swept
+  zap. HIGH SCORE: a long triangle lead with vibrato and a fifth jump. GLITCH: a crushed, glitchy noise lead.
+- **TINE.** SUITCASE: a classic warm electric piano. LOUNGE: soft and mellow. BARK BARK: barking, bright and dirty. DREAMY:
+  chorused and soft. CHURCH BASEMENT: dull, tremolo, roomy.
+- **GLINT.** MUSIC BOX: a short, dry, plucked tine. TEMPLE: a long bell with a huge space. ICE: soft-attack glass with
+  shimmer and bloom. CHIMES: struck, metallic, long ringing, dry. ROBOT BELLS: harsh, metallic, biting and short.
+- **PLUCK.** KOTO: a bright, nasal pluck. NYLON: a soft nylon string. MUTED: a palm-muted thud. HARP: a soft, ringing harp
+  with space and an echo. BANJO-ISH: twangy and very bright.
+- **VOX.** ROBOT: a buzzy robot voice. CHOIR BOY: a soft choir. WHISPER: breathy. YAMMER: a talking, vowel-moving voice.
+  MONK: a low, chanting voice.
+- **WHEELHOUSE.** SMOKY: a mellow jazz organ. SUNDAY SERVICE: full gospel organ. ROCK OUT: driven with a fast rotor.
+  BALLPARK: bright, all the drawbars. FLUTES: soft flute stops.

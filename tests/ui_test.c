@@ -11165,6 +11165,7 @@ static int tfm_only(void)
 #include "ui_test_r3.h"
 #include "ui_test_r4.h"
 #include "ui_test_r5.h"
+#include "ui_test_r6.h"
 static int test_tfm_ui_acceptance(void)
 {
     int bad = 0, ok;
@@ -11368,6 +11369,7 @@ int main(void)
     bad += test_r5_perform();
     bad += test_r6_live_scene();
     bad += test_r6_meters();
+    bad += test_r6_presets();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4
