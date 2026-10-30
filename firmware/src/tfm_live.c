@@ -3,6 +3,15 @@
  * scene playing has finished its loop: seq.c scene_tick), C#5 is unused, D#5 held is FILL, F#5 held is CHAIN (the taps of
  * the scene keys are the song's new chain). Every scene that starts is logged with how long it played (the jam is
  * remembered: TIME's KEEP AS A SONG and SONGS turn it into the SONG chain). Included from tilt.c after tfm_pages.c */
+static void scene_keep_live(void)                       /* round 6: the scene now stored as it sounds (project.c chain_prepare) */
+{
+    uint32_t cur = scene_cur();
+    if (tu_classic())                                   /* (CLASSIC: Felucca's project slots, as they were) */
+        return;
+    if (cur < NSCN && (scene_edited() || !project_used(cur)))
+        (void)scene_store_ram(cur);
+}
+static void (*chain_live_fn)(void) = scene_keep_live;
 #define JL_N 64u                                        /* the log: the last 64 launches */
 static struct { uint8_t sc, loops; } jl[JL_N];
 static uint32_t jl_n;

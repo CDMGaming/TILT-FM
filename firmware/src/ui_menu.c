@@ -335,6 +335,11 @@ static void menu_row(uint32_t k, uint32_t row)
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row name centred up/down");
         cv_text_on(lx, vy, &AF_M, MI_NAME[row], fg, bg);
     }
+    if (row == MI_DEEP) {                              /* DEEP EDIT (TFM round 6): Felucca's own pages for the selected track */
+        char b[8] = {'T', (char)('1' + song.sel % NTRK), 0, 0};
+        GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row value centred up/down");
+        cv_text_r(MR_VR, vy, &AF_M, tu_classic() ? "TFM" : b, val, bg);
+    }
     if (row == MI_LCLEAR) {                            /* LEARN CLEAR (1.5): how many CCs are learned, "NONE" */
         char b[8] = "NONE";
         if (ml_count()) {
@@ -589,7 +594,14 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
         if (s)
             menu_put(ui.menu_sel, menu_step(ui.menu_sel, s));
     } else if (up) {
-        if (ui.menu_sel == MI_LCLEAR) {                 /* LEARN CLEAR (1.5): every learned CC; no dialog (the menu has
+        if (ui.menu_sel == MI_DEEP) {                   /* DEEP EDIT (TFM round 6): the menu closes on the selected track's DEEP */
+            if (tu_classic()) {
+                ui_message("TFM SCREENS ONLY");
+            } else {
+                ui.menu = 0;
+                tu_deep();
+            }
+        } else if (ui.menu_sel == MI_LCLEAR) {                 /* LEARN CLEAR (1.5): every learned CC; no dialog (the menu has
                                                          * none: every other row's change is undone the same way) */
             ui_message(ml_clear_all() ? "LEARN CLEARED" : "NOTHING LEARNED");
         } else if (ui.menu_sel == MI_PANEL) {

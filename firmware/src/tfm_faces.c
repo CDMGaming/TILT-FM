@@ -624,9 +624,9 @@ static void tu_sound_draw(void)
     tu_pline = tu_mix(fc.bg, fc.acc, 14);
     tu_pq = TC_QUIET;
     if (i == TI_THUMP)
-        tu_foot(3, "KEYS", "PLAY PARTS", "EDIT", tu.page ? "DEEP" : "PAGE 2", "SEQ", "GRID", 0, 0, 0, 0);
+        tu_foot(3, "KEYS", "PLAY PARTS", "EDIT", tu.page ? "PAGE 1" : "PAGE 2", "SEQ", "GRID", 0, 0, 0, 0);
     else
-        tu_foot(3, "EDIT", tu.page ? "DEEP" : "PAGE 2", "PRESETS", "SOUND", "HOME", "JAM", 0, 0, 0, 0);
+        tu_foot(3, "EDIT", tu.page ? "PAGE 1" : "PAGE 2", "PRESETS", "SOUND", "HOME", "JAM", 0, 0, 0, 0);
     tu_pbg = TC_BG;
     tu_pline = TC_SURF;
     tu_pq = TC_QUIET;

@@ -1075,11 +1075,9 @@ static void tu_tap(uint32_t b)
         } else if (tu.scr != TU_SOUND) {
             tu_goto(TU_SOUND);
             tu.page = 0;
-        } else if (tu.page == 0u) {
-            tu.page = 1;
+        } else {                                        /* (round 6: EDIT toggles MACROS 1 / 2; DEEP is the MENU's DEEP EDIT) */
+            tu.page = (uint8_t)(tu.page ? 0u : 1u);
             ui.force = 1;
-        } else {
-            tu_deep();
         }
         break;
     default:
@@ -1094,11 +1092,8 @@ static void tu_home_reset(void)                        /* go_home (ui.c): every 
 }
 static void tu_home_tap(void)
 {
-    if (tu.scr == TU_DEEP) {                            /* DEEP: back to the SOUND face, or JAM when it was not from there */
-        if (tu.prev == TU_SOUND)
-            tu_deep_leave();
-        else
-            tu_goto(TU_JAM);
+    if (tu.scr == TU_DEEP) {                            /* DEEP: back to the SOUND face (round 6: always) */
+        tu_deep_leave();
         return;
     }
     tu_tap(B_HOME);

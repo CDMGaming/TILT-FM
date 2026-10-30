@@ -95,6 +95,10 @@ static int test_r1_home(void)
         tu_goto(s);
         frames(3);
         stap(B_HOME); frames(3);
+        if (s == TU_DEEP) {                             /* (round 6: DEEP's HOME is the SOUND face, then JAM) */
+            R1(tu.scr == TU_SOUND);
+            stap(B_HOME); frames(3);
+        }
         if (s == TU_JAM) {                              /* (JAM is the screen HOME toggles: MIX, and back) */
             R1(tu.scr == TU_MIX);
             stap(B_HOME); frames(3);

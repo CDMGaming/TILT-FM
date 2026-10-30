@@ -516,6 +516,7 @@ static void scene_blank(uint32_t slot);
 static int scene_stage_from(uint32_t slot);
 static int scene_store_ram(uint32_t slot);
 static void scene_keep_live(void);
+static void tu_deep(void);                              /* (tfm_ui.c: SOUND > DEEP, the MENU's DEEP EDIT) */
 static void scene_flush(void);
 static int project_used(uint32_t slot);
 static void tilt_scene_go(uint32_t s, int drop);        /* (tilt.c: the dialog's OCT+) */

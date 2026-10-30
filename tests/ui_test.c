@@ -1681,7 +1681,7 @@ static int test_menu_tabs(void)
     bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 8 6 8 8 rows: 1.6.1 2ND CORE, TILT-FM START SCREEN, a FELUCCA_CPU2=0 build SYSTEM 7; 1.5.5: SELECT, T1..T4 CHANNEL, AUTO SELECT, SCREEN WAKE), 1..8 each in a run, fit the page; tab gaps "
                  "constant (S, LARGE)",
                  ok && MTAB_COUNT == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
-                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && MI_TAB[MI_SELECT] == MTAB_CONTROL && mtab_rows(MTAB_AUDIO) == 7u &&
+                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && MI_TAB[MI_SELECT] == MTAB_CONTROL && mtab_rows(MTAB_AUDIO) == 8u && MI_TAB[MI_DEEP] == MTAB_AUDIO &&   /* (TFM round 6: DEEP EDIT) */
                  mtab_rows(MTAB_MIDI) == 8u && MI_TAB[MI_MFOLLOW] == MTAB_MIDI && MI_TAB[MI_SCRWAKE] == MTAB_MIDI && MI_SCRWAKE + 1u == MI_LCLEAR && MI_TAB[MI_LCLEAR] == MTAB_MIDI && MI_TAB[MI_TCH4] == MTAB_MIDI && mtab_rows(MTAB_SYSTEM) == 7u + FELUCCA_CPU2 && MI_TAB[MI_START] == MTAB_SYSTEM &&
 #if FELUCCA_CPU2
                  MI_TAB[MI_CPU2] == MTAB_SYSTEM &&
@@ -8013,7 +8013,8 @@ static int test_click_menu(void)
     turn(EN_K4, 1); ok &= cin_bars == 1u;
     turn(EN_K4, 1); ok &= cin_bars == 2u;
     turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_TUNE;     /* (1.2: TUNE) */
-    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_TSIG;     /* (TFM: TIME SIG, AUDIO's last) */
+    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_TSIG;     /* (TFM: TIME SIG) */
+    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_DEEP;     /* (TFM round 6: DEEP EDIT, AUDIO's last) */
     turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_LOWCUT;   /* (wraps within AUDIO) */
     press(B_HOME);
     ok &= !ui.menu;
@@ -10809,11 +10810,22 @@ static int test_tfm_ui_shell(void)
     ok = 1;
     ui_power_on();
     tu_off = 0; tu_goto(TU_JAM);
-    stap(B_EDIT); stap(B_EDIT); stap(B_EDIT);          /* SOUND, MACROS 2, DEEP: Felucca's pages */
-    ok &= tu.scr == TU_DEEP && tu_deep_on() && !tu_on();
+    {   /* round 6: EDIT toggles MACROS 1 / 2 and never leaves the face; DEEP is the MENU's DEEP EDIT */
+        uint32_t q;
+        stap(B_EDIT);
+        for (q = 0; q < 10u; q++) {
+            stap(B_EDIT);
+            ok &= tu.scr == TU_SOUND && tu_on() && tu.page == (uint8_t)((q + 1u) & 1u);
+        }
+    }
+    hold(B_HOME);
+    ok &= ui.menu != 0;
+    ui.menu_sel = MI_DEEP; ui.force = 1; ui_draw();
+    press(B_OCTUP);
+    ok &= !ui.menu && tu.scr == TU_DEEP && tu_deep_on() && !tu_on();
     press(B_HOME); ok &= tu.scr == TU_SOUND && tu_on();
     press(B_HOME); ok &= tu.scr == TU_JAM && tu_on();
-    bad += check("TFM-UI shell: DEEP (Felucca's pages) only after SOUND, MACROS 2; HOME back to SOUND, again JAM", ok);
+    bad += check("TFM-UI shell: EDIT toggles MACROS 1 / 2 (ten taps never leave the face); DEEP from MENU > DEEP EDIT; HOME back to SOUND, again JAM", ok);
     return bad;
 }
 /* TFM-UI phase 2: START (F3 NEW SONG, G3 CONTINUE, B3 SONGS), DICE (keys hold a row, OCT+ re-rolls the rest, the rules of
@@ -10929,10 +10941,12 @@ static int test_tfm_ui_sound(void)
     press(B_EDIT); ok &= tu.scr == TU_SOUND && tu.page == 1u;
     m0 = tfm_macro_get(&trk[0], 4);
     turn(EN_K1, 6); ok &= tfm_macro_get(&trk[0], 4) != m0;                /* page 2: K1 is macro 5 (BITE) */
-    press(B_EDIT); ok &= tu.scr == TU_DEEP && tu_deep_on() && !tu_on();
+    press(B_EDIT); ok &= tu.scr == TU_SOUND && tu.page == 0u;                /* (round 6: EDIT back to MACROS 1) */
+    tu_deep();
+    ok &= tu.scr == TU_DEEP && tu_deep_on() && !tu_on();
     press(B_HOME); ok &= tu.scr == TU_SOUND && tu_on();
     press(B_HOME); ok &= tu.scr == TU_JAM;
-    bad += check("TFM-UI SOUND: EDIT the face, K1-K4 the macros (page 2: 5-8), PRESETS the sounds, ALGORITHM the track; EDIT on to DEEP, HOME back", ok);
+    bad += check("TFM-UI SOUND: EDIT the face, K1-K4 the macros (page 2: 5-8), PRESETS the sounds, ALGORITHM the track; EDIT toggles the pages, DEEP's HOME back", ok);
     ok = 1;
     tu_picker_key(3);                                   /* the picker: a white key (B3) is the fourth instrument */
     ok &= tfm_ins_of(&trk[0]) == TI_CHORDETTE && tfm_snd_of(&trk[0]) == 0u;
