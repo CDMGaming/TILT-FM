@@ -125,3 +125,75 @@ static int test_r4_recdots(void)
     bad += check("round 4 item 2: REC dots in every header but START, DICE, TIME (unarmed, a red ring when armed, a red disc when recording; the selected larger)", ok);
     return bad;
 }
+/* 3: JAM v2: the scoreboard, four cabinets, the scene lamps */
+static uint32_t r4_count(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t c)    /* pixels of colour c (tu_c'd) in a box */
+{
+    int32_t x, y;
+    uint32_t n = 0;
+    for (y = y0; y <= y1; y++)
+        for (x = x0; x <= x1; x++)
+            n += swap16(host_screen[(uint32_t)y * 240u + (uint32_t)x]) == tu_c(c);
+    return n;
+}
+static uint32_t r4_lum(int32_t x, int32_t y)
+{
+    uint16_t v = swap16(host_screen[(uint32_t)y * 240u + (uint32_t)x]);
+    return ((v >> 11) & 31u) * 2u + ((v >> 5) & 63u) + (v & 31u) * 2u;
+}
+static int test_r4_jam(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t n, f, lit;
+    ui_power_on();
+    tu_off = 0;
+    tm.on = 0;
+    tilt_timer_min = 0;
+    song.rec = 0;
+    song.playing = 0;
+    tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[1], TI_THUMP, 0); tfm_load(&trk[2], TI_HAZE, 0); tfm_load(&trk[3], TI_VOX, 0);
+    song.sel = 2;
+    tu_goto(TU_JAM);
+    frames(100);
+    /* selection: T3's cabinet outlined white, the others not; the header says T3 . HAZE */
+    R4(r1_px(CAB_X(2) - 2, 120) == tu_c(TC_TEXT) && r1_px(CAB_X(1) - 2, 120) != tu_c(TC_TEXT));
+    R4(tu_hd.l && tu_hd.l[0] == 'T' && tu_hd.l[1] == '3' && str_eq(tu_hd.l + 5, "HAZE"));
+    /* timer off: no draining dots; the song's name and scene take the timer's place */
+    R4(r4_count(14, 66, 140, 72, TC_AMBER) < 5u && r4_count(14, 66, 140, 72, TC_REC) < 5u);
+    R4(r4_count(14, 31, 120, 63, TC_AMBER) > 20u);
+    /* timer on: the time big and the dots under it, draining; red for the last minute */
+    tilt_timer_min = 10; tm.on = 1; tm.left = 600; tm.end = fm1_ms + 600000u;
+    frames(60);
+    R4(r4_count(14, 66, 140, 72, TC_AMBER) >= 30u * 9u - 40u && r4_count(14, 66, 140, 72, TC_REC) < 5u);
+    tm.left = 300; tm.end = fm1_ms + 300000u; frames(1100);
+    lit = r4_count(14, 66, 140, 72, TC_AMBER);
+    R4(lit > 0u && lit < 30u * 9u - 40u);                                    /* half of it gone */
+    tm.left = 30; tm.end = fm1_ms + 30000u; frames(1100);
+    R4(r4_count(14, 66, 140, 72, TC_REC) > 0u && r4_count(14, 66, 140, 72, TC_AMBER) < 5u);
+    tm.on = 0; tilt_timer_min = 0; frames(60);
+    /* mute: the cabinet dimmed, MUTED across it */
+    n = r4_lum(CAB_X(1) + 27, 100);
+    trk[1].p[P_MUTE] = 1; frames(100);
+    R4(r4_lum(CAB_X(1) + 27, 100) < n);
+    R4(r4_count(CAB_X(1) + 10, 108, CAB_X(1) + 44, 130, TC_TEXT) > 10u);     /* (MUTED, in the text colour) */
+    trk[1].p[P_MUTE] = 0; frames(100);
+    R4(r4_lum(CAB_X(1) + 27, 100) == n);
+    /* the REC dot: dim unarmed, a red ring when armed, a red disc when it records */
+    R4(r4_count(CAB_X(1) + 41, 75 + CAB_Y, CAB_X(1) + 49, 83 + CAB_Y, TC_REC) == 0u);
+    song.rec = 2; frames(100);
+    R4(r4_count(CAB_X(1) + 41, 75 + CAB_Y, CAB_X(1) + 49, 83 + CAB_Y, TC_REC) > 4u && r1_px(CAB_X(1) + 45, 79 + CAB_Y) != tu_c(TC_REC));
+    song.playing = 1; frames(100);
+    R4(r1_px(CAB_X(1) + 45, 79 + CAB_Y) == tu_c(TC_REC));
+    song.playing = 0; song.rec = 0; frames(100);
+    /* the scene lamps: the one in use lit amber, a queued one outlined and blinking */
+    R4(r4_count(10, 184, 34, 206, TC_AMBER) < 5u);                           /* A is not the scene (the music is in B..) */
+    tsc.cue = 3;
+    lit = 0;
+    for (f = 0; f < 40u; f++) {
+        frames(48);
+        lit += r4_count(94 - 1, 183, 94 + 25, 207, RGB(255, 226, 168)) > 10u;
+    }
+    R4(lit > 3u && lit < 38u);                                               /* it blinks */
+    tsc.cue = SCENE_NONE;
+    bad += check("round 4 item 3: JAM v2 (selection, mute, REC dot, timer on / off and its dots, the queued scene's lamp)", ok);
+    return bad;
+}

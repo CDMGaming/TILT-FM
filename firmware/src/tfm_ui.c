@@ -43,6 +43,7 @@ static uint16_t tu_mix(uint16_t over, uint16_t c, uint32_t pct)
     return (uint16_t)(r << 11 | g << 5 | b);
 }
 
+static const char *tu_scale_full(uint32_t v);           /* (tfm_dice.c) */
 static void tu_pages_tap(uint32_t b);                   /* (tfm_pages.c) */
 static void tu_pages_draw(void);
 static void tu_pages_input(uint32_t busy);
@@ -75,6 +76,7 @@ static struct {
     uint8_t page;                                       /* SOUND: macros 1 / 2 */
     uint8_t cur;                                        /* a list's selected row */
     uint8_t flash[NTRK];                                /* JAM: a note's flash, frames */
+    uint8_t lvl[NTRK];                                  /* JAM: the level meter's LEDs lit (0..14) */
     int32_t prev_peak[NTRK];
     uint32_t sig[TU_ZONES];
 } tu;
@@ -413,72 +415,247 @@ static void tu_bars(uint32_t *cur, uint32_t *tot)
 }
 
 /* ================================================================== JAM (home) ================================ */
-static void tu_jam_body(void)                           /* y 22 .. 126: four bumpers */
+/* round 4 item 3 (tfm-spec/screens/JamA.dc.html, the live meters of JamB): the scoreboard, the band as four cabinets, the scenes
+ * as insert lamps. The display is a 5 x 7 dot matrix as TILT's timer and splash: lit dots amber, the unlit ones faint */
+static const uint8_t DMD_G[41][7] = {
+    {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E}, {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E}, {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F},
+    {0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E}, {0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02}, {0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E},
+    {0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E}, {0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08}, {0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E},
+    {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C},                                                    /* 0..9 */
+    {0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}, {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E}, {0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E},
+    {0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E}, {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F}, {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10},
+    {0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F}, {0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}, {0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E},
+    {0x07, 0x02, 0x02, 0x02, 0x02, 0x12, 0x0C}, {0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11}, {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F},
+    {0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11}, {0x11, 0x11, 0x19, 0x15, 0x13, 0x11, 0x11}, {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E},
+    {0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10}, {0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D}, {0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11},
+    {0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E}, {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04}, {0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E},
+    {0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04}, {0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0A}, {0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11},
+    {0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04}, {0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F},                  /* A..Z */
+    {0x00, 0x00, 0x10, 0x00, 0x10, 0x00, 0x00},                                                    /* : (one column) */
+    {0x01, 0x01, 0x02, 0x04, 0x08, 0x10, 0x10}, {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00},       /* / - */
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10}, {0, 0, 0, 0, 0, 0, 0}};                           /* . and a space */
+static uint32_t dmd_ix(char c)
 {
-    uint32_t c;
-    for (c = 0; c < NTRK; c++) {
-        const track_t *t = &trk[c];
-        int32_t cx = 35 + 56 * (int32_t)c + (c > 1u ? 1 : 0), cy = 73, pos = jam_pos(t), ang;
-        int mute = t->p[P_MUTE] != 0, ins = jam_macro(t);
-        uint16_t col = TU_TC[c], edge = mute ? TC_DIM : col, fillc;
-        char b[24], v[8];
-        int32_t p = t->peak;
-        if (p > tu.prev_peak[c] * 3 / 2 + 900)
-            tu.flash[c] = 5;
-        tu.prev_peak[c] = p;
-        b[0] = 'T';
-        b[1] = (char)('1' + c);
-        b[2] = 0;
-        tu_text_c(cx, 40, &AF_TS, b, col, TC_BG);
-        ang = pos * 192 / 127;                           /* the ring: 270 degrees, 0..192 */
-        tu_dial(cx, cy, 24, 21, (uint32_t)(pos * 1000 / 127), mute ? TC_DIM : col, TC_TRACK);
-        tu_disc(cx, cy, 21, TC_BG);
-        fillc = mute ? TC_BG : tu.flash[c] ? tu_mix(col, TC_TEXT, 45) : tu_mix(TC_BG, col, 25 + (uint32_t)clamp(p / 140, 0, 60));
-        if (!mute && tu.flash[c] == 0 && p < 300)
-            fillc = tu_mix(TC_BG, col, 25);
-        tu_disc(cx, cy, 15, edge);
-        tu_disc(cx, cy, 14, fillc);
-        tu_ring(cx, cy, 5, 4, edge);
-        if (c == song.sel)                               /* the selected track: a bright outer ring */
-            tu_ring(cx, cy, 28, 26, tu_mix(col, TC_TEXT, 55));
-        (void)ang;
-        if (tu.flash[c])
-            tu.flash[c]--;
-        if (c == song.sel) {                             /* (its name and macro in reverse: filled in the track colour) */
-            tu_rrect(cx - 27, 98, 54, 28, 4, col, TC_BG);
-            tu_text_c(cx, 105, &AF_TS, ins ? tfm_ins_name(t) : tu_inst_name(t), TC_BG, col);
-        } else {
-            tu_text_c(cx, 105, &AF_TS, ins ? tfm_ins_name(t) : tu_inst_name(t), TC_TEXT, TC_BG);
-        }
-        if (ins) {
-            str_cpy(b, TFM_INS[tfm_ins_of(t)].mac[tfm_jam_m(t)].name, 12);
-        } else {
-            str_cpy(b, "LEVEL", 12);
-        }
-        fmt_int(v, pos * 100 / 127);
-        str_cpy(b + str_len(b), " ", 2);
-        str_cpy(b + str_len(b), v, 6);
-        if (c == song.sel)
-            tu_text_c(cx, 118, &AF_TS, b, TC_BG, col);
-        else
-            tu_text_c(cx, 118, &AF_TS, b, mute ? TC_DIM : col, TC_BG);
+    if (c >= 'a' && c <= 'z')
+        c = (char)(c - 32);
+    if (c >= '0' && c <= '9')
+        return (uint32_t)(c - '0');
+    if (c >= 'A' && c <= 'Z')
+        return 10u + (uint32_t)(c - 'A');
+    return c == ':' ? 36u : c == '/' ? 37u : c == '.' ? 39u : c == ' ' ? 40u : 38u;
+}
+static uint32_t dmd_cols(uint32_t g) { return g == 36u || g == 39u ? 1u : g == 40u ? 3u : 5u; }
+static int32_t dmd_w(const char *s, int32_t pitch)
+{
+    int32_t w = 0;
+    for (; *s; s++)
+        w += (int32_t)(dmd_cols(dmd_ix(*s)) + 1u) * pitch;
+    return w ? w - pitch : 0;
+}
+/* a string in dots, its top left at x y: a dot is pitch - 1 square, pitch apart; the unlit ones in `dim` */
+static int32_t dmd_str(int32_t x, int32_t y, int32_t pitch, const char *s, uint16_t lit, uint16_t dim)
+{
+    for (; *s; s++) {
+        uint32_t g = dmd_ix(*s), cols = dmd_cols(g), c, r;
+        for (c = 0; c < cols; c++)
+            for (r = 0; r < 7u; r++) {
+                uint32_t bit = g == 36u || g == 39u ? (DMD_G[g][r] >> 4) & 1u : (DMD_G[g][r] >> (4u - c)) & 1u;
+                tu_rect(x + (int32_t)c * pitch, y + (int32_t)r * pitch, pitch - 1, pitch - 1, bit ? lit : dim);
+            }
+        x += (int32_t)(cols + 1u) * pitch;
+    }
+    return x;
+}
+#define DMD_DIM RGB(44, 31, 12)
+#define DMD_ROW 30u
+static void tu_jam_dmd(void)                            /* y 22 .. 79: the scoreboard */
+{
+    char t[8], b[24], r[12];
+    const char *u;
+    uint32_t bar, tot, shown = chain.running && chain.config.row[chain.row].slot[0] < NSCN ? chain.config.row[chain.row].slot[0] : tu_scene_cur();
+    int32_t x;
+    tu_rrect(5, 25, 230, 52, 6, RGB(42, 32, 18), TC_BG);
+    tu_rrect(7, 27, 226, 48, 5, RGB(10, 7, 4), RGB(42, 32, 18));
+    tu_timer_text(t);
+    tu_bars(&bar, &tot);
+    if (t[0]) {                                         /* the timer big (pitch 4), SCENE and BAR beside it (pitch 2) */
+        uint32_t left = tm.left, total = (uint32_t)tilt_timer_min * 60u, lit, i;
+        dmd_str(14, 32, 4, t, TC_AMBER, DMD_DIM);
+        lit = total ? (left * DMD_ROW + total - 1u) / total : 0u;
+        if (lit > DMD_ROW)
+            lit = DMD_ROW;
+        for (i = 0; i < DMD_ROW; i++)                   /* the dots under it drain with the time (red for the last minute) */
+            tu_rect(14 + (int32_t)i * 4, 68, 3, 3, i < lit ? (left <= 60u ? TC_REC : TC_AMBER) : RGB(58, 42, 16));
+        str_cpy(b, "SCENE ", 8);
+        b[6] = shown < NSCN ? (char)('A' + shown) : '-';
+        b[7] = 0;
+        dmd_str(134, 31, 2, b, TC_AMBER, DMD_DIM);
+        x = 134;
+    } else {                                            /* no TIMER: the song's name and its scene instead */
+        char nm[16];
+        project_cur_name(nm);
+        nm[9] = 0;
+        dmd_str(14, 31, 2, nm[0] ? nm : "UNTITLED", TC_AMBER, DMD_DIM);
+        str_cpy(b, "SCENE ", 8);
+        b[6] = shown < NSCN ? (char)('A' + shown) : '-';
+        b[7] = 0;
+        dmd_str(14, 49, 2, b, TC_AMBER, DMD_DIM);
+        x = 134;
+    }
+    str_cpy(b, "BAR ", 6);
+    fmt_int(b + 4, (int32_t)bar);
+    str_cpy(b + str_len(b), "/", 2);
+    fmt_int(b + str_len(b), (int32_t)tot);
+    dmd_str(x, t[0] ? 49 : 31, 2, b, RGB(255, 217, 160), DMD_DIM);
+    param_format(&TP[P_ROOT], TSEL->p[P_ROOT], r, &u);
+    str_cpy(b, r, 4);
+    str_cpy(b + str_len(b), " ", 2);
+    str_cpy(b + str_len(b), tu_scale_full(TSEL->p[P_SCALE]), 10);
+    str_cpy(b + str_len(b), " ", 2);
+    fmt_int(b + str_len(b), song.g[G_BPM]);
+    tu_text(x, t[0] ? 67 : 53, &AF_TS, b, RGB(185, 138, 58), RGB(10, 7, 4));
+}
+/* ---- the cabinets: each instrument in its own material (tfm-spec/screens/Sound*.dc.html, item 5) ---- */
+typedef struct { uint16_t top, bot, ink; uint8_t tex; } tu_mat_t;       /* the face's two tones, its ink, 1 hairlines / 2 horizontal rules */
+static const tu_mat_t TU_MAT[TI_N] = {
+    {RGB(29, 29, 32), RGB(29, 29, 32), RGB(238, 238, 238), 0},          /* THUMP LAB: dark steel */
+    {RGB(217, 220, 223), RGB(169, 173, 178), RGB(20, 20, 20), 1},       /* SQUELCH: brushed aluminium */
+    {RGB(27, 29, 31), RGB(20, 21, 23), RGB(230, 242, 234), 2},          /* WOBBLER: a checker plate */
+    {RGB(185, 179, 167), RGB(164, 158, 146), RGB(42, 38, 32), 0},       /* CHORDETTE: cream plastic */
+    {RGB(36, 80, 143), RGB(23, 58, 107), RGB(220, 232, 255), 1},        /* RAZOR: blue hammerite */
+    {RGB(59, 42, 92), RGB(248, 177, 149), RGB(255, 255, 255), 0},       /* HAZE: a dusk gradient */
+    {RGB(233, 229, 220), RGB(214, 209, 197), RGB(59, 53, 80), 0},       /* PIXEL: a grey handheld */
+    {RGB(26, 26, 26), RGB(20, 20, 20), RGB(232, 226, 214), 2},          /* TINE: black vinyl */
+    {RGB(31, 95, 92), RGB(13, 53, 51), RGB(232, 211, 155), 0},          /* GLINT: teal */
+    {RGB(74, 50, 30), RGB(42, 29, 18), RGB(232, 214, 176), 1},          /* PLUCK: wood */
+    {RGB(58, 68, 82), RGB(28, 34, 43), RGB(231, 236, 242), 0},          /* VOX: slate */
+    {RGB(42, 28, 18), RGB(26, 17, 11), RGB(239, 230, 207), 0},          /* WHEELHOUSE: dark walnut */
+};
+static const tu_mat_t TU_MAT_NONE = {RGB(26, 22, 16), RGB(18, 14, 8), RGB(246, 236, 216), 0};
+static uint16_t tu_mat_at(const tu_mat_t *m, uint32_t y, uint32_t h)    /* the body's colour y rows down */
+{
+    return tu_mix(m->top, m->bot, h ? y * 100u / h : 0u);
+}
+static void tu_cab_rec(int32_t cx, int32_t cy, uint32_t k, uint16_t under)     /* the REC dot: as the header's */
+{
+    int armed = (int)((song.rec >> k) & 1u);
+    if (armed && song.playing) {
+        tu_disc(cx, cy, 4, TC_REC);
+    } else if (armed) {
+        tu_disc(cx, cy, 4, TC_REC);
+        tu_disc(cx, cy, 2, under);
+    } else {
+        tu_disc(cx, cy, 2, tu_mix(under, TC_REC, 30));
     }
 }
-static void tu_strip_draw(void)                         /* y 126 .. 170: the scene strip A..H */
+static void tu_cut(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c)       /* a block with its corners cut (no text cell for the lint) */
 {
-    uint32_t s, cur = tu_scene_cur();
-    int32_t x;
-    tu_text(8, 138, &AF_TS, "SCENES", TC_QUIET, TC_BG);
-    x = 8 + text_w(&AF_TS, "SCENES") + 3;
-    tu_text(x, 138, &AF_TS, "- hold ARP to switch", TC_QUIET, TC_BG);
+    tu_rect(x + 2, y, w - 4, 1, c);
+    tu_rect(x + 1, y + 1, w - 2, 1, c);
+    tu_rect(x, y + 2, w, h - 4, c);
+    tu_rect(x + 1, y + h - 2, w - 2, 1, c);
+    tu_rect(x + 2, y + h - 1, w - 4, 1, c);
+}
+#define CAB_X(c) (5 + 58 * (int32_t)(c))
+#define CAB_Y 84
+#define CAB_H 89
+static void tu_cab_draw(uint32_t c)
+{
+    const track_t *t = &trk[c];
+    int ins = jam_macro(t), mute = t->p[P_MUTE] != 0, sel = c == song.sel;
+    const tu_mat_t *m = ins ? &TU_MAT[tfm_ins_of(t) % TI_N] : &TU_MAT_NONE;
+    int32_t x0 = CAB_X(c), y0 = CAB_Y, cx = x0 + 32, cy = y0 + 38, pos = jam_pos(t), i, lvl = tu.lvl[c];
+    uint16_t top = m->top, bot = m->bot, ink = m->ink, col = TU_TC[c], face, acc, mid;
+    tu_mat_t mm;
+    char nm[12], v[10], b[4] = {'T', (char)('1' + c), 0, 0};
+    const char *unit = "", *name;
+    if (mute) {                                         /* dimmed: the material a third as bright, the ink DIM */
+        mm = *m;
+        mm.top = tu_mix(TC_BG, top, 30);
+        mm.bot = tu_mix(TC_BG, bot, 30);
+        mm.ink = TC_DIM;
+        m = &mm;
+        top = mm.top; bot = mm.bot; ink = TC_DIM;
+        col = TC_DIM;
+    }
+    if (sel)                                            /* the selected track (ALGORITHM): outlined white */
+        tu_cut(x0 - 2, y0 - 2, 58, CAB_H + 4, TC_TEXT);
+    tu_cut(x0, y0, 54, CAB_H, bot);
+    tu_cut(x0, y0, 54, 40, top);
+    for (i = 8; i < CAB_H - 8; i += 4)                  /* the gradient, in bands of four rows */
+        tu_rect(x0, y0 + i, 54, 4, tu_mat_at(m, (uint32_t)i + 2u, CAB_H));
+    if (m->tex == 1) {                                  /* hairlines: brushed metal */
+        for (i = 3; i < 54; i += 4)
+            tu_rect(x0 + i, y0 + 8, 1, CAB_H - 16, tu_mix(tu_mat_at(m, 40, CAB_H), ink, 9));
+    } else if (m->tex == 2) {                           /* rules: a plate */
+        for (i = 10; i < CAB_H - 8; i += 8)
+            tu_rect(x0, y0 + i, 54, 1, tu_mix(tu_mat_at(m, (uint32_t)i, CAB_H), ink, 7));
+    }
+    tu_cut(x0, y0, 54, 4, col);                         /* the track colour strip */
+    mid = tu_mat_at(m, 38, CAB_H);
+    name = ins ? tfm_ins_name(t) : tu_inst_name(t);
+    str_cpy(nm, name, 12);
+    if (text_w(&AF_TS, nm) > 50)
+        str_cpy(nm, ins ? tfm_ins_tag(t) : "--", 12);
+    tu_text_c(x0 + 29, y0 + 12, &AF_TS, nm, ink, tu_mat_at(m, 12, CAB_H));
+    for (i = 0; i < 14; i++)                            /* the level meter, the left edge: 14 LEDs, green to red */
+        tu_rect(x0 + 3, y0 + 8 + (13 - i) * 5, 3, 3,
+                i < lvl ? (i >= 12 ? TC_REC : i >= 9 ? TC_AMBER : TC_GOOD) : tu_mix(tu_mat_at(m, (uint32_t)(8 + (13 - i) * 5), CAB_H), ink, 12));
+    acc = ins ? TFM_INS[tfm_ins_of(t) % TI_N].col[2] : TC_AMBER;
+    if (mute)
+        acc = TC_DIM;
+    tu_dial(cx, cy, 19, 16, (uint32_t)(pos * 1000 / 127), acc, tu_mix(mid, ink, 18));
+    face = tu.flash[c] && !mute ? tu_mix(tu_mix(mid, TC_BG, 35), ink, 40) : tu_mix(mid, TC_BG, mute ? 10 : 35);
+    tu_disc(cx, cy, 15, face);                          /* (a note flashes the dial) */
+    if (mute) {
+        tu_text_c(cx, cy, &AF_TS, "MUTED", TC_TEXT, face);
+    } else if (ins) {
+        tfm_macro_text(t, tfm_jam_m(t), v, &unit);
+        tu_text_c(cx, cy, &AF_TM, v, TC_TEXT, face);
+    } else {
+        fmt_int(v, pos * 100 / 127);
+        tu_text_c(cx, cy, &AF_TM, v, TC_TEXT, face);
+    }
+    str_cpy(nm, ins ? TFM_INS[tfm_ins_of(t)].mac[tfm_jam_m(t)].name : "LEVEL", 12);
+    tu_text_c(x0 + 29, y0 + 64, &AF_TS, nm, ink, tu_mat_at(m, 64, CAB_H));
+    tu_cut(x0 + 6, y0 + 72, 17, 12, col);                                              /* T1..T4 on a chip of the track colour */
+    tu_text_c(x0 + 14, y0 + 78, &AF_TS, b, TC_BG, col);
+    tu_cab_rec(x0 + 45, y0 + 79, c, tu_mat_at(m, 79, CAB_H));
+}
+static void tu_jam_body(void)                           /* y 79 .. 177: the four cabinets */
+{
+    uint32_t c;
+    for (c = 0; c < NTRK; c++)
+        tu_cab_draw(c);
+}
+/* ---- the scenes A..H as pinball insert lamps (the arrow shape) ---- */
+static void tu_lamp(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c)     /* the arrow, x y its top left: a point above a block */
+{
+    int32_t r, pt = h * 38 / 100;
+    for (r = 0; r < h; r++) {
+        int32_t hw = r < pt ? (w / 2) * (r + 1) / (pt + 1) : w / 2;
+        tu_rect(x + w / 2 - hw, y + r, 2 * hw + (w & 1 ? 1 : 0) + (r >= pt ? 0 : 0), 1, c);
+    }
+}
+static void tu_strip_draw(void)                         /* y 177 .. 215 */
+{
+    uint32_t s, cur = chain.running && chain.config.row[chain.row].slot[0] < NSCN ? chain.config.row[chain.row].slot[0] : tu_scene_cur();
+    uint32_t cue = tsc.cue < NSCN ? tsc.cue : 0xFFu, blink = (ui.frame >> 3) & 1u;
     for (s = 0; s < TU_NSCENE; s++) {
-        int32_t tx = 8 + (int32_t)s * 28;
-        int is_cur = s == cur, used = tu_scene_used(s);
-        char b[2] = {(char)('A' + s), 0};
-        uint16_t edge = is_cur ? TC_AMBER : used ? RGB(138, 124, 102) : RGB(51, 41, 28);
-        tu_rrect(tx, 148, 25, 18, 4, edge, TC_BG);
-        tu_rrect(tx + 1, 149, 23, 16, 3, is_cur ? TC_AMBER : TC_BG, edge);
-        tu_text_c(tx + 12, 157, &AF_TL, b, is_cur ? TC_BG : used ? TC_TEXT : TC_DIM, is_cur ? TC_AMBER : TC_BG);
+        int32_t x = 10 + (int32_t)s * 28, y = 184;
+        int on = s == cur, used = tu_scene_used(s);
+        char l[2] = {(char)('A' + s), 0};
+        uint16_t body = on ? TC_AMBER : used ? RGB(122, 90, 34) : RGB(42, 32, 18);
+        if (on)                                         /* the lamp lit glows: a larger lamp behind, a dim amber */
+            tu_lamp(x - 2, y - 2, 28, 26, RGB(110, 72, 14));
+        tu_lamp(x, y, 24, 22, body);
+        if (s == cue) {                                 /* queued: outlined, blinking */
+            if (blink) {
+                tu_lamp(x - 1, y - 1, 26, 24, RGB(255, 226, 168));
+                tu_lamp(x + 2, y + 3, 20, 17, body);
+            }
+        }
+        tu_text_c(x + 12, y + 14, &AF_TM, l, on ? TC_BG : used ? TC_TEXT : TC_DIM, body);
     }
 }
 static uint32_t tu_sel_until;                           /* ALGORITHM turned on JAM: the track's name shows big until then (fm1_ms) */
@@ -505,43 +682,41 @@ static void tu_gap_draw(void)
 }
 static void tu_jam_draw(void)
 {
-    char l[16], l2[16];
-    uint32_t cur = tu_scene_cur(), bar, tot, i, sig = 0;
-    str_cpy(l, "SCENE ", 8);
-    l[6] = cur < TU_NSCENE ? (char)('A' + cur) : '-';
-    l[7] = 0;
+    uint32_t cur = tu_scene_cur(), bar, tot, i, sig = 0, dsig;
+    char tn[24], nmb[16];
+    project_cur_name(nmb);
     tu_bars(&bar, &tot);
-    str_cpy(l2, ". bar ", 8);
-    fmt_int(l2 + 6, (int32_t)bar);
-    str_cpy(l2 + str_len(l2), " of ", 5);
-    fmt_int(l2 + str_len(l2), (int32_t)tot);
-    l2[0] = '-';
-    {   /* the header: the selected track, "T2 \xB7 SQUELCH", then where the song is */
-        char tn[24];
-        tn[0] = 'T';
-        tn[1] = (char)('1' + song.sel % NTRK);
-        tn[2] = 0;
-        str_cpy(tn + 2, " \xB7 ", 6);
-        str_cpy(tn + str_len(tn), tu_inst_name(&trk[song.sel % NTRK]), 14);
-        {
-            static char hl[24], hl2[28];
-            str_cpy(hl, tn, sizeof hl);
-            str_cpy(hl2, l, 8);
-            str_cpy(hl2 + str_len(hl2), " ", 2);
-            str_cpy(hl2 + str_len(hl2), l2, 16);
-            tu_head(-1, hl, hl2, 0, 1);
-        }
+    tn[0] = 'T';
+    tn[1] = (char)('1' + song.sel % NTRK);
+    tn[2] = 0;
+    str_cpy(tn + 2, " \xB7 ", 6);
+    str_cpy(tn + str_len(tn), tu_inst_name(&trk[song.sel % NTRK]), 14);
+    {   /* the header: the selected track, "T3 \xB7 SQUELCH" */
+        static char hl[24];
+        str_cpy(hl, tn, sizeof hl);
+        tu_head(-1, hl, 0, 0, 1);
     }
-    sig = song.sel * 6151u + (uint32_t)tu_sel_big() * 3571u;
-    for (i = 0; i < NTRK; i++)
+    for (i = 0; i < NTRK; i++) {                        /* a note's flash and the level: up at once, down by one LED a frame */
+        const track_t *t = &trk[i];
+        int32_t p = t->peak, want = clamp(p * 14 / 10000, 0, 14);
+        if (p > tu.prev_peak[i] * 3 / 2 + 900)
+            tu.flash[i] = 5;
+        tu.prev_peak[i] = p;
+        tu.lvl[i] = (uint8_t)(want > tu.lvl[i] ? want : tu.lvl[i] > 0 ? tu.lvl[i] - 1 : 0);
+    }
+    dsig = (tm.on ? tm.left * 31u : 0u) + (uint32_t)tilt_timer_min * 977u + bar * 7u + tot * 131u + (uint32_t)song.g[G_BPM] * 4099u +
+           (uint32_t)TSEL->p[P_ROOT] * 17u + (uint32_t)TSEL->p[P_SCALE] * 19u + cur * 6151u + (chain.running ? chain.row + 1u : 0u) * 53u +
+           str_hash(5u, nmb) + (uint32_t)song.sel * 2999u;
+    tu_zone(1, TU_HY, 57, TC_BG, dsig, tu_jam_dmd);
+    for (i = 0; i < NTRK; i++) {
         sig = sig * 131u + (uint32_t)jam_pos(&trk[i]) * 7u + (uint32_t)(trk[i].p[P_MUTE] != 0) * 3u + trk[i].eng_req +
-              (uint32_t)tfm_ins_of(&trk[i]) * 257u + (uint32_t)tu.flash[i] * 1031u;
-    for (i = 0; i < NTRK; i++)                          /* (the level moves the glow: a frame in two while it sounds) */
-        if (trk[i].peak > 200 || tu.flash[i])
-            sig += ui.frame >> 1;
-    tu_zone(2, TU_HY, 104, TC_BG, sig, tu_jam_body);
-    tu_zone(3, 126, 44, TC_BG, cur * 977u + tu_used_mask() * 5u + (uint32_t)sng_cur * 131u, tu_strip_draw);
-    tu_zone(4, 170, 45, TC_BG, 1u + song.sel * 7u + (uint32_t)tu_sel_big() * 101u, tu_gap_draw);
+              (uint32_t)tfm_ins_of(&trk[i]) * 257u + (uint32_t)tu.flash[i] * 1031u + (uint32_t)tu.lvl[i] * 4001u +
+              (uint32_t)((song.rec >> i) & 1u) * 8209u;
+    }
+    sig = sig * 31u + song.sel * 6151u + (song.playing ? 977u : 0u);
+    tu_zone(2, 79, 98, TC_BG, sig, tu_jam_body);
+    tu_zone(3, 177, 38, TC_BG, cur * 977u + tu_used_mask() * 5u + (uint32_t)sng_cur * 131u + (tsc.cue < NSCN ? 1u + ((ui.frame >> 3) & 1u) + tsc.cue * 3u : 0u) +
+            (chain.running ? 1u + chain.row * 17u : 0u), tu_strip_draw);
     tu_foot(3, "K1-K4", "JAM", "SCL", "TEMPO", "ENV", "DICE", 0, 0, 0, 0);
 }
 
