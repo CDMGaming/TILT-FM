@@ -358,24 +358,14 @@ static void tq_notes_body(void)                         /* y 22 .. 215 */
 }
 static void tq_notes_head(void)
 {
-    char l[24], r[16], b[3] = {0, 0, 0};
-    int32_t x;
-    uint32_t i;
+    char l[24], r[16];
     const char *u;
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
-    tu_badge(9, 10, song.sel, TC_BG);
+    tu_rec_dots(TC_BG);
     str_cpy(l, tq_grab ? "MOVING \xB7 " : "NOTES \xB7 ", 12);
     str_cpy(l + str_len(l), tu_inst_name(TSEL), 12);
-    tu_text(26, 10, &AF_TM, l, tq_grab ? TC_AMBER : TC_TEXT, TC_BG);
-    x = 108;
-    for (i = 0; i < 4u; i++) {                          /* the bar tabs */
-        uint32_t used = i * 16u < tq_len(TSEL);
-        b[0] = (char)('1' + i);
-        tu_rrect(x, 5, 13, 11, 3, i == tq_bar ? TC_AMBER : used ? TC_SURF : TC_BG, TC_BG);
-        tu_text_c(x + 6, 10, &AF_TS, b, i == tq_bar ? TC_BG : used ? TC_TEXT : TC_DIM, i == tq_bar ? TC_AMBER : used ? TC_SURF : TC_BG);
-        x += 15;
-    }
+    tu_text(TU_DX, 10, &AF_TM, l, tq_grab ? TC_AMBER : TC_TEXT, TC_BG);
     {
         uint16_t mc;
         const char *mt = tq_mode(&mc);
@@ -386,7 +376,7 @@ static void tq_notes_head(void)
 static void tq_notes_draw(void)
 {
     uint32_t sig = ui.cursor * 31u + song.sel * 7u + tq_len(TSEL) * 977u + steps_hash(TSEL) + tq_bar * 7919u + (uint32_t)(uint8_t)tq_base * 131u +
-                   (uint32_t)TSEL->p[P_ROOT] * 17u + (uint32_t)TSEL->p[P_SCALE] * 19u + (uint32_t)tq_grab * 6151u + tq_mode_sig() * 40503u;
+                   (uint32_t)TSEL->p[P_ROOT] * 17u + (uint32_t)TSEL->p[P_SCALE] * 19u + (uint32_t)tq_grab * 6151u + tq_mode_sig() * 40503u + tu_rec_sig() * 6007u;
     if (song.playing)
         sig += TSEL->seq_idx * 131071u;
     tu_zone(0, 0, TU_HY, TC_BG, sig, tq_notes_head);
@@ -562,10 +552,10 @@ static void tq_drums_head(void)
     char l[24], r[16], b[8];
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
-    tu_badge(9, 10, song.sel, TC_BG);
+    tu_rec_dots(TC_BG);
     str_cpy(l, "DRUMS \xB7 ", 12);
     str_cpy(l + str_len(l), tu_inst_name(TSEL), 12);
-    tu_text(26, 10, &AF_TM, l, TC_TEXT, TC_BG);
+    tu_text(TU_DX, 10, &AF_TM, l, TC_TEXT, TC_BG);
     {
         uint16_t mc;
         const char *mt = tq_mode(&mc);
@@ -576,7 +566,7 @@ static void tq_drums_head(void)
 static void tq_drums_draw(void)
 {
     uint32_t sig = ui.cursor * 31u + song.sel * 7u + tq_len(TSEL) * 977u + steps_hash(TSEL) + tq_bar * 7919u + (ui.lane & 7u) * 131u +
-                   tq_mode_sig() * 40503u;
+                   tq_mode_sig() * 40503u + tu_rec_sig() * 6007u;
     if (song.playing)
         sig += TSEL->seq_idx * 131071u;
     tu_zone(0, 0, TU_HY, TC_BG, sig, tq_drums_head);

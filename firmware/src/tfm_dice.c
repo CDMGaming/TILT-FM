@@ -427,8 +427,9 @@ static void tu_head_setup(void)
 {
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
-    tu_text(9, 10, &AF_PS, "SETUP", TC_AMBER, TC_BG);
-    tu_text_r(231, 10, &AF_TS, "how the dice roll \xB7 saved", TC_QUIET, TC_BG);
+    tu_rec_dots(TC_BG);
+    tu_text(TU_DX, 10, &AF_PS, "SETUP", TC_AMBER, TC_BG);
+    tu_text_r(231, 10, &AF_TS, "how the dice roll", TC_QUIET, TC_BG);
 }
 static void tu_dice_draw(void)
 {
@@ -440,7 +441,7 @@ static void tu_dice_draw(void)
         uint32_t i, ssig = tu_su_top * 7u;
         for (i = 0; i < 16u; i++)
             ssig = ssig * 31u + CFG(i);
-        tu_zone(0, 0, TU_HY, TC_BG, 1u, tu_head_setup);
+        tu_zone(0, 0, TU_HY, TC_BG, tu_rec_sig(), tu_head_setup);
         tu_zone(2, TU_HY, 100, TC_BG, ssig, tu_su_rows);       /* (a band is 124 rows at most: two) */
         tu_zone(5, TU_HY + 100, 77, TC_BG, ssig, tu_su_rows);
         tu_zone(3, 199, 16, TC_BG, 1u, tu_su_note);

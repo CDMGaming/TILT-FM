@@ -136,11 +136,12 @@ static void tsg_scenes_head(void)
     char t[8];
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
-    tu_text(9, 10, &AF_TM, "SCENES", TC_TEXT, TC_BG);
+    tu_rec_dots(TC_BG);
+    tu_text(TU_DX, 10, &AF_TM, "SCENES", TC_TEXT, TC_BG);
     {
-        char sn[8] = "SONG 1";
-        sn[5] = (char)('1' + sng_cur % NSONG);
-        tu_text(9 + text_w(&AF_TM, "SCENES") + 6, 12, &AF_TS, sn, TC_QUIET, TC_BG);
+        char sn[8] = "S1";
+        sn[1] = (char)('1' + sng_cur % NSONG);
+        tu_text(TU_DX + text_w(&AF_TM, "SCENES") + 5, 12, &AF_TS, sn, TC_QUIET, TC_BG);
     }
     tu_timer_text(t);
     if (t[0])
@@ -162,7 +163,7 @@ static void tu_scenes_draw(void)
     uint32_t i;
     for (i = 0; i < chain_config.count; i++)
         sig = sig * 31u + chain_config.row[i].repeat + chain_config.row[i].slot[0] * 7u + chain_config.row[i].slot[1] * 13u;
-    tu_zone(0, 0, TU_HY, TC_BG, sig, tsg_scenes_head);
+    tu_zone(0, 0, TU_HY, TC_BG, sig + tu_rec_sig() * 6007u, tsg_scenes_head);
     tu_zone(2, 22, 100, TC_BG, sig, tsg_scenes_body);
     tu_zone(3, 122, 93, TC_BG, sig, tsg_scenes_body);
     tu_foot(3, "KEY", "GO", "KEY+KEY", "COPY", "HOLD G5", "CHAIN", 0, 0, 0, 0);
@@ -221,16 +222,17 @@ static void tsg_song_head(void)
     char t[8];
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
-    tu_text(9, 10, &AF_TM, "SONG", TC_TEXT, TC_BG);
+    tu_rec_dots(TC_BG);
+    tu_text(TU_DX, 10, &AF_TM, "SONG", TC_TEXT, TC_BG);
     {
         char sn[4] = " 1";
         sn[1] = (char)('1' + sng_cur % NSONG);
-        tu_text(9 + text_w(&AF_TM, "SONG"), 10, &AF_TM, sn, TC_TEXT, TC_BG);
+        tu_text(TU_DX + text_w(&AF_TM, "SONG"), 10, &AF_TM, sn, TC_TEXT, TC_BG);
     }
     tu_timer_text(t);
     if (t[0])
         tu_text_c(120, 10, &AF_PS, t, TC_AMBER, TC_BG);
-    tu_text_r(231, 10, &AF_TS, chain.running ? "PLAYING" : "SELECT row \xB7 PRESETS reps", chain.running ? TC_GOOD : TC_QUIET, TC_BG);
+    tu_text_r(231, 10, &AF_TS, chain.running ? "PLAYING" : "PRESETS reps", chain.running ? TC_GOOD : TC_QUIET, TC_BG);
 }
 static void tu_song_draw(void)
 {
@@ -239,7 +241,7 @@ static void tu_song_draw(void)
     for (i = 0; i < chain_config.count; i++)
         sig = sig * 31u + chain_config.row[i].repeat + chain_config.row[i].slot[0] * 7u + chain_config.row[i].slot[1] * 13u +
               chain_config.row[i].slot[2] * 17u + chain_config.row[i].slot[3] * 19u;
-    tu_zone(0, 0, TU_HY, TC_BG, sig, tsg_song_head);
+    tu_zone(0, 0, TU_HY, TC_BG, sig + tu_rec_sig() * 6007u, tsg_song_head);
     tu_zone(2, 22, 100, TC_BG, sig, tsg_song_rows);
     tu_zone(3, 122, 93, TC_BG, sig, tsg_song_rows);
     tu_foot(3, "K1-K4", "SCENES", "OCT+", "ADD", "EDIT", "DELETE", 0, 0, 0, 0);
@@ -361,11 +363,12 @@ static void tsg_songs_head(void)
     char t[8];
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
-    tu_text(9, 10, &AF_TM, tsg_new ? "REPLACE WHICH?" : "SONGS", tsg_new ? TC_AMBER : TC_TEXT, TC_BG);
+    tu_rec_dots(TC_BG);
+    tu_text(TU_DX, 10, &AF_TM, tsg_new ? "REPLACE WHICH?" : "SONGS", tsg_new ? TC_AMBER : TC_TEXT, TC_BG);
     tu_timer_text(t);
     if (t[0])
         tu_text_c(120, 10, &AF_PS, t, TC_AMBER, TC_BG);
-    tu_text_r(231, 10, &AF_TS, "autosaved as you go", TC_QUIET, TC_BG);
+    tu_text_r(231, 10, &AF_TS, "autosaved", TC_QUIET, TC_BG);
 }
 static void tu_songs_draw(void)
 {
@@ -375,7 +378,7 @@ static void tu_songs_draw(void)
         tsg_song_name(i, nm);
         sig = sig * 31u + (uint32_t)song_stored(i) * 5u + str_hash(3u, nm) + song_nscenes(i) * 977u + tsg_song_bars_n(i) * 131u;
     }
-    tu_zone(0, 0, TU_HY, TC_BG, sig, tsg_songs_head);
+    tu_zone(0, 0, TU_HY, TC_BG, sig + tu_rec_sig() * 6007u, tsg_songs_head);
     tu_zone(2, 22, 100, TC_BG, sig, tsg_songs_rows);
     tu_zone(3, 122, 93, TC_BG, sig, tsg_songs_rows);
     if (tsg_new)

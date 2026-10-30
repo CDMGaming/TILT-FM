@@ -71,3 +71,57 @@ static int test_r4_blank(void)
     bad += check("round 4 item 1: blank scenes play silence (section lengths, no error, knob order \"-\" A..H)", ok);
     return bad;
 }
+/* 2: REC state on every header but START, DICE, TIME: four dots, a red ring = armed, a red disc = recording now, the selected larger */
+static uint32_t r4_ink(uint32_t x0, uint32_t x1, uint16_t bg)       /* pixels not the background in the header's row 11, x0..x1 */
+{
+    uint32_t x, n = 0;
+    for (x = x0; x <= x1; x++)
+        n += px_at(x, 11) != bg;
+    return n;
+}
+static uint16_t r4_c(uint16_t c) { uint16_t v = tu_c(c); return (uint16_t)(v >> 8 | v << 8); }   /* (the screen buffer holds the panel's byte order) */
+static int test_r4_recdots(void)
+{
+    static const uint8_t SCR[] = {TU_JAM, TU_MIX, TU_SOUND, TU_NOTES, TU_DRUMS, TU_SCENES, TU_SONG, TU_SONGS, TU_FX, TU_SPACE, TU_ARP, TU_CLOCK, TU_CLOCK2, TU_MOTION};
+    int bad = 0, ok = 1;
+    uint32_t i, k;
+    ui_power_on();
+    tu_off = 0;
+    tm.on = 0;
+    for (i = 0; i < sizeof SCR; i++) {
+        uint32_t st;
+        for (st = 0; st < 3u; st++) {                   /* none armed; T2 armed, stopped; T2 armed and playing */
+            song.sel = 2;
+            song.rec = st ? 2u : 0u;
+            song.playing = st == 2u;
+            tu_goto(SCR[i]);
+            frames(80);
+            for (k = 0; k < NTRK; k++) {
+                uint32_t cx = 14u + 10u * k, rb = k == 2u ? 3u : 2u;
+                uint16_t bg = px_at(cx, 3);
+                int armed = k == 1u && st, rec = armed && st == 2u;
+                uint32_t ring = r4_ink(cx + rb + 1u, cx + rb + 2u, bg) + r4_ink(cx - rb - 2u, cx - rb - 1u, bg);
+                R4(armed ? ring >= 2u : ring == 0u);                                    /* a ring only when armed */
+                R4(rec ? px_at(cx, 11) != r4_c(TU_TC[k]) && px_at(cx, 11) == px_at(cx + 1u, 11)   /* a disc, not the track's dot */
+                       : px_at(cx, 11) == r4_c(TU_TC[k]));
+                if (!ok) {
+                    fprintf(stderr, "R4 screen %u state %u track %u ", (unsigned)SCR[i], (unsigned)st, (unsigned)k);
+                    ok = 1; bad++;
+                }
+            }
+        }
+    }
+    song.rec = 0; song.playing = 0;
+    /* the selected track's dot is larger: T3 selected, none armed, JAM */
+    song.sel = 2; tu_goto(TU_JAM); frames(80);
+    R4(r4_ink(14 + 20 - 4, 14 + 20 + 4, px_at(60, 3)) > r4_ink(14 - 4, 14 + 4, px_at(60, 3)));
+    /* arm on SEQ, go HOME: JAM shows it */
+    tu_goto(TU_JAM); song.sel = 0; song.rec = 0;
+    stap(B_SEQ); frames(32);
+    stap(B_REC); frames(32);
+    stap(B_HOME); frames(80);
+    R4(tu.scr == TU_JAM && (song.rec & 1u) && r4_ink(14 + 4, 14 + 5, px_at(60, 3)) >= 1u);
+    song.rec = 0;
+    bad += check("round 4 item 2: REC dots in every header but START, DICE, TIME (unarmed, a red ring when armed, a red disc when recording; the selected larger)", ok);
+    return bad;
+}

@@ -85,13 +85,10 @@ static void ro_body(void)                               /* y 22 .. 215 */
 static void ro_head(void)
 {
     char t[8];
-    int32_t x = 9;
+    int32_t x = TU_DX;
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
-    if (ro.trk < NTRK) {
-        tu_badge(9, 10, ro.trk, TC_BG);
-        x = 26;
-    }
+    tu_rec_dots(TC_BG);
     tu_text(x, 10, &AF_TM, ro.hl, TC_TEXT, TC_BG);
     tu_timer_text(t);
     if (t[0])
@@ -100,7 +97,7 @@ static void ro_head(void)
 }
 static void ro_draw(const char *k0, const char *a0, const char *k1, const char *a1, const char *k2, const char *a2)
 {
-    uint32_t sig = fnv(2166136261u, &ro, sizeof ro) + (tm.on ? tm.left : 0u);
+    uint32_t sig = fnv(2166136261u, &ro, sizeof ro) + (tm.on ? tm.left : 0u) + tu_rec_sig() * 6007u;
     tu_zone(0, 0, TU_HY, TC_BG, sig, ro_head);
     tu_zone(2, 22, 100, TC_BG, sig, ro_body);
     tu_zone(3, 122, 93, TC_BG, sig, ro_body);

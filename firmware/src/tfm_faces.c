@@ -420,8 +420,8 @@ static void tu_head_sound(void)
     int32_t x;
     tu_rect(0, 0, TU_W, TU_HY, fc.bg);
     tu_rect(0, TU_HY - 1, TU_W, 1, tu_mix(fc.bg, fc.acc, 14));
-    tu_badge(9, 10, k, fc.bg);
-    tu_text(26, 10, &AF_TM, b, fc.ink, fc.bg);
+    tu_rec_dots(fc.bg);
+    tu_text(TU_DX, 10, &AF_TM, b, fc.ink, fc.bg);
     tu_timer_text(t);
     if (t[0])
         tu_text_c(120, 10, &AF_PS, t, TC_AMBER, fc.bg);
@@ -441,7 +441,7 @@ static void tu_sound_draw(void)
     uint32_t k = song.sel, i = tfm_ins_of(&trk[k]), sig, m;
     tu_face_pal(i == TI_NONE ? 0 : &TFM_INS[i]);
     tu_toy_poll(k);
-    sig = i * 977u + k * 31u + (uint32_t)tu.page * 7919u + tfm_snd_of(&trk[k]) * 131u + (tm.on ? tm.left : 0u);
+    sig = i * 977u + k * 31u + (uint32_t)tu.page * 7919u + tfm_snd_of(&trk[k]) * 131u + (tm.on ? tm.left : 0u) + tu_rec_sig() * 6007u;
     for (m = 0; m < 8u && i != TI_NONE; m++)
         sig = sig * 31u + (uint32_t)tfm_macro_get(&trk[k], m);
     tu_zone(0, 0, TU_HY, fc.bg, sig, tu_head_sound);

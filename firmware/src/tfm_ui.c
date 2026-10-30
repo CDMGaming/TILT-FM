@@ -278,6 +278,28 @@ static void tu_badge(int32_t x, int32_t ymid, uint32_t k, uint16_t bg)
     tu_text_c(x + 6, ymid, &AF_TS, b, TC_BG, TU_TC[k % NTRK]);
     (void)bg;
 }
+/* round 4 item 2: REC state on every header but START, DICE and TIME: T1..T4 as four dots in their track colours, the selected
+ * track's larger; a red ring round the dot = armed (song.rec), a filled red disc = recording now (armed and playing).
+ * The dots take the header's left (TU_DX is where its title starts) */
+#define TU_DX 54
+static uint32_t tu_rec_sig(void) { return (song.rec & 15u) * 7919u + (song.sel & 3u) * 131u + (song.playing ? 977u : 0u) + 1u; }
+static void tu_rec_dots(uint16_t bg)
+{
+    uint32_t k;
+    for (k = 0; k < NTRK; k++) {
+        int32_t cx = 14 + 10 * (int32_t)k, rb = k == song.sel ? 3 : 2;
+        int armed = (int)((song.rec >> k) & 1u);
+        if (armed && song.playing) {
+            tu_disc(cx, 11, rb + 2, TC_REC);
+            continue;
+        }
+        if (armed) {
+            tu_disc(cx, 11, rb + 2, TC_REC);
+            tu_disc(cx, 11, rb + 1, bg);
+        }
+        tu_disc(cx, 11, rb, TU_TC[k]);
+    }
+}
 /* the timer's text, "7:42" (empty: no TIMER running) */
 static void tu_timer_text(char *b)
 {
@@ -290,13 +312,10 @@ static struct { const char *l, *l2, *r; int badge; int play; uint32_t sig; } tu_
 static void tu_head_draw(void)
 {
     char t[8];
-    int32_t x = 9;
+    int32_t x = TU_DX;
     tu_rect(0, 0, TU_W, TU_HY, tu_pbg);
     tu_rect(0, TU_HY - 1, TU_W, 1, tu_pline);
-    if (tu_hd.badge >= 0) {
-        tu_badge(x, 10, (uint32_t)tu_hd.badge, TC_BG);
-        x += 15;
-    }
+    tu_rec_dots(tu_pbg);
     x = tu_text(x, 10, &AF_TM, tu_hd.l ? tu_hd.l : "", TC_TEXT, TC_BG) + 3;
     if (tu_hd.l2)
         tu_text(x, 10, &AF_TS, tu_hd.l2, TC_QUIET, TC_BG);
@@ -325,7 +344,7 @@ static void tu_head(int badge, const char *l, const char *l2, const char *r, int
     tu_timer_text(t);
     tu_hd.sig = str_hash(1u, l ? l : "") * 31u + str_hash(2u, l2 ? l2 : "") + str_hash(3u, r ? r : "") * 7u +
                 str_hash(4u, t) * 13u + (uint32_t)(badge + 1) * 977u + (uint32_t)(song.g[G_BPM]) * 4099u +
-                (uint32_t)(tu_hd.play + 1) * 65537u + (tm.on ? tm_level() * 131071u : 0u);
+                (uint32_t)(tu_hd.play + 1) * 65537u + (tm.on ? tm_level() * 131071u : 0u) + tu_rec_sig() * 40503u;
     tu_zone(0, 0, TU_HY, tu_pbg, tu_hd.sig + tu_pbg * 7u, tu_head_draw);
 }
 /* the footer: `KEY ACTION` hints centred, the key amber; a message (ui.msg) replaces them while it shows */
