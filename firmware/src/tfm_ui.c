@@ -748,19 +748,26 @@ static void tu_lamp(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c)     
 static void tu_strip_draw(void)                         /* y 177 .. 215: the 11 black keys as lamps, grouped 3 2 3 2 1 */
 {
     static const int16_t X[11] = {7, 26, 45, 69, 88, 110, 129, 148, 172, 192, 212};
-    static const char *const KN[11] = {"F#3", "G#3", "A#3", "C#4", "D#4", "F#4", "G#4", "A#4", "C#5", "D#5", "F#5"};
+    /* round 6: a key name only under the first lamp of each group (all eleven touched at 19 px apart) */
+    static const char *const KN[11] = {"F#3", 0, 0, "C#4", 0, "F#4", 0, 0, "C#5", 0, "F#5"};
     uint32_t s, cur = chain.running && chain.config.row[chain.row].slot[0] < NSCN ? chain.config.row[chain.row].slot[0] : tu_scene_cur();
     uint32_t cue = tsc.cue < NSCN ? tsc.cue : 0xFFu, blink = (ui.frame >> 3) & 1u;
     if (prf_on()) {                                     /* PERFORM: M1 M2 M3 M4 FILL CAP MUT on the keys */
         static const char *const PN[7] = {"M1", "M2", "M3", "M4", "FIL", "CAP", "MUT"};
         for (s = 0; s < 11u; s++) {
             int32_t x = X[s];
-            tu_text_c(x + 9, 208, &AF_TS, KN[s], TC_QUIET, TC_BG);
+            if (KN[s])
+                tu_text(x, 208, &AF_TS, KN[s], TC_QUIET, TC_BG);
             if (s < 7u) {
                 uint16_t col = s < 4u ? TU_TC[s] : s == 4u ? RGB(120, 96, 200) : s == 5u ? RGB(80, 220, 140) : RGB(255, 170, 60);
                 int lit = s < 4u ? !trk[s].p[P_MUTE] : s == 4u ? jl_held(4) : 0;
-                tu_disc(x + 9, 190, 8, lit ? col : tu_mix(TC_BG, col, 30));
-                tu_text_c(x + 9, 190, &AF_TS, PN[s], lit ? TC_BG : tu_mix(TC_BG, col, 85), lit ? col : tu_mix(TC_BG, col, 30));
+                if (s < 4u) {
+                    tu_disc(x + 9, 190, 8, lit ? col : tu_mix(TC_BG, col, 30));
+                    tu_text_c(x + 9, 190, &AF_TS, PN[s], lit ? TC_BG : tu_mix(TC_BG, col, 85), lit ? col : tu_mix(TC_BG, col, 30));
+                } else {                                /* (round 6: the three-letter ones: the word in colour over a bar, no pill to crowd) */
+                    tu_text_c(x + 9, 188, &AF_TS, PN[s], lit ? col : tu_mix(TC_BG, col, 85), TC_BG);
+                    tu_rect(x + 2, 196, 14, 3, lit ? col : tu_mix(TC_BG, col, 35));
+                }
             } else {
                 tu_rect(x, 180, 18, 1, RGB(42, 32, 18)); tu_rect(x, 199, 18, 1, RGB(42, 32, 18));
                 tu_rect(x, 180, 1, 20, RGB(42, 32, 18)); tu_rect(x + 17, 180, 1, 20, RGB(42, 32, 18));
@@ -770,7 +777,8 @@ static void tu_strip_draw(void)                         /* y 177 .. 215: the 11 
     }
     for (s = 0; s < 11u; s++) {
         int32_t x = X[s], y = 178;
-        tu_text_c(x + 9, 208, &AF_TS, KN[s], s < 8u && s == cur ? TC_AMBER : TC_QUIET, TC_BG);
+        if (KN[s])
+            tu_text(x, 208, &AF_TS, KN[s], TC_QUIET, TC_BG);
         if (s < 8u) {
             int on = s == cur, used = tu_scene_used(s);
             char l[2] = {(char)('A' + s), 0};

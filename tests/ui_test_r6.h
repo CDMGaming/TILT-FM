@@ -189,3 +189,30 @@ static int test_r6_jam_here(void)
     bad += check("round 6 item 8: SONGS: SEQ saves the jam here (the jam log as the chain, the NAME screen; over a song: asks; no jam: says so)", ok);
     return bad;
 }
+/* item 9: CHORDETTE names the chord notes up from the root (C E G), whatever the voicing, an inversion keeps the root name */
+static int test_r6_chord_order(void)
+{
+    int bad = 0, ok = 1;
+    char name[10], notes[24];
+    r4_face(TI_CHORDETTE);
+    trk[0].p[P_ROOT] = 0;
+    trk[0].p[P_CHRD] = 0;
+    {
+        uint32_t i;
+        for (i = 0; i < 9u; i++) {                      /* the CHORD switch: find the major triad */
+            tfm_macro_put(&trk[0], 0, (int32_t)(i * 128u / 9u), 0);
+            trk[0].p[P_VOIC] = VC_CLOSE;
+            tf_chord_name(60, name, notes);
+            if (str_eq(name, "C"))
+                break;
+        }
+    }
+    R6(str_eq(name, "C") && str_eq(notes, "C E G"));
+    trk[0].p[P_VOIC] = VC_OPEN; tf_chord_name(60, name, notes);
+    R6(str_eq(name, "C") && str_eq(notes, "C E G"));
+    trk[0].p[P_VOIC] = VC_INV1; tf_chord_name(60, name, notes);
+    R6(str_eq(name, "C") && str_eq(notes, "C E G"));
+    trk[0].p[P_VOIC] = VC_CLOSE;
+    bad += check("round 6 item 9: CHORDETTE lists the chord notes up from the root (C E G with OPEN and an inversion too)", ok);
+    return bad;
+}

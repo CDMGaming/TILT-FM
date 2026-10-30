@@ -197,25 +197,31 @@ static void tf_chord_name(uint32_t note, char *name, char *notes)
     uint8_t ch[CHORD_MAX];
     int32_t r;
     uint16_t mask;
-    uint32_t n = chord_make(t, note, ch, &r, &mask), j, set = 0, e = 0;
+    uint32_t n = chord_make(t, note, ch, &r, &mask), j, set, e = 0, base;
     char nb[8];
     name[0] = 0;
     notes[0] = 0;
     if (!n)
         return;
-    for (j = 0; j < n; j++) {
-        char *p = tu_note_name(ch[j], nb);
+    /* round 6: the notes in the chord's own order, up from its root (C E G, not the OPEN voicing's C G E; an inversion keeps
+     * its root's name) */
+    set = n > 1u && mask ? (uint32_t)mask | 1u : 1u;
+    base = n > 1u && mask ? 60u + (uint32_t)(((r % 12) + 12) % 12) : ch[0];
+    for (j = 0; j < 12u; j++) {
+        char *p;
         uint32_t q = 0;
-        set |= 1u << ((ch[j] + 120u - ch[0]) % 12u);
+        if (!((set >> j) & 1u))
+            continue;
+        p = tu_note_name(base + j, nb);
         while (p[q] && p[q] != '-' && !(p[q] >= '0' && p[q] <= '9'))
             q++;
-        if (j) notes[e++] = ' ';
+        if (e) notes[e++] = ' ';
         memcpy(notes + e, p, q);
         e += q;
     }
     notes[e] = 0;
     {
-        char *p = tu_note_name(ch[0], nb);
+        char *p = tu_note_name(base, nb);
         uint32_t q = 0;
         const char *qual = "?";
         while (p[q] && !(p[q] >= '0' && p[q] <= '9') && p[q] != '-')
