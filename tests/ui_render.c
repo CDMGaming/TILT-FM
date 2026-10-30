@@ -780,7 +780,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_TIME, S_TIME_UNSAVED, S_TIME_KEEP,
        S_START, S_START_BLANK, S_START_NONE, S_START_CRASH,
        S_TILT_SCENES, S_SCENE_DROP, S_TILT_CUED, S_SCENE_PEND, S_SCENE_OVR, S_SCENE_CLR,
-       S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_TFM_JAM, S_TFM_JAM_LARGE, S_TFM_TOY_DRUM, S_TFM_TOY_SQUELCH,
+       S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_TFM_JAM, S_TFM_JAM_LARGE,
        S_UI_JAM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_SETUP, S_UI_TIME,
        S_UI_SND0, S_UI_SND1, S_UI_SND2, S_UI_SND3, S_UI_SND4, S_UI_SND5, S_UI_SND6, S_UI_SND7, S_UI_SND8, S_UI_SND9, S_UI_SND10,
        S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_UI_SCENES, S_UI_SONG, S_UI_SONGS,
@@ -821,7 +821,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "time", "time_unsaved", "time_keep",
     "start", "start_blank", "start_none", "start_crash",
     "tilt_scenes", "scene_drop", "tilt_cued", "scene_pending", "scene_overwrite", "scene_clear",
-    "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large", "tfm_toy_drum", "tfm_toy_squelch",
+    "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large",
     "ui_jam", "ui_mix", "ui_start", "ui_dice", "ui_setup", "ui_time",
     "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
     "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_step", "ui_notes", "ui_drums", "ui_sheet", "ui_scenes", "ui_song", "ui_songs",
@@ -1528,8 +1528,6 @@ static void setup(int s)
         }
         ui.force = 1;
         break;
-    case S_TFM_TOY_DRUM: song.playing = 0; tfm_load(TSEL, TI_THUMP, 0); go_page(GR_MACRO); toy.lit[0] = toy.lit[2] = 4; toy.ang = 48; break;
-    case S_TFM_TOY_SQUELCH: song.playing = 0; tfm_load(TSEL, TI_SQUELCH, 0); go_page(GR_MACRO); toy.lit[0] = 3; toy.ang = 80; break;
     case S_TFM_JAM: case S_TFM_JAM_LARGE:               /* TFM: HOME > JAM: T3 muted, T4 no instrument, T2 sounding */
         song.playing = 0; go_home(); ui_home_view = HV_JAM;
         tfm_load(&trk[0], TI_THUMP, 0); tfm_load(&trk[1], TI_SQUELCH, 2); tfm_load(&trk[2], TI_HAZE, 1);

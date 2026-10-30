@@ -305,3 +305,132 @@ static int test_r4_notes(void)
     bad += check("round 4 item 4: NOTES v2 (strip, folded rows in the key, every step and note in view at every zoom, zoom keeps the cursor, K2 inserts, K1 sets the length while a key is held)", ok);
     return bad;
 }
+/* 5: SOUND faces v2: the live parts */
+static void r4_face(uint32_t ins)
+{
+    ui_power_on();
+    tu_off = 0;
+    song.rec = 0; song.playing = 0;
+    tfm_load(&trk[0], ins, 0);
+    song.sel = 0;
+    tu_goto(TU_SOUND);
+    tu.page = 0;
+    memset(fs, 0, sizeof fs);
+    frames(100);
+}
+static uint32_t r4_hash(int32_t x0, int32_t y0, int32_t x1, int32_t y1)      /* the pixels of a box, hashed */
+{
+    int32_t x, y;
+    uint32_t h = 2166136261u;
+    for (y = y0; y <= y1; y++)
+        for (x = x0; x <= x1; x++)
+            h = (h ^ host_screen[(uint32_t)y * 240u + (uint32_t)x]) * 16777619u;
+    return h;
+}
+static int test_r4_faces(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t a, b, i;
+    char name[10], notes[24];
+    /* THUMP LAB: a pad lights on its hit */
+    r4_face(TI_THUMP);
+    a = r4_hash(8 + 57 + 6, 28 + 6, 8 + 57 + 46, 28 + 28);
+    fs[0].lane[1] = 6; frames(32);
+    b = r4_hash(8 + 57 + 6, 28 + 6, 8 + 57 + 46, 28 + 28);
+    R4(a != b);
+    R4(r4_hash(8 + 6, 28 + 6, 8 + 46, 28 + 28) == r4_hash(8 + 6, 28 + 6, 8 + 46, 28 + 28));
+    frames(300); fs[0].lane[1] = 0; frames(32);
+    R4(r4_hash(8 + 57 + 6, 28 + 6, 8 + 57 + 46, 28 + 28) == a);                  /* and out again */
+    /* SQUELCH: the ACCENT lamp lights on an accented note */
+    r4_face(TI_SQUELCH);
+    a = r4_hash(180, 30, 200, 50);
+    song.playing = 1; trk[0].step[0].flags |= SF_ACCENT; trk[0].seq_idx = 0;       /* an accented step sounding */
+    fs[0].flash = 6; frames(16);
+    b = r4_hash(180, 30, 200, 50);
+    song.playing = 0;
+    R4(a != b);
+    /* WOBBLER: the LED ring = WOB, the lit tile = RATE */
+    r4_face(TI_WOBBLER);
+    tfm_macro_put(&trk[0], 0, 10, 0); frames(64);
+    a = r4_hash(60, 30, 180, 155);
+    tfm_macro_put(&trk[0], 0, 120, 0); frames(64);
+    b = r4_hash(60, 30, 180, 155);
+    R4(a != b);
+    tfm_macro_put(&trk[0], 1, 0, 0); frames(64);
+    a = r4_hash(36, 166, 210, 183);
+    tfm_macro_put(&trk[0], 1, 127, 0); frames(64);
+    b = r4_hash(36, 166, 210, 183);
+    R4(a != b);
+    /* CHORDETTE: the LCD says the chord's real name and notes (D minor 7: Dm7, D F A C) */
+    r4_face(TI_CHORDETTE);
+    trk[0].p[P_ROOT] = 0;
+    for (i = 0; i < 9u; i++) {                                                   /* the CHORD switch: find MIN7 */
+        tfm_macro_put(&trk[0], 0, (int32_t)(i * 128u / 9u), 0);
+        tf_chord_name(62, name, notes);
+        if (str_eq(name, "Dm7"))
+            break;
+    }
+    R4(str_eq(name, "Dm7") && str_eq(notes, "D F A C"));
+    tfm_macro_put(&trk[0], 0, 0, 0);
+    tf_chord_name(60, name, notes);
+    R4(name[0] == 'C' && notes[0] == 'C');
+    /* PIXEL: its screen draws the current WAVE (five different drawings) */
+    r4_face(TI_PIXEL);
+    {
+        uint32_t h[5];
+        for (i = 0; i < 5u; i++) {
+            tfm_macro_put(&trk[0], 1, (int32_t)(i * 128u / 5u + 2u), 0);
+            frames(64);
+            h[i] = r4_hash(22, 40, 140, 95);
+        }
+        R4(h[0] != h[1] && h[1] != h[2] && h[2] != h[3] && h[3] != h[4] && h[0] != h[4]);
+    }
+    /* TINE: the lever follows TREM (OFF / MONO / STER) */
+    r4_face(TI_TINE);
+    tfm_macro_put(&trk[0], 2, 0, 0); frames(64); a = r4_hash(14, 90, 116, 104);
+    tfm_macro_put(&trk[0], 2, 127, 0); frames(64); b = r4_hash(14, 90, 116, 104);
+    R4(a != b);
+    /* PLUCK: the string vibrates on a note and is still when it has died away */
+    r4_face(TI_PLUCK);
+    a = r4_hash(24, 62, 216, 92);
+    fs[0].amp = 100; frames(48);
+    b = r4_hash(24, 62, 216, 92);
+    R4(a != b);
+    /* VOX: the mouth opens with the sound and the eyes glow on a note; the vowel shapes it */
+    r4_face(TI_VOX);
+    a = r4_hash(30, 70, 80, 112);
+    fs[0].env = 6000; fs[0].flash = 5; frames(48);
+    b = r4_hash(30, 70, 80, 112);
+    R4(a != b);
+    R4(r4_hash(32, 47, 42, 57) != 0u);
+    tfm_macro_put(&trk[0], 0, 100, 0); frames(64);
+    R4(r4_hash(30, 70, 80, 112) != b);
+    /* WHEELHOUSE: the drawbars show the STOPS registration, the tile = ROTOR */
+    r4_face(TI_WHEEL);
+    tfm_macro_put(&trk[0], 0, 0, 0); frames(64); a = r4_hash(10, 28, 150, 125);
+    tfm_macro_put(&trk[0], 0, 40, 0); frames(64); b = r4_hash(10, 28, 150, 125);
+    R4(a != b);
+    tfm_macro_put(&trk[0], 2, 0, 0); frames(64); a = r4_hash(150, 93, 230, 107);
+    tfm_macro_put(&trk[0], 2, 127, 0); frames(64); b = r4_hash(150, 93, 230, 107);
+    R4(a != b);
+    /* HAZE / GLINT / RAZOR: the controls move with the macros */
+    r4_face(TI_HAZE);
+    tfm_macro_put(&trk[0], 0, 10, 0); frames(64); a = r4_hash(30, 70, 55, 165);
+    tfm_macro_put(&trk[0], 0, 120, 0); frames(64); b = r4_hash(30, 70, 55, 165);
+    R4(a != b);
+    r4_face(TI_GLINT);
+    tfm_macro_put(&trk[0], 0, 10, 0); frames(64); a = r4_hash(26, 90, 58, 124);
+    tfm_macro_put(&trk[0], 0, 120, 0); frames(64); b = r4_hash(26, 90, 58, 124);
+    R4(a != b);
+    /* MACROS 2: the other four macros in the same control style */
+    r4_face(TI_RAZOR);
+    a = r4_hash(20, 70, 215, 175);
+    tu.page = 1; frames(80);
+    b = r4_hash(20, 70, 215, 175);
+    R4(a != b);
+    tfm_macro_put(&trk[0], 4, 5, 0); frames(64); a = r4_hash(20, 70, 215, 175);
+    tfm_macro_put(&trk[0], 4, 120, 0); frames(64); b = r4_hash(20, 70, 215, 175);
+    R4(a != b);
+    bad += check("round 4 item 5: SOUND faces v2 (pads, accent lamp, wobbler ring and tiles, chord name, wave screen, tremolo lever, string, mouth and eyes, drawbars and rotor tile, MACROS 2)", ok);
+    return bad;
+}

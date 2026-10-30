@@ -11343,6 +11343,7 @@ int main(void)
     bad += test_r4_recdots();
     bad += test_r4_jam();
     bad += test_r4_notes();
+    bad += test_r4_faces();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

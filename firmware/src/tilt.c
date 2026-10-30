@@ -76,7 +76,6 @@ static int tfm_jam_accept(const uint8_t *a, uint32_t n) /* a code (ASCII, from t
 }
 static int (*tfm_jam_hook)(const uint8_t *a, uint32_t n) = tfm_jam_accept;
 #include "tfm_jam.c"                                     /* TFM: HOME > JAM */
-#include "tfm_toys.c"                                    /* TFM: the instruments' pinball toys (MACROS) */
 #include "tfm_sheet.c"                                   /* TFM: the STEP SHEET (OCT+ held on STEP) */
 /* (tfm_ui.c: TFM-UI, included at the end of this file; tilt.c's own forward declarations of what it uses) */
 static struct {

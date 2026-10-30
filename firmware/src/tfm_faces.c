@@ -8,8 +8,9 @@
 static struct { uint16_t bg, surf, acc, mute, ink; } fc;
 static void tu_face_pal(const tfm_instr_t *in)
 {
-    if (in) {
-        fc.bg = in->col[0]; fc.surf = in->col[1]; fc.acc = in->col[2]; fc.mute = in->col[3]; fc.ink = in->col[4];
+    if (in) {                                           /* (round 4: the material's colours; the accent is the instrument's own) */
+        const tu_mat_t *m = &TU_MAT[(uint32_t)(in - TFM_INS) % TI_N];
+        fc.bg = m->top; fc.surf = tu_mix(m->top, m->ink, 12); fc.acc = in->col[2]; fc.mute = tu_mix(m->top, m->ink, 55); fc.ink = m->ink;
     } else {
         fc.bg = TC_BG; fc.surf = TC_SURF; fc.acc = TC_AMBER; fc.mute = TC_QUIET; fc.ink = TC_TEXT;
     }
@@ -27,6 +28,7 @@ static struct {
     uint16_t ang;                                       /* a spinner, 1/256 turns x 16 */
     int32_t env;                                        /* the level, smoothed */
     uint8_t acc;                                        /* the step now is accented */
+    uint8_t amp;                                        /* PLUCK's string: 100 on a note, then dying with DAMP */
 } fs[NTRK];
 static int32_t tu_sin(uint32_t a256)                    /* sin, a 0..255 round, x 1024 */
 {
@@ -56,6 +58,10 @@ static void tu_toy_poll(uint32_t k)
     if (fs[k].flash)
         fs[k].flash--;
     fs[k].acc = 0;
+    if (tfm_ins_of(t) == TI_PLUCK) {
+        int32_t damp = tfm_macro_get(t, 1);
+        fs[k].amp = fs[k].on ? 100u : (uint8_t)((uint32_t)fs[k].amp * (uint32_t)(252 - damp * 36 / 127) / 256u);
+    }
     if (song.playing) {                                 /* the step now: its accent, a drum's lanes */
         const step_t *s = &t->step[t->seq_idx % NSTEP];
         uint32_t cur = t->seq_idx;
@@ -90,341 +96,508 @@ static void tu_glow(int32_t cx, int32_t cy, int32_t r, uint16_t c, uint16_t unde
     }
 }
 static void tu_circle(int32_t cx, int32_t cy, int32_t r, uint16_t c) { tu_ring(cx, cy, r, r - 1, c); }
-/* ---- the twelve toys, in a box of 70 x 70 at (x0, y0) ---- */
-static void toy_spin(int32_t cx, int32_t cy, int32_t r, uint32_t a256, uint16_t c, int bars)
+/* ---- round 4 item 5: each instrument is its own hardware (tfm-spec/screens/Sound*.dc.html, after TILT's panels). The drawn
+ * controls ARE the K1-K4 macros (MACROS 2: the other four, in the same style) and move live; the live parts are said where
+ * they are drawn. The materials are TU_MAT (tfm_ui.c), gradients are bands, wood and metal rules and hairlines ---- */
+static int32_t tf_y0 = 22;                              /* (the body is one drawing: both zones draw it, the canvas clips) */
+static uint16_t tf_under(int32_t y)                     /* the material's colour at screen row y */
 {
-    uint32_t b;
-    for (b = 0; b < (uint32_t)bars; b++) {
-        uint32_t a = a256 + b * (128u / (uint32_t)bars);
-        int32_t dx = tu_sin(a) * r / 1024, dy = -tu_cos(a) * r / 1024;
-        cv_line_t(cx - dx, cy - dy, cx + dx, cy + dy, tu_c(c), 3);
-    }
+    const tu_mat_t *m = &TU_MAT[tfm_ins_of(&trk[song.sel]) % TI_N];
+    return tu_mat_at(m, (uint32_t)(y < 22 ? 0 : y - 22), 193u);
 }
-static void toy_squelch(uint32_t k, int32_t x0, int32_t y0)              /* a spinner: its speed follows the cutoff and the envelope; white on an accent */
+static void tf_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t c, int32_t w) { cv_line_t(x0, y0, x1, y1, tu_c(c), w); }
+static void tf_knob(int32_t cx, int32_t cy, int32_t r, uint16_t disc, uint16_t ptr, int32_t pos)
 {
-    track_t *t = &trk[k];
-    int32_t cx = x0 + 35, cy = y0 + 35;
-    uint32_t cut = (uint32_t)clamp(t->p[P_E4], 0, 127);
-    fs[k].ang = (uint16_t)(fs[k].ang + 6u + cut / 4u + (uint32_t)clamp(fs[k].env / 500, 0, 40));
-    tu_disc(cx, cy, 30, tu_mix(fc.surf, fc.acc, 12));
-    toy_spin(cx, cy, 28, fs[k].ang >> 4, fs[k].acc && fs[k].flash ? 0xFFFFu : fc.acc, 2);
-    tu_disc(cx, cy, 6, fc.bg);
-    tu_circle(cx, cy, 6, fc.acc);
+    uint32_t a = (160u + (uint32_t)pos * 192u / 127u) & 255u;
+    int32_t dx = tu_sin(a), dy = -tu_cos(a);
+    tu_disc(cx, cy + 1, r + 1, tu_mix(tf_under(cy), TC_BG, 55));                        /* its shadow */
+    tu_disc(cx, cy, r, disc);
+    tu_disc(cx - r / 4, cy - r / 4, r * 2 / 3, tu_mix(disc, TC_TEXT, 9));               /* a highlight */
+    tf_line(cx + dx * r * 28 / 102400, cy + dy * r * 28 / 102400, cx + dx * r * 88 / 102400, cy + dy * r * 88 / 102400, ptr, 2);
 }
-static void toy_wobbler(uint32_t k, int32_t x0, int32_t y0)              /* a ball held by a magnet: pushed off centre by the LFO x WOB; the rings light on a note */
+static void tf_fader(int32_t cx, int32_t top, int32_t h, uint16_t cap, uint16_t fill, int32_t pos, int glow)
 {
-    track_t *t = &trk[k];
-    int32_t cx = x0 + 35, cy = y0 + 35, depth = clamp(t->p[P_LD_FLT], 0, 63), off = (t->lfo_val >> 8) * depth / 63 * 20 / 128;
-    int32_t j;
-    for (j = 0; j < 3; j++)
-        tu_circle(cx, cy, 29 - 9 * j, tu_mix(fc.surf, fc.acc, fs[k].flash > (uint32_t)j * 2u ? 100 : 35 + 30 * (uint32_t)j));
-    tu_glow(cx + off, cy, 8, fc.acc, fc.surf, 60);
-    tu_disc(cx + off, cy, 7, fc.ink);
-    tu_rect(cx - 12, cy - 1, 8, 2, tu_mix(fc.surf, fc.acc, 50));
+    int32_t cy = top + h - h * pos / 127;
+    uint16_t un = tf_under(top + h / 2);
+    tu_rrect(cx - 2, top, 5, h, 2, tu_mix(un, TC_BG, 60), un);
+    if (top + h - cy > 2)
+        tu_rrect(cx - 2, cy, 5, top + h - cy, 2, fill, un);
+    if (glow > 8)
+        tu_rrect(cx - 11, cy - 6, 23, 13, 4, tu_mix(un, cap, glow * 40 / 100), un);
+    tu_rrect(cx - 9, cy - 5, 19, 10, 3, cap, un);
+    tu_rect(cx - 6, cy, 13, 1, tu_mix(cap, TC_BG, 35));
 }
-static void toy_chordette(uint32_t k, int32_t x0, int32_t y0)           /* drop targets, one per chord note: down while it sounds, flash when all are down */
+static void tf_label(uint32_t c, int32_t cx, int32_t y, uint32_t m, int showval)    /* "o NAME" in the ink, its value under it */
 {
-    track_t *t = &trk[k];
-    static const uint8_t SZ[10] = {1, 3, 4, 3, 3, 4, 4, 4, 3, 2};
-    uint32_t n = SZ[t->p[P_CHRD] % 10], i, down = (t->nheld || fs[k].env > 400) ? n : 0u, all;
-    all = down == n && n > 0u && (fm1_ms >> 7) & 1u;
-    for (i = 0; i < 4u; i++) {
-        int32_t x = x0 + 7 + (int32_t)i * 15;
-        int on = i < n && i < down;
-        uint16_t c = i < n ? (all ? fc.ink : fc.acc) : tu_mix(fc.surf, fc.acc, 20);
-        if (on)
-            tu_rrect(x, y0 + 38, 11, 9, 2, tu_mix(fc.surf, fc.acc, 40), fc.surf);
-        else if (i < n)
-            tu_rrect(x, y0 + 12, 11, 32, 2, c, fc.surf);
-        else
-            tu_rrect(x, y0 + 38, 11, 9, 2, c, fc.surf);
-    }
-    tu_rect(x0 + 5, y0 + 52, 60, 2, fc.mute);
-}
-static void toy_razor(uint32_t k, int32_t x0, int32_t y0)               /* a ramp, a ball whose height follows the pitch, chase lights faster with the filter envelope */
-{
-    track_t *t = &trk[k];
-    uint32_t i, ph = fm1_ms >> (fs[k].env > 3000 ? 5 : fs[k].env > 800 ? 6 : 7);
-    int32_t n = (int32_t)fs[k].note - 36, bx, by;
-    n = clamp(n, 0, 48);
-    for (i = 0; i < 6u; i++) {
-        int32_t lx = x0 + 9 + (int32_t)i * 10, ly = y0 + 54 - (int32_t)i * 6;
-        tu_disc(lx, ly, 2, (ph % 6u) == i ? fc.acc : tu_mix(fc.surf, fc.acc, 22));
-    }
-    cv_line_t(x0 + 4, y0 + 62, x0 + 66, y0 + 26, tu_c(fc.acc), 2);
-    bx = x0 + 8 + n * 56 / 48;
-    by = y0 + 56 - n * 36 / 48 - 10;
-    tu_glow(bx, by, 6, fc.acc, fc.surf, t->nheld || fs[k].flash ? 70 : 20);
-    tu_disc(bx, by, 5, fc.ink);
-}
-static void toy_haze(uint32_t k, int32_t x0, int32_t y0)                /* bulbs along a soft glow: brightness follows the envelope, the colour drifts with the LFO */
-{
-    track_t *t = &trk[k];
-    uint32_t i, br = (uint32_t)clamp(fs[k].env / 90, 6, 100);
-    uint16_t gc = tu_mix(fc.acc, TC_AMBER, (uint32_t)clamp(50 + (t->lfo_val >> 9), 0, 100) / 4u);
-    for (i = 0; i < 6u; i++) {
-        int32_t y = y0 + 20 + (int32_t)i * 6;
-        tu_rect(x0 + 6, y, 58, 5, tu_mix(fc.surf, gc, br * (14u + 6u * (i / 2u)) / 100u));
-    }
-    for (i = 0; i < 5u; i++) {
-        uint32_t b = br * (i == 2u ? 100u : i == 1u || i == 3u ? 80u : 50u) / 100u;
-        tu_rrect(x0 + 6 + (int32_t)i * 12, y0 + 46, 8, 11, 3, tu_mix(fc.surf, TC_TEXT, b), fc.surf);
-    }
-}
-static const uint8_t PIX_SPRITE[8] = {0x3C, 0x7E, 0xDB, 0xFF, 0xFF, 0x5A, 0xA5, 0x42};   /* an original sprite, 8 x 8 */
-static void toy_pixel(uint32_t k, int32_t x0, int32_t y0)               /* a sprite on a dot-matrix grid: jumps on a note (height by the velocity), a coin on an accent or COIN */
-{
-    track_t *t = &trk[k];
-    int32_t r, c, hop = fs[k].flash ? (int32_t)fs[k].flash * (int32_t)fs[k].vel / 64 : 0, gx, gy;
-    for (gy = 0; gy < 8; gy++)
-        for (gx = 0; gx < 11; gx++)
-            tu_rect(x0 + 3 + gx * 6, y0 + 8 + gy * 6, 4, 4, tu_mix(fc.surf, fc.acc, 14));
-    for (r = 0; r < 8; r++)
-        for (c = 0; c < 8; c++)
-            if ((PIX_SPRITE[r] >> (7 - c)) & 1u)
-                tu_rect(x0 + 9 + c * 6, y0 + 8 + (r - (hop > 5 ? 5 : hop) / 3 * 0) * 6 - (hop > 6 ? 6 : hop), 4, 4, fc.acc);
-    if ((t->p[P_ED_PIT] > 18 || fs[k].acc) && fs[k].flash > 3u)                /* the coin */
-        for (r = 0; r < 3; r++)
-            tu_rect(x0 + 57, y0 + 6 + r * 5, 5 - (r == 1 ? 0 : 2), 4, TC_AMBER);
-}
-static void toy_tine(uint32_t k, int32_t x0, int32_t y0)                /* five rollover lanes: a note lights the lane of its pitch class (note mod 5), fading with the decay */
-{
-    uint32_t i;
-    if (fs[k].on)
-        fs[k].lit[fs[k].note % 5u] = 24;
-    for (i = 0; i < 5u; i++) {
-        int32_t x = x0 + 6 + (int32_t)i * 13;
-        tu_rrect(x, y0 + 6, 9, 58, 4, tu_mix(fc.bg, fc.mute, 10), fc.surf);
-        tu_ring(x + 4, y0 + 35, 3, 2, tu_mix(fc.surf, fc.acc, 18));
-        if (fs[k].lit[i])
-            tu_disc(x + 4, y0 + 35, 3, tu_mix(fc.surf, fc.acc, 100u * fs[k].lit[i] / 24u));
-    }
-}
-static void tu_star(int32_t cx, int32_t cy, int32_t r, uint16_t c)       /* a four-point star */
-{
-    int32_t i;
-    tu_rect(cx - r, cy, 2 * r + 1, 1, c);
-    tu_rect(cx, cy - r, 1, 2 * r + 1, c);
-    for (i = 1; i < r; i++) {
-        tu_rect(cx - (r - i) / 2, cy - i, 1 + (r - i), 1, c);
-        tu_rect(cx - (r - i) / 2, cy + i, 1 + (r - i), 1, c);
-    }
-}
-static void toy_glint(uint32_t k, int32_t x0, int32_t y0)               /* five star rollovers: how many light follows the velocity, the twinkle follows METAL */
-{
-    static const int8_t P[5][3] = {{14, 14, 8}, {50, 12, 5}, {34, 36, 10}, {12, 52, 5}, {52, 50, 8}};
-    uint32_t i, n, metal = (uint32_t)clamp(trk[k].p[P_E2] + 64, 0, 127);
-    if (fs[k].on) {
-        n = 1u + (uint32_t)fs[k].vel * 4u / 128u;
-        for (i = 0; i < 5u; i++)
-            fs[k].lit[i] = i < n ? (uint8_t)(10 + metal / 16u) : 0u;
-    }
-    for (i = 0; i < 5u; i++) {
-        int on = fs[k].lit[i] && (((fm1_ms >> (7 - (metal >> 6))) + i) & 1u);
-        tu_star(x0 + P[i][0], y0 + P[i][1], P[i][2], on || fs[k].lit[i] > 6u ? fc.acc : tu_mix(fc.surf, fc.acc, 22));
-    }
-}
-static void toy_pluck(uint32_t k, int32_t x0, int32_t y0)               /* four flippers: each note kicks the next one, harder notes higher; they settle with the damping */
-{
-    uint32_t i, dm = (uint32_t)clamp(trk[k].p[P_E3], 0, 127);
-    static uint8_t nx[NTRK];
-    if (fs[k].on) {
-        uint32_t f = nx[k]++ & 3u;
-        fs[k].lit[f] = (uint8_t)(6u + (uint32_t)fs[k].vel / 24u);
-    }
-    for (i = 0; i < 4u; i++) {
-        int32_t bx = x0 + (i & 1u ? 38 : 6), by = y0 + (i >> 1) * 30 + 12, up = (int32_t)fs[k].lit[i] * (140 - (int32_t)dm) / 160;
-        int32_t ex = bx + (i & 1u ? 0 : 26), ey = by + 6 + (i & 1u ? -(up - 8) : -(up - 8));
-        cv_line_t(i & 1u ? bx + 26 : bx, by + 6, i & 1u ? bx : ex, ey > by + 14 ? by + 14 : ey, tu_c(fs[k].lit[i] ? fc.acc : fc.mute), 4);
-        if (fs[k].lit[i] > 0u && fs[k].lit[i] < 3u)
-            fs[k].lit[i]++;
-    }
-}
-static void toy_vox(uint32_t k, int32_t x0, int32_t y0)                 /* a dot-matrix mouth: it opens with the envelope, its shape follows the vowel (A E I O U) */
-{
-    int32_t vw = clamp(trk[k].p[P_E0], 0, 127) * 5 / 128, open = clamp(fs[k].env / 350, 1, 7), gx, gy;
-    int32_t w = vw == 2 ? 11 : vw == 3 ? 6 : vw == 4 ? 5 : vw == 1 ? 10 : 9;   /* I narrow? E wide */
-    for (gy = 0; gy < 9; gy++)
-        for (gx = 0; gx < 11; gx++)
-            tu_rect(x0 + 3 + gx * 6, y0 + 6 + gy * 6, 4, 4, tu_mix(fc.surf, fc.acc, 12));
-    for (gy = 0; gy < 9; gy++) {
-        int32_t half = open - (gy < 4 ? 4 - gy : gy - 4) * (vw == 2 ? 3 : 1) - (vw >= 3 ? (gy < 4 ? 4 - gy : gy - 4) : 0);
-        if (half < 0) half = 0;
-        for (gx = 0; gx < 11; gx++) {
-            int32_t dx = gx - 5, lim = w / 2;
-            if ((dx < 0 ? -dx : dx) <= lim && (gy >= 4 - open / 2 && gy <= 4 + open / 2) && (dx * dx * 2 + (gy - 4) * (gy - 4) * 3) < w * w / 2 + open * 4)
-                tu_rect(x0 + 3 + gx * 6, y0 + 6 + gy * 6, 4, 4, fc.acc);
-        }
-        (void)half;
-    }
-}
-static void toy_wheel(uint32_t k, int32_t x0, int32_t y0)               /* a spinning disc: its speed follows the rotor with the rotor's inertia, brighter while keys are held */
-{
-    track_t *t = &trk[k];
-    static int32_t sp[NTRK];
-    int32_t want = t->p[P_E7] == 2 ? 28 : t->p[P_E7] == 1 ? 9 : 0, cx = x0 + 35, cy = y0 + 35, i;
-    uint16_t on = tu_mix(fc.surf, fc.acc, t->nheld ? 100 : 62);
-    sp[k] += (want * 16 - sp[k]) / 24;                  /* (the rotor's spin-up and spin-down) */
-    fs[k].ang = (uint16_t)(fs[k].ang + (uint32_t)sp[k]);
-    for (i = 0; i < 10; i++) {
-        uint32_t a0 = (fs[k].ang >> 4) + (uint32_t)i * 25u;
-        int32_t r;
-        for (r = 12; r <= 30; r += 1) {
-            int32_t px = cx + tu_sin(a0) * r / 1024, py = cy - tu_cos(a0) * r / 1024, px2 = cx + tu_sin(a0 + 6) * r / 1024,
-                    py2 = cy - tu_cos(a0 + 6) * r / 1024;
-            if (i & 1)
-                continue;
-            cv_line_t(px, py, px2, py2, tu_c(on), 1);
-        }
-    }
-    tu_ring(cx, cy, 30, 28, fc.acc);
-    tu_disc(cx, cy, 11, fc.bg);
-    tu_ring(cx, cy, 11, 9, fc.acc);
-    tu_text_c(cx, cy, &AF_TS, t->p[P_E7] == 2 ? "FAST" : t->p[P_E7] == 1 ? "SLOW" : "OFF", fc.acc, fc.bg);
-}
-/* THUMP LAB's panel is its own, as drawn (tfm-spec/screens/SoundThump.dc.html): bumpers, a hat spinner, eight lane chips.
- * Each bumper flashes on its hit with the velocity; the spinner advances a notch a hat; a chip lights while its lane hits */
-static void tu_thump_panel(uint32_t k)
-{
-    track_t *t = &trk[k];
-    static const char *const CH[8] = {"BD", "SD", "CP", "CH", "OH", "TM", "RM", "BL"};
-    uint32_t i, hat;
-    int32_t vk = fs[k].lane[0] ? 100 : 0, vs = fs[k].lane[1] ? 100 : 0, vc = fs[k].lane[2] ? 100 : 0;
-    char b[24], v[8];
-    tu_rrect(8, 28, 224, 98, 8, fc.surf, fc.bg);
-    tu_text(16, 40, &AF_PN, "THUMP LAB", fc.acc, fc.surf);
-    tfm_snd_label(t, b);
-    tu_text(16, 54, &AF_TL, b, fc.ink, fc.surf);
-    fmt_int(v, (int32_t)tfm_snd_of(t) + 1);
-    {
-        int32_t x = 16;
-        str_cpy(b, " of ", 5);
-        fmt_int(b + 4, (int32_t)TFM_INS[TI_THUMP].nsnd);
-        tu_arrow(x, 66, 1, TC_PRESETS);
-        x = tu_text(x + 6, 66, &AF_TS, "PRESETS", TC_PRESETS, fc.surf);
-        x = tu_text(x + 3, 66, &AF_TS, v, TC_PRESETS, fc.surf);
-        x = tu_text(x, 66, &AF_TS, b, TC_PRESETS, fc.surf);
-        tu_arrow(x + 3, 66, 0, TC_PRESETS);
-    }
-    for (i = 0; i < 8u; i++) {
-        int32_t x = 16 + (int32_t)i * 16;
-        int on = fs[k].lane[i] != 0u;
-        tu_rrect(x, 88, 13, 28, 3, on ? fc.acc : tu_mix(fc.surf, fc.acc, 22), fc.surf);
-        tu_text_c(x + 6, 111, &AF_TS, CH[i], on ? fc.bg : fc.mute, on ? fc.acc : tu_mix(fc.surf, fc.acc, 22));
-    }
-    tu_disc(149, 62, 23 + 0, tu_mix(fc.surf, fc.acc, 22));
-    tu_glow(149, 62, 20, fc.acc, fc.surf, vk);
-    tu_disc(149, 62, 20, vk ? fc.acc : tu_mix(fc.surf, fc.acc, 12));
-    tu_text_c(149, 62, &AF_TS, "KICK", vk ? fc.bg : fc.acc, vk ? fc.acc : tu_mix(fc.surf, fc.acc, 12));
-    tu_disc(207, 58, 16, vs ? fc.acc : tu_mix(fc.surf, fc.acc, 14));
-    tu_circle(207, 58, 16, fc.acc);
-    tu_text_c(207, 58, &AF_TS, "SNARE", vs ? fc.bg : fc.acc, vs ? fc.acc : tu_mix(fc.surf, fc.acc, 14));
-    tu_disc(172, 104, 14, vc ? fc.acc : tu_mix(fc.surf, fc.acc, 14));
-    tu_circle(172, 104, 14, vc ? fc.ink : tu_mix(fc.surf, fc.acc, 50));
-    tu_text_c(172, 104, &AF_TS, "CLAP", vc ? fc.bg : fc.mute, vc ? fc.acc : tu_mix(fc.surf, fc.acc, 14));
-    hat = (fs[k].ang >> 4) & 1u;
-    if ((fs[k].lane[3] == 8u || fs[k].lane[4] == 8u))
-        fs[k].ang = (uint16_t)(fs[k].ang + 16u * 3u);
-    tu_rrect(198, 87, 22, 32, 4, tu_mix(fc.surf, fc.ink, 55), fc.surf);
-    tu_rrect(199, 88, 20, 30, 3, fc.surf, tu_mix(fc.surf, fc.ink, 55));
-    tu_rect(204, 94 + (int32_t)hat * 3, 10, 3, fc.ink);
-    tu_rect(204, 100 + (int32_t)((fs[k].ang >> 5) & 1u) * 3, 10, 3, tu_mix(fc.surf, fc.ink, 40));
-    tu_text_c(209, 113, &AF_TS, "HATS", fc.ink, fc.surf);
-}
-static void tu_toy(uint32_t k, int32_t x0, int32_t y0)
-{
-    switch (tfm_ins_of(&trk[k])) {
-    case TI_SQUELCH: toy_squelch(k, x0, y0); break;
-    case TI_WOBBLER: toy_wobbler(k, x0, y0); break;
-    case TI_CHORDETTE: toy_chordette(k, x0, y0); break;
-    case TI_RAZOR: toy_razor(k, x0, y0); break;
-    case TI_HAZE: toy_haze(k, x0, y0); break;
-    case TI_PIXEL: toy_pixel(k, x0, y0); break;
-    case TI_TINE: toy_tine(k, x0, y0); break;
-    case TI_GLINT: toy_glint(k, x0, y0); break;
-    case TI_PLUCK: toy_pluck(k, x0, y0); break;
-    case TI_VOX: toy_vox(k, x0, y0); break;
-    case TI_WHEEL: toy_wheel(k, x0, y0); break;
-    default: break;
-    }
-}
-/* ---- the face ---- */
-static void tu_dial_draw(int32_t cx, int32_t cy, int32_t ro, uint32_t k, uint32_t m, const track_t *t, uint16_t bg)
-{
-    uint32_t i = tfm_ins_of(t);
-    const tfm_macro_t *mc = &TFM_INS[i].mac[m & 7u];
-    char val[12], kb[3] = {'K', (char)('1' + k), 0};
+    track_t *t = &trk[song.sel];
+    const tfm_macro_t *mc = &TFM_INS[tfm_ins_of(t)].mac[m & 7u];
+    char val[12];
     const char *unit;
-    int32_t pos = tfm_macro_get(t, m);
-    tu_dial(cx, cy, ro, ro - 3, (uint32_t)(pos * 1000 / 127), TU_TC[k & 3u], tu_mix(fc.surf, fc.acc, 14));
-    tu_disc(cx, cy, ro - 4, bg);
-    tfm_macro_text(t, m, val, &unit);
-    tu_text_c(cx, cy, str_len(val) > 3u ? &AF_TM : &AF_TL, val, fc.ink, bg);
-    tu_text_c(cx, cy + ro + 8, &AF_TM, mc->name, TU_TC[k & 3u], bg);
-    if (ro > 19)
-        tu_text_c(cx, cy + ro + 19, &AF_TS, kb, fc.mute, bg);
+    int32_t w = text_w(&AF_TM, mc->name), x = cx - (w + 7) / 2;
+    uint16_t un = tf_under(y);
+    tu_disc(x + 2, y, 2, TU_TC[c & 3u]);
+    tu_text(x + 7, y, &AF_TM, mc->name, fc.ink, un);
+    if (showval) {
+        tfm_macro_text(t, m, val, &unit);
+        tu_text_c(cx, y + 11, &AF_TS, val, fc.mute, tf_under(y + 11));
+    }
 }
-static void tu_face_top(void)                           /* y 22 .. 125 */
+/* the four macros of the page as round knobs / faders in one row */
+static void tf_row(int32_t cy, int32_t r, int fader, int32_t pitch, int32_t x0, uint16_t disc, uint16_t ptr, int32_t ly)
 {
-    uint32_t k = song.sel, i = tfm_ins_of(&trk[k]);
+    track_t *t = &trk[song.sel];
+    uint32_t c;
+    for (c = 0; c < 4u; c++) {
+        uint32_t m = (uint32_t)tu.page * 4u + c;
+        int32_t cx = x0 + pitch * (int32_t)c, pos = tfm_macro_get(t, m);
+        if (fader)
+            tf_fader(cx, cy, r, disc, ptr, pos, (int32_t)fs[song.sel].env / 80);
+        else
+            tf_knob(cx, cy, r, disc, ptr, pos);
+        tf_label(c, cx, ly, m, !fader);
+    }
+}
+static void tf_preset(int32_t x, int32_t y, uint16_t c, uint16_t un)        /* "NAME < 1 of 5 >" */
+{
+    track_t *t = &trk[song.sel];
+    uint32_t i = tfm_ins_of(t);
     char b[24], v[8], w[16];
-    int32_t x;
-    tu_rect(0, 22, TU_W, 104, fc.bg);
-    if (i == TI_THUMP) {
-        tu_thump_panel(k);
-        return;
-    }
-    tu_rrect(10, 30, 70, 70, 9, fc.acc, fc.bg);
-    tu_rrect(11, 31, 68, 68, 8, fc.surf, fc.acc);
-    if (i != TI_NONE)
-        tu_toy(k, 10, 30);
-    if (i == TI_NONE) {
-        tu_text_fit(89, 46, &AF_PN, ENGINES[trk[k].eng_req % NENGINES]->name, fc.acc, fc.bg, 144);
-        tu_text(89, 60, &AF_TS, "a sound without an instrument", fc.mute, fc.bg);
-        tu_text(89, 74, &AF_TL, "EDIT: DEEP", fc.ink, fc.bg);
-        return;
-    }
-    tu_text_fit(89, 44, str_len(TFM_INS[i].name) > 8u ? &AF_PN : &AF_PM, TFM_INS[i].name, fc.acc, fc.bg, 146);
-    {
-        char d[40];
-        str_cpy(d, TFM_INS[i].desc, sizeof d);
-        tu_text_fit(89, 61, &AF_TS, d, fc.mute, fc.bg, 141);
-    }
-    tfm_snd_label(&trk[k], b);
-    tu_text_fit(89, 74, &AF_TL, b, fc.ink, fc.bg, 148);
-    fmt_int(v, (int32_t)tfm_snd_of(&trk[k]) + 1);
+    tfm_snd_label(t, b);
+    x = tu_text(x, y, &AF_TM, b, fc.ink, un) + 6;
+    fmt_int(v, (int32_t)tfm_snd_of(t) + 1);
     str_cpy(w, " of ", 5);
     fmt_int(w + 4, (int32_t)TFM_INS[i].nsnd);
-    x = 89;
-    tu_arrow(x, 86, 1, TC_PRESETS);
-    x = tu_text(x + 6, 86, &AF_TS, "PRESETS", TC_PRESETS, fc.bg);
-    x = tu_text(x + 3, 86, &AF_TS, v, TC_PRESETS, fc.bg);
-    x = tu_text(x, 86, &AF_TS, w, TC_PRESETS, fc.bg);
-    tu_arrow(x + 3, 86, 0, TC_PRESETS);
+    tu_arrow(x, y, 1, TC_PRESETS);
+    x = tu_text(x + 5, y, &AF_TS, v, TC_PRESETS, un);
+    x = tu_text(x, y, &AF_TS, w, TC_PRESETS, un);
+    tu_arrow(x + 3, y, 0, TC_PRESETS);
 }
-static void tu_face_dials(void)                         /* y 126 .. 215 */
+static int32_t tf_sw(uint32_t m)                        /* a switch macro's place in its names */
 {
-    uint32_t k = song.sel, i = tfm_ins_of(&trk[k]), c;
-    tu_rect(0, 126, TU_W, 89, fc.bg);
-    if (i == TI_NONE)
-        return;
-    for (c = 0; c < 4u; c++) {
-        int32_t cx = i == TI_THUMP ? 34 + 57 * (int32_t)c : 34 + 57 * (int32_t)c + (c > 1u);
-        tu_dial_draw(cx, i == TI_THUMP ? 152 : 150, i == TI_THUMP ? 19 : 20, c, (uint32_t)tu.page * 4u + c, &trk[k], fc.bg);
+    const track_t *t = &trk[song.sel];
+    const tfm_macro_t *mc = &TFM_INS[tfm_ins_of(t)].mac[m & 7u];
+    return mc->nsw ? (int32_t)tfm_sw_idx(mc, motion_base_value(t, mc->t[0].id)) : 0;
+}
+static void tf_tiles(int32_t x0, int32_t y, int32_t w, int32_t h, int32_t pitch, uint32_t m, uint16_t on, uint16_t off, uint16_t inkon, uint16_t inkoff)
+{
+    const tfm_macro_t *mc = &TFM_INS[tfm_ins_of(&trk[song.sel])].mac[m & 7u];
+    uint32_t j;
+    int32_t cur = tf_sw(m);
+    for (j = 0; j < mc->nsw; j++) {
+        char nb[6];
+        str_cpy(nb, mc->swn ? mc->swn[j] : "-", 6);
+        tu_rrect(x0 + (int32_t)j * pitch, y, w, h, 3, (int32_t)j == cur ? on : off, tf_under(y));
+        tu_text_c(x0 + (int32_t)j * pitch + w / 2, y + h / 2, &AF_TS, nb, (int32_t)j == cur ? inkon : inkoff, (int32_t)j == cur ? on : off);
     }
 }
+/* the chord's real name and notes (D M7: "Dm7", D F A C) from the notes it makes */
+static void tf_chord_name(uint32_t note, char *name, char *notes)
+{
+    track_t *t = &trk[song.sel];
+    uint8_t ch[CHORD_MAX];
+    int32_t r;
+    uint16_t mask;
+    uint32_t n = chord_make(t, note, ch, &r, &mask), j, set = 0, e = 0;
+    char nb[8];
+    name[0] = 0;
+    notes[0] = 0;
+    if (!n)
+        return;
+    for (j = 0; j < n; j++) {
+        char *p = tu_note_name(ch[j], nb);
+        uint32_t q = 0;
+        set |= 1u << ((ch[j] + 120u - ch[0]) % 12u);
+        while (p[q] && p[q] != '-' && !(p[q] >= '0' && p[q] <= '9'))
+            q++;
+        if (j) notes[e++] = ' ';
+        memcpy(notes + e, p, q);
+        e += q;
+    }
+    notes[e] = 0;
+    {
+        char *p = tu_note_name(ch[0], nb);
+        uint32_t q = 0;
+        const char *qual = "?";
+        while (p[q] && !(p[q] >= '0' && p[q] <= '9') && p[q] != '-')
+            q++;
+        memcpy(name, p, q);
+        name[q] = 0;
+        if (set == (1u | 1u << 4 | 1u << 7)) qual = "";
+        else if (set == (1u | 1u << 3 | 1u << 7)) qual = "m";
+        else if (set == (1u | 1u << 4 | 1u << 7 | 1u << 10)) qual = "7";
+        else if (set == (1u | 1u << 4 | 1u << 7 | 1u << 11)) qual = "M7";
+        else if (set == (1u | 1u << 3 | 1u << 7 | 1u << 10)) qual = "m7";
+        else if (set == (1u | 1u << 5 | 1u << 7)) qual = "sus4";
+        else if (set == (1u | 1u << 2 | 1u << 7)) qual = "sus2";
+        else if (set == (1u | 1u << 7)) qual = "5";
+        else if (set == (1u | 1u << 3 | 1u << 6)) qual = "dim";
+        str_cpy(name + q, qual, 6);
+    }
+}
+static void tf_star(int32_t cx, int32_t cy, int32_t s, uint16_t c)
+{
+    tu_rect(cx, cy - s, 1, 2 * s + 1, c);
+    tu_rect(cx - s, cy, 2 * s + 1, 1, c);
+    if (s > 3) {
+        tu_rect(cx - 1, cy - s / 2, 3, s, c);
+        tu_rect(cx - s / 2, cy - 1, s, 3, c);
+    }
+}
+static void tf_ell(int32_t cx, int32_t cy, int32_t rx, int32_t ry, uint16_t c)     /* a filled ellipse */
+{
+    int32_t dy;
+    for (dy = -ry; dy <= ry; dy++) {
+        int32_t w = (int32_t)tu_isq((uint32_t)(ry * ry - dy * dy)) * rx / (ry ? ry : 1);
+        tu_rect(cx - w, cy + dy, 2 * w + 1, 1, c);
+    }
+}
+static void tf_thump(void)
+{
+    track_t *t = &trk[song.sel];
+    static const uint16_t PC[8] = {RGB(232, 100, 79), RGB(122, 85, 48), RGB(136, 140, 52), RGB(150, 214, 70),
+                                   RGB(52, 128, 104), RGB(60, 120, 170), RGB(110, 96, 170), RGB(170, 90, 120)};
+    uint32_t l;
+    for (l = 0; l < 8u; l++) {
+        int32_t x = 8 + (int32_t)(l & 3u) * 57, y = 28 + (int32_t)(l >> 2) * 52, lit = fs[song.sel].lane[l] ? 1 : 0;
+        uint16_t pc = lit ? PC[l] : tu_mix(fc.bg, PC[l], 28);
+        tu_rrect(x, y, 54, 47, 6, tu_mix(fc.bg, PC[l], 45), fc.bg);                         /* the pad's frame */
+        tu_rrect(x + 3, y + 3, 48, 29, 4, pc, tu_mix(fc.bg, PC[l], 45));                  /* its rubber: lit on a hit */
+        tu_text_c(x + 27, y + 39, &AF_TS, drum_lane_name(t, l), lit ? PC[l] : tu_mix(fc.bg, PC[l], 80), tu_mix(fc.bg, PC[l], 45));
+    }
+    tu_rrect(8, 132, 224, 80, 7, fc.surf, fc.bg);
+    tu_text(14, 146, &AF_PS, "THUMP", fc.acc, fc.surf);
+    tu_text(14, 159, &AF_PS, "LAB", fc.acc, fc.surf);
+    {
+        char pb[24];
+        tfm_snd_label(t, pb);
+        tu_text_fit(14, 176, &AF_TM, pb, fc.ink, fc.surf, 66);
+    }
+    {
+        uint32_t c;
+        for (c = 0; c < 4u; c++) {
+            uint32_t m = (uint32_t)tu.page * 4u + c;
+            int32_t cx = 101 + 37 * (int32_t)c;
+            tf_knob(cx, 156, 12, RGB(26, 18, 16), TU_TC[c], tfm_macro_get(t, m));
+            tf_label(c, cx, 177, m, 1);
+        }
+    }
+}
+static void tf_squelch(void)
+{
+    track_t *t = &trk[song.sel];
+    int lit = fs[song.sel].acc && fs[song.sel].flash;
+    tu_text(10, 40, &AF_PN, "SQUELCH", fc.ink, tf_under(40));
+    tu_text(10, 57, &AF_TS, "ACID BASS \xB7 RUBBER", fc.mute, tf_under(57));
+    tf_preset(10, 72, fc.ink, tf_under(72));
+    if (lit)
+        tu_disc(190, 40, 10, tu_mix(tf_under(40), RGB(255, 59, 47), 40));
+    tu_disc(190, 40, 6, lit ? RGB(255, 59, 47) : RGB(120, 30, 28));                 /* the ACCENT lamp: lit on accented notes */
+    tu_text(200, 40, &AF_TS, "ACCENT", fc.ink, tf_under(40));
+    tf_row(97, 23, 0, 56, 36, RGB(26, 26, 28), RGB(236, 236, 236), 151);
+    tu_text_c(120, 196, &AF_TS, "the plate glows brighter as the cutoff opens", fc.mute, tf_under(196));
+    (void)t;
+}
+static void tf_wobbler(void)
+{
+    track_t *t = &trk[song.sel];
+    uint32_t j, lit = (uint32_t)tfm_macro_get(t, 0) * JAM_RING_N / 128u, rate = (uint32_t)tf_sw(1);
+    int32_t lfo = (t->lfo_val >> 8), br = clamp(70 + lfo * 28 / 128, 25, 100);
+    tu_text(10, 38, &AF_PN, "WOBBLER", RGB(80, 255, 140), tf_under(38));
+    tf_preset(10, 54, fc.ink, tf_under(54));
+    if (tu.page == 0u) {
+        for (j = 0; j < JAM_RING_N; j++) {                                           /* the LED ring = WOB; the lit ones pulse with the LFO */
+            int32_t x = 120 + JAM_RING[j][0] * 52 / 1024, y = 92 + JAM_RING[j][1] * 52 / 1024;
+            tu_disc(x, y, 2, j < lit ? tu_mix(RGB(20, 50, 30), RGB(80, 255, 140), (uint32_t)br) : RGB(32, 38, 34));
+        }
+        tf_knob(120, 92, 36, RGB(24, 26, 28), RGB(80, 255, 140), tfm_macro_get(t, 0));
+        tu_text_c(120, 142, &AF_TM, "WOB", RGB(80, 255, 140), tf_under(142));
+        for (j = 2; j < 4u; j++) {                                                    /* GROWL and CUT: small knobs */
+            int32_t cy = j == 2u ? 52 : 118;
+            tf_knob(205, cy, 16, RGB(24, 26, 28), TU_TC[j], tfm_macro_get(t, j));
+            tu_disc(186, cy + 24, 2, TU_TC[j]);
+            tu_text(190, cy + 24, &AF_TS, TFM_INS[TI_WOBBLER].mac[j].name, fc.ink, tf_under(cy + 24));
+        }
+        for (j = 0; j < 6u; j++) {                                                    /* the RATE tiles: the lit one is the rate */
+            char nb[6];
+            str_cpy(nb, TFM_INS[TI_WOBBLER].mac[1].swn ? TFM_INS[TI_WOBBLER].mac[1].swn[j] : "-", 6);
+            tu_rrect(36 + (int32_t)j * 29, 166, 26, 17, 3, j == rate ? RGB(80, 255, 140) : RGB(26, 44, 34), tf_under(166));
+            tu_text_c(49 + (int32_t)j * 29, 175, &AF_TS, nb, j == rate ? RGB(18, 28, 22) : RGB(120, 200, 150), j == rate ? RGB(80, 255, 140) : RGB(26, 44, 34));
+        }
+        tu_text_c(120, 192, &AF_TS, "K2 RATE", fc.mute, tf_under(192));
+    } else {
+        tf_row(100, 17, 0, 56, 36, RGB(24, 26, 28), RGB(80, 255, 140), 140);
+    }
+}
+static void tf_chordette(void)
+{
+    track_t *t = &trk[song.sel];
+    char name[10], notes[24], cn[12];
+    const char *unit;
+    uint32_t j, cur = tfm_snd_of(t), first;
+    tu_rrect(8, 28, 224, 84, 4, RGB(90, 84, 72), tf_under(60));
+    tu_rrect(11, 31, 218, 78, 3, RGB(14, 34, 24), RGB(90, 84, 72));                  /* the LCD */
+    tu_text(18, 40, &AF_PS, "CHORDETTE", RGB(150, 236, 190), RGB(14, 34, 24));
+    if (t->nheld || fs[song.sel].env > 400)
+        tf_chord_name(fs[song.sel].note, name, notes);
+    else
+        tf_chord_name(60, name, notes), notes[0] = 0;
+    tu_text(18, 68, &AF_PL, t->nheld || fs[song.sel].env > 400 ? name : "---", RGB(150, 236, 190), RGB(14, 34, 24));
+    tfm_macro_text(t, 0, cn, &unit);
+    {
+        char b[36];
+        str_cpy(b, cn, 12);
+        if (notes[0]) {
+            str_cpy(b + str_len(b), " \xB7 ", 5);
+            str_cpy(b + str_len(b), notes, 16);
+        }
+        tu_text(18, 97, &AF_TS, b, RGB(110, 190, 150), RGB(14, 34, 24));
+    }
+    first = cur >= 4u ? cur - 3u : 0u;
+    for (j = 0; j < 5u && first + j < TFM_INS[TI_CHORDETTE].nsnd; j++) {             /* the preset list; the one now lit */
+        int32_t y = 44 + (int32_t)j * 13;
+        int on = first + j == cur;
+        if (on)
+            tu_rect(124, y - 6, 100, 12, RGB(150, 236, 190));
+        tu_text(128, y, &AF_TS, TFM_INS[TI_CHORDETTE].snd[first + j].name, on ? RGB(14, 34, 24) : RGB(110, 190, 150), on ? RGB(150, 236, 190) : RGB(14, 34, 24));
+    }
+    tf_row(142, 16, 0, 56, 36, RGB(28, 26, 24), RGB(236, 232, 224), 168);
+}
+static void tf_razor(void)
+{
+    tu_text(10, 36, &AF_PN, "RAZOR", RGB(230, 244, 255), tf_under(36));
+    tu_text(88, 36, &AF_TM, "SYNC LEAD", RGB(110, 220, 255), tf_under(36));
+    tf_preset(10, 52, fc.ink, tf_under(52));
+    tf_row(73, 98, 1, 54, 33, RGB(150, 232, 255), RGB(70, 190, 230), 182);
+}
+static void tf_haze(void)
+{
+    track_t *t = &trk[song.sel];
+    uint32_t j;
+    for (j = 0; j < 4u; j++)                                                         /* a glass panel */
+        tu_rect(11 + (int32_t)j, 29 + (int32_t)j, 218 - 2 * (int32_t)j, 1, tu_mix(tf_under(29), TC_TEXT, 24 - 5 * j));
+    tu_rect(11, 29, 1, 160, tu_mix(tf_under(100), TC_TEXT, 22));
+    tu_rect(228, 29, 1, 160, tu_mix(tf_under(100), TC_TEXT, 22));
+    tu_rect(11, 188, 218, 1, tu_mix(tf_under(188), TC_TEXT, 22));
+    tu_text(20, 46, &AF_PN, "haze", RGB(255, 255, 255), tf_under(46));
+    tf_preset(120, 44, fc.ink, tf_under(44));
+    tf_row(70, 90, 1, 50, 42, RGB(250, 250, 255), RGB(235, 235, 245), 172);
+    (void)t;
+}
+static void tf_pixel(void)
+{
+    track_t *t = &trk[song.sel];
+    uint32_t j, w = (uint32_t)tf_sw(1);
+    int32_t x, y0 = 70, lastx = 22, lasty = 0;
+    char b[24], v[12];
+    const char *unit;
+    tu_rrect(11, 29, 142, 98, 8, RGB(88, 88, 96), tf_under(70));
+    tu_rrect(19, 34, 125, 76, 3, RGB(134, 168, 40), RGB(88, 88, 96));                 /* the screen: the WAVE, drawn */
+    for (x = 0; x < 110; x++) {
+        int32_t y;
+        uint32_t ph = (uint32_t)x * 16u / 110u;
+        if (w < 3u)
+            y = (ph * 100u / 16u) % 100u < (w == 0u ? 50u : w == 1u ? 25u : 12u) ? 0 : 36;
+        else if (w == 3u)
+            y = ph < 8u ? (int32_t)ph * 36 / 8 : (int32_t)(16u - ph) * 36 / 8;
+        else
+            y = (int32_t)(((uint32_t)x * 2654435761u + (fm1_ms >> 7) * 40503u) >> 27) % 37;
+        if (x && w >= 4u)
+            tf_line(lastx, y0 - 18 + lasty, 27 + x, y0 - 18 + y, RGB(34, 52, 20), 2);
+        else if (x)
+            tf_line(lastx, y0 - 18 + lasty, 27 + x, y0 - 18 + y, RGB(34, 52, 20), 2);
+        lastx = 27 + x;
+        lasty = y;
+    }
+    tfm_snd_label(t, b);
+    tfm_macro_text(t, 1, v, &unit);
+    str_cpy(b + str_len(b), " \xB7 ", 5);
+    str_cpy(b + str_len(b), v, 10);
+    tu_text(22, 100, &AF_TS, b, RGB(34, 52, 20), RGB(134, 168, 40));
+    tu_text(22, 118, &AF_PS, "PIXEL", fc.ink, RGB(88, 88, 96));
+    for (j = 0; j < 5u; j++) {                                                         /* the WAVE buttons (K2): 50 25 12 TRI NZ */
+        static const char *const WN[5] = {"50", "25", "12", "TRI", "NZ"};
+        int32_t cx = j < 3u ? 169 + 25 * (int32_t)j : 181 + 25 * (int32_t)(j - 3u), cy = j < 3u ? 46 : 74;
+        tu_disc(cx, cy, 10, j == w ? RGB(214, 60, 140) : RGB(130, 128, 150));
+        tu_text_c(cx, cy, &AF_TS, WN[j], TC_TEXT, j == w ? RGB(214, 60, 140) : RGB(130, 128, 150));
+    }
+    tu_text(158, 100, &AF_TS, "K2 WAVE", RGB(214, 60, 140), tf_under(100));
+    tf_row(152, 15, 0, 54, 36, RGB(52, 48, 78), RGB(236, 232, 240), 176);
+}
+static void tf_tine(void)
+{
+    track_t *t = &trk[song.sel];
+    int32_t tp = tfm_macro_get(t, 2), trem = tp < 43 ? 0 : tp < 85 ? 1 : 2;       /* TREM: past 1/3 MONO, past 2/3 STEREO */
+    uint32_t j;
+    tu_text(10, 40, &AF_PN, "Tine", fc.ink, tf_under(40));
+    tf_preset(70, 42, fc.ink, tf_under(42));
+    tu_rrect(7, 66, 226, 122, 6, RGB(212, 210, 206), tf_under(120));
+    tu_disc(18, 80, 3, TU_TC[2]);
+    tu_text(26, 80, &AF_TS, "TREMOLO", RGB(34, 34, 34), RGB(212, 210, 206));
+    for (j = 0; j < 3u; j++) {                                                         /* the lever = TREM: OFF / MONO / STER */
+        static const char *const LN[3] = {"OFF", "MONO", "STER"};
+        tu_rrect(14 + (int32_t)j * 34, 90, 31, 14, 3, (int32_t)j == trem ? RGB(190, 60, 40) : RGB(48, 48, 50), RGB(212, 210, 206));
+        tu_text_c(29 + (int32_t)j * 34, 97, &AF_TS, LN[j], TC_TEXT, (int32_t)j == trem ? RGB(190, 60, 40) : RGB(48, 48, 50));
+    }
+    tu_text(122, 82, &AF_TS, "TREM: past 1/3 MONO,", RGB(60, 60, 60), RGB(212, 210, 206));
+    tu_text(122, 94, &AF_TS, "past 2/3 STEREO", RGB(60, 60, 60), RGB(212, 210, 206));
+    {
+        uint16_t ink = fc.ink, mute = fc.mute;
+        fc.ink = RGB(30, 30, 30);                                                     /* (the labels sit on the light panel) */
+        fc.mute = RGB(96, 96, 96);
+        tf_row(133, 16, 0, 52, 40, RGB(22, 22, 24), RGB(240, 240, 240), 158);
+        fc.ink = ink;
+        fc.mute = mute;
+    }
+    (void)t;
+}
+static void tf_glint(void)
+{
+    track_t *t = &trk[song.sel];
+    uint32_t p = fm1_ms >> 8, flash = fs[song.sel].flash;
+    uint16_t gold = RGB(232, 190, 100);
+    tu_rect(10, 30, 219, 1, gold); tu_rect(10, 189, 219, 1, gold); tu_rect(10, 30, 1, 160, gold); tu_rect(228, 30, 1, 160, gold);
+    tu_rect(14, 34, 211, 1, tu_mix(tf_under(40), gold, 50)); tu_rect(14, 185, 211, 1, tu_mix(tf_under(40), gold, 50));
+    tu_rect(14, 34, 1, 152, tu_mix(tf_under(40), gold, 50)); tu_rect(224, 34, 1, 152, tu_mix(tf_under(40), gold, 50));
+    tu_text_c(120, 50, &AF_PN, "Glint", gold, tf_under(50));
+    {
+        int32_t s0 = 3 + (int32_t)((p + 0u) & 3u) / 2 + (flash ? 3 : 0), s1 = 2 + (int32_t)((p + 1u) & 3u) / 2, s2 = 3 + (int32_t)((p + 2u) & 3u) / 2 + (flash ? 2 : 0), s3 = 2 + (int32_t)((p + 3u) & 3u) / 2;
+        tf_star(33, 48, s0, gold);                                                   /* the stars twinkle, and flare on a note */
+        tf_star(47, 68, s1, tu_mix(tf_under(68), gold, 70));
+        tf_star(194, 72, s2, gold);
+        tf_star(205, 49, s3, tu_mix(tf_under(49), gold, 70));
+    }
+    tf_preset(70, 66, gold, tf_under(66));
+    tf_row(107, 17, 0, 51, 42, RGB(196, 150, 60), RGB(30, 20, 10), 133);
+    (void)t;
+}
+static void tf_pluck(void)
+{
+    track_t *t = &trk[song.sel];
+    int32_t x, amp = (int32_t)fs[song.sel].amp, lasty = 76, lastx = 24;
+    tu_text(14, 40, &AF_PN, "Pluck", RGB(240, 214, 170), tf_under(40));
+    tf_preset(84, 40, fc.ink, tf_under(40));
+    tu_rrect(18, 58, 204, 38, 14, RGB(176, 130, 84), tf_under(76));
+    for (x = 0; x < 192; x += 3) {                                                    /* the string: it vibrates on each note and dies with DAMP */
+        int32_t y = 77 + (tu_sin((uint32_t)(x * 5 / 2) + (fm1_ms >> 3)) * amp * 14 / 102400) * (x > 90 ? (192 - x) : x) / 96;
+        tf_line(lastx, lasty, 24 + x, y, RGB(130, 40, 24), 2);
+        lastx = 24 + x;
+        lasty = y;
+    }
+    tf_row(122, 15, 0, 51, 42, RGB(82, 50, 26), RGB(248, 236, 214), 148);
+    (void)t;
+}
+static void tf_vox(void)
+{
+    track_t *t = &trk[song.sel];
+    static const char VL[5] = {'U', 'O', 'A', 'E', 'I'};
+    uint32_t j, v = (uint32_t)clamp(tfm_macro_get(t, 0) * 5 / 128, 0, 4), glow = fs[song.sel].flash || fs[song.sel].env > 900;
+    int32_t open = clamp(fs[song.sel].env / 400, 2, 18), rx = v == 0u ? 8 : v == 1u ? 11 : v == 2u ? 14 : v == 3u ? 15 : 16;
+    int32_t ry = v == 4u ? open / 3 + 1 : v == 3u ? open / 2 + 1 : open;
+    tu_rrect(18, 32, 75, 83, 14, RGB(150, 168, 190), tf_under(70));
+    tu_disc(37, 52, 6, glow ? RGB(120, 200, 255) : RGB(70, 110, 160));               /* the eyes glow on notes */
+    tu_disc(74, 52, 6, glow ? RGB(120, 200, 255) : RGB(70, 110, 160));
+    tf_ell(55, 90, rx, ry < 2 ? 2 : ry, RGB(24, 30, 40));                            /* the mouth: opens with the sound, shaped by VOWEL */
+    tu_rrect(104, 32, 120, 83, 10, RGB(60, 72, 88), tf_under(70));
+    for (j = 0; j < 20u; j++) {
+        int32_t q;
+        for (q = 0; q < 12; q++)
+            tu_rect(110 + (int32_t)j * 5, 38 + q * 6, 2, 2, RGB(84, 96, 112));
+    }
+    for (j = 0; j < 5u; j++) {                                                        /* the vowels, the one in the voice lit */
+        char l[2] = {VL[j], 0};
+        tu_text_c(118 + (int32_t)j * 24, 76, &AF_TM, l, j == v ? RGB(255, 190, 60) : RGB(160, 172, 190), RGB(60, 72, 88));
+    }
+    tu_text(14, 128, &AF_PN, "VOX", RGB(120, 190, 240), tf_under(128));
+    tf_preset(70, 128, fc.ink, tf_under(128));
+    tf_row(152, 14, 0, 51, 40, RGB(196, 204, 214), RGB(30, 36, 46), 175);
+}
+static void tf_wheel(void)
+{
+    track_t *t = &trk[song.sel];
+    static const uint8_t REG[10][9] = {{8, 8, 8, 8, 8, 8, 8, 8, 8}, {8, 8, 8, 0, 0, 0, 0, 0, 0}, {8, 8, 8, 6, 0, 0, 0, 0, 0}, {8, 0, 8, 0, 0, 0, 0, 0, 0},
+                                       {8, 8, 8, 8, 0, 0, 0, 0, 0}, {0, 0, 8, 6, 4, 0, 0, 0, 0}, {8, 8, 8, 8, 8, 8, 0, 0, 0}, {8, 0, 8, 8, 8, 0, 0, 0, 0},
+                                       {0, 0, 4, 4, 6, 6, 0, 0, 0}, {8, 6, 8, 6, 8, 6, 4, 4, 4}};
+    uint32_t j, st = (uint32_t)tf_sw(0) % 10u;
+    int32_t sub = tfm_macro_get(t, 4), body = tfm_macro_get(t, 5), top = tfm_macro_get(t, 6), rotor = tf_sw(2);
+    char b[24];
+    tu_rrect(6, 27, 228, 162, 8, RGB(78, 44, 24), tf_under(100));
+    for (j = 0; j < 9u; j++) {                                                         /* the drawbars: the STOPS registration; SUB / BODY / TOP scale their groups */
+        int32_t g = j < 2u ? sub : j < 6u ? body : top, len = (int32_t)REG[st][j] * 9 * (100 + (g - 64) * 55 / 64) / 100 + 6;
+        uint16_t bc = j < 2u ? RGB(150, 70, 40) : (j == 2u || j == 4u || j == 6u || j == 8u) ? RGB(240, 232, 208) : RGB(30, 24, 20);
+        tu_rect(14 + 15 * (int32_t)j, 31, 12, len, bc);
+        tu_rect(14 + 15 * (int32_t)j, 31 + len - 1, 12, 1, tu_mix(bc, TC_BG, 40));
+        tu_rect(18 + 15 * (int32_t)j, 28, 4, 4, RGB(60, 34, 18));
+    }
+    tu_text(150, 40, &AF_PS, "WHEEL", RGB(255, 170, 60), tf_under(40));
+    tu_text(150, 53, &AF_PS, "HOUSE", RGB(255, 170, 60), tf_under(53));
+    {
+        char pb[24];
+        tfm_snd_label(t, pb);
+        tu_text_fit(150, 68, &AF_TM, pb, fc.ink, tf_under(68), 78);
+    }
+    tu_text(150, 84, &AF_TS, "ROTARY", fc.ink, tf_under(84));
+    tf_tiles(150, 93, 25, 14, 27, 2, RGB(240, 232, 208), RGB(40, 24, 14), RGB(30, 24, 20), RGB(200, 180, 150));
+    str_cpy(b, "STOPS: ", 8);
+    str_cpy(b + str_len(b), TFM_INS[TI_WHEEL].snd[tfm_snd_of(t) % TFM_INS[TI_WHEEL].nsnd].name, 14);
+    tu_disc(14, 126, 2, TU_TC[0]);
+    tu_text_fit(20, 126, &AF_TS, b, fc.ink, tf_under(126), 200);
+    if (tu.page == 0u) {
+        tf_knob(49, 147, 13, RGB(206, 204, 198), RGB(30, 30, 30), tfm_macro_get(t, 1));
+        tf_label(1, 49, 168, 1, 1);
+        tf_knob(180, 147, 13, RGB(206, 204, 198), RGB(30, 30, 30), tfm_macro_get(t, 3));
+        tf_label(3, 180, 168, 3, 1);
+    } else {
+        tf_row(147, 13, 0, 55, 49, RGB(206, 204, 198), RGB(30, 30, 30), 168);
+    }
+    (void)rotor;
+}
+static void tf_face(void)                               /* the whole body, y 22 .. 215 */
+{
+    uint32_t k = song.sel, i = tfm_ins_of(&trk[k]), y;
+    const tu_mat_t *m = &TU_MAT[i % TI_N];
+    for (y = 22; y < 215u; y += 4u)                                                   /* the material: bands, with its rules */
+        tu_rect(0, (int32_t)y, TU_W, 4, tu_mat_at(m, y - 22u, 193u));
+    if (m->tex == 1)
+        for (y = 3; y < TU_W; y += 4u)
+            tu_rect((int32_t)y, 22, 1, 193, tu_mix(tf_under(100), m->ink, 7));
+    else if (m->tex == 2)
+        for (y = 26; y < 215u; y += 8u)
+            tu_rect(0, (int32_t)y, TU_W, 1, tu_mix(tf_under((int32_t)y), m->ink, 6));
+    switch (i) {
+    case TI_THUMP: tf_thump(); break;
+    case TI_SQUELCH: tf_squelch(); break;
+    case TI_WOBBLER: tf_wobbler(); break;
+    case TI_CHORDETTE: tf_chordette(); break;
+    case TI_RAZOR: tf_razor(); break;
+    case TI_HAZE: tf_haze(); break;
+    case TI_PIXEL: tf_pixel(); break;
+    case TI_TINE: tf_tine(); break;
+    case TI_GLINT: tf_glint(); break;
+    case TI_PLUCK: tf_pluck(); break;
+    case TI_VOX: tf_vox(); break;
+    case TI_WHEEL: tf_wheel(); break;
+    default:
+        tu_text_fit(14, 46, &AF_PN, ENGINES[trk[k].eng_req % NENGINES]->name, fc.acc, fc.bg, 212);
+        tu_text(14, 64, &AF_TS, "a sound without an instrument", fc.mute, fc.bg);
+        tu_text(14, 80, &AF_TL, "EDIT: DEEP", fc.ink, fc.bg);
+        break;
+    }
+}
+static void tu_face_top(void) { tf_face(); }
+static void tu_face_dials(void) { tf_face(); }
 static void tu_head_sound(void)
 {
     uint32_t k = song.sel;
     char t[8], b[4] = {'T', (char)('1' + k), 0, 0};
     int32_t x;
-    tu_rect(0, 0, TU_W, TU_HY, fc.bg);
-    tu_rect(0, TU_HY - 1, TU_W, 1, tu_mix(fc.bg, fc.acc, 14));
-    tu_rec_dots(fc.bg);
-    tu_text(TU_DX, 10, &AF_TM, b, fc.ink, fc.bg);
+    uint16_t hb = tu_mix(fc.bg, TC_BG, 70);             /* (the header and footer dark over the material) */
+    tu_rect(0, 0, TU_W, TU_HY, hb);
+    tu_rect(0, TU_HY - 1, TU_W, 1, tu_mix(hb, fc.acc, 14));
+    tu_rec_dots(hb);
+    tu_text(TU_DX, 10, &AF_TM, b, TC_TEXT, hb);
     tu_timer_text(t);
     if (t[0])
-        tu_text_c(120, 10, &AF_PS, t, TC_AMBER, fc.bg);
+        tu_text_c(120, 10, &AF_PS, t, TC_AMBER, hb);
     {   /* "MACROS 1 . 2 . DEEP": the page's number in the accent */
         static const char *const W[6] = {"MACROS", "1", "\xB7", "2", "\xB7", "DEEP"};
         uint32_t j;
@@ -433,7 +606,7 @@ static void tu_head_sound(void)
             w += text_w(&AF_TS, W[j]);
         x = 231 - w;
         for (j = 0; j < 6u; j++)
-            x = tu_text(x, 10, &AF_TS, W[j], (j == 1u && tu.page == 0u) || (j == 3u && tu.page == 1u) ? fc.acc : fc.mute, fc.bg) + 4;
+            x = tu_text(x, 10, &AF_TS, W[j], (j == 1u && tu.page == 0u) || (j == 3u && tu.page == 1u) ? fc.acc : TC_QUIET, hb) + 4;
     }
 }
 static void tu_sound_draw(void)
@@ -446,14 +619,14 @@ static void tu_sound_draw(void)
         sig = sig * 31u + (uint32_t)tfm_macro_get(&trk[k], m);
     tu_zone(0, 0, TU_HY, fc.bg, sig, tu_head_sound);
     tu_zone(2, 22, 104, fc.bg, sig + (i != TI_NONE ? (ui.frame >> 1) * 7u : 0u), tu_face_top);
-    tu_zone(3, 126, 89, fc.bg, sig, tu_face_dials);
-    tu_pbg = fc.bg;
+    tu_zone(3, 126, 89, fc.bg, sig + (i != TI_NONE ? (ui.frame >> 1) * 7u : 0u), tu_face_dials);
+    tu_pbg = tu_mix(fc.bg, TC_BG, 70);
     tu_pline = tu_mix(fc.bg, fc.acc, 14);
-    tu_pq = fc.mute;
+    tu_pq = TC_QUIET;
     if (i == TI_THUMP)
-        tu_foot(3, "KEYS", "PLAY PARTS", "EDIT", "NEXT PAGE", "SEQ", "DRUM GRID", 0, 0, 0, 0);
+        tu_foot(3, "KEYS", "PLAY PARTS", "EDIT", tu.page ? "DEEP" : "PAGE 2", "SEQ", "GRID", 0, 0, 0, 0);
     else
-        tu_foot(3, "EDIT", "NEXT PAGE", "HOLD EDIT", "INSTRUMENT", "HOME", "JAM", 0, 0, 0, 0);
+        tu_foot(3, "EDIT", tu.page ? "DEEP" : "PAGE 2", "PRESETS", "SOUND", "HOME", "JAM", 0, 0, 0, 0);
     tu_pbg = TC_BG;
     tu_pline = TC_SURF;
     tu_pq = TC_QUIET;
