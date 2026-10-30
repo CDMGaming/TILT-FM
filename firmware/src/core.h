@@ -254,6 +254,7 @@ typedef struct track {
     uint8_t eng_req;             /* engine the UI asked for (the ISR switches at a block start) */
     uint8_t user;                /* user preset slot + 1 the sound came from (UI), 0 = none */
     voice_t v[NVOICE];
+    uint16_t kgain[NVOICE];      /* TFM round 6: each voice's level for its key (Q15, 32767 none: voice.c voice_start) */
     /* LFO */
     uint32_t lfo_ph;
     int32_t lfo_val;             /* Q15 */

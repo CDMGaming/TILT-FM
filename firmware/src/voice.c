@@ -288,6 +288,13 @@ static void glide_set(track_t *t, voice_t *v, int glide)
     }
 }
 
+/* TFM round 6: an instrument's level for a key (tfm_instr.c tfm_key_gain: notes above its home range no louder), Q15;
+ * none: 32767 (set there; a project or sound of before has none) */
+static int32_t (*key_gain_fn)(const track_t *t, uint32_t note);
+static void voice_kgain(track_t *t, const voice_t *v, uint32_t note)
+{
+    t->kgain[(v - t->v) % NVOICE] = (uint16_t)(key_gain_fn ? key_gain_fn(t, note) : 32767);
+}
 static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int glide)
 {
     const engine_t *e = ENGINES[t->engine];
@@ -297,6 +304,7 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
     uint32_t keep = e->keep;
     v->note = (uint8_t)note;
     v->vel = (uint8_t)vel;
+    voice_kgain(t, v, note);
     v->gate = 1;
     v->active = 1;
     v->stage = 1;
@@ -356,6 +364,7 @@ static void mono_play(track_t *t, uint32_t note, uint32_t vel, int retrig, int g
             }
         } else {                                            /* legato: new pitch, same envelope */
             v->note = (uint8_t)note;
+            voice_kgain(t, v, note);
             v->pitch16 = (int32_t)note * 16;
             v->mvel = t->m_vel;
             v->mrnd = t->m_rnd;
@@ -723,6 +732,8 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
                 env = e->amp(t, v, env);
             m.envq15 = e->ownenv ? 0 : env;
             m.amp1 = e->ownenv ? env : mulq15(env, v->vel * 258);
+            if (t->kgain[i] < 32767u)                   /* (TFM: the key's level) */
+                m.amp1 = mulq15(m.amp1, t->kgain[i]);
             if (p[P_LD_AMP])
                 m.amp1 = mulq15(m.amp1, 32767 - mulq15(p[P_LPOL] ? lfo : (lfo + 32768) >> 1, p[P_LD_AMP] * 258));
             if (fade)                                   /* linear to 0 over the fade */

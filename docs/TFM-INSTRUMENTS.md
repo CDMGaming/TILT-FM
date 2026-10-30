@@ -379,3 +379,197 @@ each:
   MONK: a low, chanting voice.
 - **WHEELHOUSE.** SMOKY: a mellow jazz organ. SUNDAY SERVICE: full gospel organ. ROCK OUT: driven with a fast rotor.
   BALLPARK: bright, all the drawbars. FLUTES: soft flute stops.
+
+## Levels (round 6)
+
+Measured on the host (`R6LOUD=1` on `tests/ui_test.c`, `tests/ui_test_r6.h`): ITU BS.1770-style loudness, the K-weighting re-derived for 44.1 kHz, 400 ms blocks every 100 ms, the absolute (-70) and relative (-10 LU) gates for the integrated loudness (I, LUFS), the loudest 3 s for the short-term one. Each preset plays 2 bars at 120 of a part in its role: THUMP LAB a beat (kick, snare, hats); SQUELCH and WOBBLER eighths in C2-C3; CHORDETTE, HAZE, TINE, PLUCK, VOX, WHEELHOUSE chords on the half bars in C3-C4 (CHORDETTE: the root, it makes the chord); RAZOR, PIXEL and GLINT quarters in C4-C6. Default LEVEL, the master at unity, from a clean start. "-1 / +1 oct": the same part an octave down / up. "pk": the part's peak before the master (dBFS).
+
+**How it is matched.** The mix takes a trim with LEVEL (`firmware/src/fx.c` `trk_lvl`; `tfm_instr.c` `TFM_TRIM`: half dB, per instrument and per named preset; the older sounds take the instrument's). Pads, leads and bells sit at -18 LUFS, the basses at -16.5 / -17.5, the drums at about -18. **No loudness is bought from the limiter**: a trim stops where the part alone peaks at -2 dBFS before the master (the master limiter starts at -5.2 dBFS and caught every drum hit and bass note before: THUMP LAB peaked at +9 dBFS through it, the pads were squeezed from about -6 to -11 LUFS). That ceiling is why the drums sit level with the rest rather than above, and why PLUCK sits at -21: its pick is a sharp peak over a short note.
+
+Before, the pads and leads were 8-12 LU louder than the drums and basses (THUMP LAB -22, SQUELCH -21, the pads -11, the leads -10) and PLUCK's NYLON / MUTED / BANJO-ISH were 25 LU under HARP.
+
+| instrument | preset | before I | after I | after S | after pk | before -1 / +1 oct | after -1 / +1 oct |
+|---|---|---|---|---|---|---|---|
+| THUMP LAB | WAREHOUSE | -22.2 | -18.2 | -18.0 | -2.0 | -22.2 / -22.2 | -18.2 / -18.1 |
+| THUMP LAB | BOOM BAP | -22.6 | -18.1 | -18.0 | -1.9 | -22.6 / -22.6 | -18.2 / -18.1 |
+| THUMP LAB | DISCO | -19.1 | -17.9 | -17.8 | -1.8 | -19.1 / -19.1 | -17.9 / -17.9 |
+| THUMP LAB | TRASH CAN | -27.6 | -18.5 | -18.2 | -2.0 | -27.5 / -27.6 | -18.5 / -18.5 |
+| THUMP LAB | ARCADE | -22.1 | -17.3 | -17.1 | -3.8 | -22.1 / -22.1 | -17.3 / -17.2 |
+| SQUELCH | RUBBER | -21.5 | -18.1 | -17.9 | -1.6 | -23.8 / -20.1 | -20.1 / -17.6 |
+| SQUELCH | ACID RAIN | -20.2 | -17.1 | -17.1 | -4.2 | -23.2 / -18.6 | -20.0 / -16.3 |
+| SQUELCH | LOW RIDER | -19.1 | -17.6 | -17.5 | -6.7 | -22.1 / -17.2 | -20.6 / -16.5 |
+| SQUELCH | ZAPPER | -25.2 | -18.3 | -18.1 | -2.0 | -27.0 / -23.2 | -20.1 / -17.4 |
+| SQUELCH | GNARLY | -25.8 | -17.5 | -17.4 | -6.3 | -29.2 / -24.1 | -20.9 / -16.5 |
+| WOBBLER | HALF STEP | -20.9 | -16.5 | -16.4 | -6.1 | -23.7 / -19.6 | -19.3 / -15.8 |
+| WOBBLER | YOY | -21.5 | -16.6 | -16.5 | -7.7 | -23.5 / -21.3 | -18.6 / -16.3 |
+| WOBBLER | TRASH FLOOR | -25.6 | -16.7 | -16.6 | -7.5 | -26.3 / -24.8 | -17.4 / -16.2 |
+| WOBBLER | LASER WOB | -20.3 | -16.4 | -16.3 | -7.3 | -23.2 / -19.0 | -19.3 / -15.5 |
+| WOBBLER | SUBWAY | -20.3 | -16.4 | -16.3 | -7.7 | -23.0 / -18.8 | -19.1 / -15.6 |
+| CHORDETTE | HOUSE STAB | -13.2 | -18.1 | -18.0 | -11.9 | -13.5 / -13.1 | -18.4 / -17.7 |
+| CHORDETTE | SUNDAY | -11.9 | -17.8 | -17.6 | -12.3 | -12.5 / -11.0 | -18.8 / -15.9 |
+| CHORDETTE | VELVET | -11.5 | -18.2 | -18.1 | -12.9 | -12.7 / -11.1 | -21.0 / -18.0 |
+| CHORDETTE | PUMPER | -14.7 | -17.8 | -17.8 | -10.7 | -15.1 / -12.9 | -18.4 / -15.5 |
+| CHORDETTE | MIXTAPE | -11.4 | -17.8 | -17.6 | -11.2 | -13.5 / -11.5 | -19.9 / -17.0 |
+| RAZOR | HERO | -10.3 | -18.1 | -17.9 | -9.8 | -10.7 / -9.6 | -18.0 / -18.9 |
+| RAZOR | TRANCE GATE | -9.9 | -18.1 | -18.0 | -11.1 | -9.8 / -9.1 | -17.4 / -18.0 |
+| RAZOR | ARENA | -11.5 | -17.8 | -17.2 | -7.0 | -10.7 / -14.5 | -16.4 / -21.0 |
+| RAZOR | SINE RIDER | -14.7 | -18.0 | -17.1 | -9.0 | -10.6 / -22.2 | -11.9 / -24.7 |
+| RAZOR | HOT WIRE | -10.6 | -18.2 | -18.1 | -8.1 | -10.9 / -9.7 | -18.2 / -17.1 |
+| HAZE | FOG | -11.4 | -18.0 | -17.9 | -9.4 | -11.8 / -11.3 | -21.2 / -18.4 |
+| HAZE | MORNING | -11.8 | -18.0 | -17.8 | -8.9 | -13.3 / -10.7 | -20.2 / -17.1 |
+| HAZE | VHS | -12.1 | -17.9 | -17.7 | -7.6 | -13.0 / -11.4 | -21.0 / -17.1 |
+| HAZE | AURORA | -12.4 | -17.8 | -17.5 | -6.9 | -14.4 / -11.1 | -20.5 / -15.5 |
+| HAZE | DEEP END | -11.1 | -18.2 | -18.0 | -14.1 | -11.6 / -11.2 | -21.9 / -19.5 |
+| PIXEL | 1UP | -9.6 | -18.1 | -18.0 | -15.3 | -10.0 / -8.6 | -18.2 / -18.3 |
+| PIXEL | BOSS LEVEL | -12.6 | -17.9 | -17.9 | -9.5 | -13.2 / -12.2 | -18.2 / -18.5 |
+| PIXEL | WARP ZONE | -17.5 | -17.9 | -17.7 | -8.9 | -19.1 / -16.2 | -19.1 / -17.7 |
+| PIXEL | HIGH SCORE | -11.8 | -17.9 | -17.5 | -14.8 | -14.5 / -10.1 | -20.1 / -17.3 |
+| PIXEL | GLITCH | -12.7 | -17.9 | -17.6 | -13.8 | -15.3 / -11.2 | -20.1 / -17.5 |
+| TINE | SUITCASE | -11.2 | -17.9 | -18.0 | -9.7 | -12.1 / -11.6 | -19.6 / -18.4 |
+| TINE | LOUNGE | -11.0 | -18.0 | -18.0 | -10.5 | -12.0 / -11.3 | -19.9 / -18.7 |
+| TINE | BARK BARK | -11.9 | -18.2 | -18.3 | -11.0 | -13.4 / -12.5 | -19.6 / -18.9 |
+| TINE | DREAMY | -10.9 | -17.9 | -18.0 | -11.4 | -12.3 / -11.3 | -19.5 / -18.6 |
+| TINE | CHURCH BASEMENT | -13.1 | -18.2 | -18.2 | -11.6 | -16.5 / -13.4 | -21.1 / -18.5 |
+| GLINT | MUSIC BOX | -17.1 | -18.2 | -18.0 | -10.5 | -18.2 / -16.1 | -19.3 / -17.4 |
+| GLINT | TEMPLE | -15.7 | -18.0 | -17.8 | -12.1 | -15.9 / -15.3 | -18.7 / -18.1 |
+| GLINT | ICE | -17.3 | -17.8 | -17.6 | -10.4 | -18.1 / -16.7 | -18.5 / -17.5 |
+| GLINT | CHIMES | -15.9 | -18.0 | -17.8 | -11.2 | -16.9 / -15.3 | -18.9 / -17.7 |
+| GLINT | ROBOT BELLS | -14.7 | -18.2 | -18.2 | -12.3 | -14.7 / -14.7 | -18.2 / -18.5 |
+| PLUCK | KOTO | -30.7 | -21.8 | -21.4 | -1.8 | -31.1 / -30.1 | -22.1 / -22.7 |
+| PLUCK | NYLON | -36.7 | -24.8 | -25.1 | -1.8 | -36.3 / -35.2 | -23.9 / -24.6 |
+| PLUCK | MUTED | -36.9 | -23.5 | -24.1 | -1.8 | -37.4 / -35.3 | -23.6 / -24.2 |
+| PLUCK | HARP | -14.0 | -21.1 | -20.6 | -12.3 | -14.7 / -10.6 | -22.3 / -17.1 |
+| PLUCK | BANJO-ISH | -35.5 | -21.0 | -20.9 | -13.7 | -35.4 / -34.0 | -20.9 / -19.8 |
+| VOX | ROBOT | -10.8 | -17.9 | -17.6 | -8.9 | -11.7 / -10.0 | -19.9 / -15.5 |
+| VOX | CHOIR BOY | -11.4 | -18.0 | -17.7 | -10.2 | -12.0 / -10.9 | -20.1 / -15.8 |
+| VOX | WHISPER | -12.0 | -17.9 | -17.8 | -7.7 | -11.9 / -11.5 | -17.8 / -18.6 |
+| VOX | YAMMER | -11.3 | -18.2 | -17.9 | -8.2 | -12.1 / -10.7 | -19.9 / -17.0 |
+| VOX | MONK | -11.3 | -17.8 | -17.4 | -11.0 | -11.5 / -10.5 | -18.2 / -15.6 |
+| WHEELHOUSE | SMOKY | -11.4 | -17.9 | -17.8 | -10.3 | -12.0 / -11.3 | -19.9 / -17.8 |
+| WHEELHOUSE | SUNDAY SERVICE | -11.7 | -18.1 | -18.1 | -11.0 | -12.6 / -11.9 | -20.9 / -18.3 |
+| WHEELHOUSE | ROCK OUT | -12.2 | -17.9 | -17.8 | -10.1 | -12.7 / -11.2 | -18.4 / -17.0 |
+| WHEELHOUSE | BALLPARK | -11.7 | -18.2 | -18.3 | -9.4 | -12.0 / -10.4 | -18.2 / -17.1 |
+| WHEELHOUSE | FLUTES | -12.0 | -18.1 | -18.0 | -7.7 | -12.0 / -10.8 | -17.8 / -17.5 |
+
+Each instrument's reference (the median of its five) and the spread after:
+
+| instrument | reference (LUFS) | presets from it (LU) |
+|---|---|---|
+| THUMP LAB | -18.1 | -0.1, +0.0, +0.2, -0.4, +0.8 |
+| SQUELCH | -17.6 | -0.5, +0.5, +0.0, -0.7, +0.1 |
+| WOBBLER | -16.5 | +0.0, -0.1, -0.2, +0.1, +0.1 |
+| CHORDETTE | -17.8 | -0.3, +0.0, -0.4, +0.0, +0.0 |
+| RAZOR | -18.1 | +0.0, +0.0, +0.3, +0.1, -0.1 |
+| HAZE | -18.0 | +0.0, +0.0, +0.1, +0.2, -0.2 |
+| PIXEL | -17.9 | -0.2, +0.0, +0.0, +0.0, +0.0 |
+| TINE | -18.0 | +0.1, +0.0, -0.2, +0.1, -0.2 |
+| GLINT | -18.0 | -0.2, +0.0, +0.2, +0.0, -0.2 |
+| PLUCK | -21.8 | +0.0, -3.0, -1.7, +0.7, +0.8 |
+| VOX | -17.9 | +0.0, -0.1, +0.0, -0.3, +0.1 |
+| WHEELHOUSE | -18.1 | +0.2, +0.0, +0.2, -0.1, +0.0 |
+
+PLUCK NYLON and MUTED stay 1.6-3 LU under PLUCK's reference: at the -2 dBFS ceiling already (their pick's peak), louder means the limiter. A follow-up for their sound (a softer pick at the same brightness), not for the level.
+
+**Key tracking of level** (`TFM_KT`: the top of the home range, then half dB less per octave above it, per voice at its note: `voice.c` `voice_kgain`), set from the "+1 oct" rise: SQUELCH from C3 2.5 dB/oct, WOBBLER from C3 2, CHORDETTE from C4 1.5, RAZOR from C5 0.5, HAZE from C4 1, PIXEL from C5 1.5, TINE none (it falls), GLINT from C5 0.5, PLUCK from C4 2, VOX from C4 3, WHEELHOUSE from C4 1.5. THUMP LAB none.
+
+**THUMP LAB's low end.** The kick's body sat at ~160 Hz, not its designed 50 Hz: SMACK drove the kit's TONE (30..115), and TONE also holds the kick's pitch sweep up (0..+3 octaves); PUNCH and TUNE both wrote the kit's TUNE. Now TONE is fixed low in the voicing (26: the kick's energy under 100 Hz 56 %, was 33 %), SMACK is the snap and the snare and clap lanes, PUNCH is the kick lane's level, the accent and the drive (TUNE alone tunes), the hats' lanes are louder (voicing 110, HATS 80..127), and WAREHOUSE and BOOM BAP have more snare and hats. Nothing in the track or master chain thinned the lows (the insert's low cut is ~27 Hz, the master DC blocker ~2 Hz; SPEAKER EQ is FLAT by default); the limiter was the other half (every kick went through it). Each piece alone, after:
+
+| kit | before kick / snare / hats | after kick / snare / hats |
+|---|---|---|
+| WAREHOUSE | -21.3 / -26.7 / -35.1 | -18.1 / -20.6 / -20.7 |
+| BOOM BAP | -23.4 / -23.8 / -33.0 | -19.9 / -21.2 / -19.4 |
+| DISCO | -22.3 / -24.9 / -22.5 | -22.1 / -24.1 / -18.9 |
+| TRASH CAN | -27.6 / -32.3 / -38.3 | -18.0 / -22.3 / -24.3 |
+| ARCADE | -22.2 / -24.0 / -32.8 | -17.8 / -19.7 / -23.3 |
+
+**Macros** (each on the instrument's first named preset at 0 / 50 / 100; a level target running against the ones that brighten, resonate, drive or add space). Changed: THUMP PUNCH, SMACK, TIME, DIRT, HATS; SQUELCH RESO, ENV MOD, BITE, GNAW; WOBBLER GROWL (no level target: it over-compensated), DIRT; CHORDETTE WARM; RAZOR CUT; HAZE SPACE, TONE (its band-pass swept off the sound: 10..28 now); PIXEL SWEEP, DUTY; TINE WARMTH; GLINT METAL; PLUCK BRIGHT, BOW, SPACE; VOX BUZZ, SPACE; WHEELHOUSE DRIVE, BODY. Those kinds of macros stay within 5 LU over the whole turn (the test). Left as they are, and why: the ones that change the note's length or movement (SQUELCH DECAY +7, PLUCK DAMP +16, THUMP TIME, HAZE BLOOM / HOLD / MOVE, TINE TREM, CHORDETTE PUMP, VOX BREATH, RAZOR WIDTH) and RAZOR SWEEP (its filter envelope; RAZOR CUT holds the level target: two macros writing LEVEL fight, the last one moved wins - an old limit of the macro design, worth its own change).
+
+| instrument | macro | before 0 / 50 / 100 | after 0 / 50 / 100 |
+|---|---|---|---|
+| THUMP LAB | PUNCH | -20.3 / -21.7 / -24.5 | -20.2 / -18.5 / -17.4 |
+| THUMP LAB | SMACK | -24.8 / -22.2 / -19.9 | -20.2 / -19.5 / -18.5 |
+| THUMP LAB | TIME | -21.5 / -21.8 / -19.5 | -21.5 / -21.1 / -17.7 |
+| THUMP LAB | ROOM | -22.4 / -22.5 / -20.9 | -18.4 / -18.2 / -17.3 |
+| THUMP LAB | TUNE | -22.6 / -22.0 / -21.5 | -18.8 / -17.9 / -16.7 |
+| THUMP LAB | DIRT | -19.5 / -23.0 / -26.5 | -17.5 / -18.2 / -18.2 |
+| THUMP LAB | HATS | -22.3 / -22.1 / -22.2 | -18.0 / -18.2 / -18.1 |
+| THUMP LAB | ECHO | -22.2 / -22.2 / -21.4 | -18.2 / -17.9 / -17.7 |
+| SQUELCH | CUTOFF | -22.3 / -21.4 / -20.9 | -18.6 / -18.0 / -17.5 |
+| SQUELCH | RESO | -20.7 / -22.7 / -23.7 | -18.0 / -18.2 / -17.4 |
+| SQUELCH | ENV MOD | -24.3 / -23.2 / -21.4 | -18.6 / -19.3 / -19.1 |
+| SQUELCH | DECAY | -24.0 / -20.5 / -13.1 | -19.3 / -18.0 / -12.0 |
+| SQUELCH | BITE | -22.1 / -24.2 / -27.8 | -19.2 / -18.1 / -18.4 |
+| SQUELCH | GNAW | -20.1 / -24.5 / -29.3 | -18.3 / -17.5 / -17.0 |
+| SQUELCH | WAVE | -20.1 / -21.9 / -20.1 | -17.1 / -18.3 / -17.1 |
+| SQUELCH | SLIDE | -21.5 / -21.5 / -21.5 | -18.1 / -18.1 / -18.1 |
+| WOBBLER | WOB | -20.8 / -20.8 / -21.2 | -16.4 / -16.4 / -16.8 |
+| WOBBLER | GROWL | -18.2 / -22.4 / -26.8 | -16.3 / -16.5 / -16.9 |
+| WOBBLER | CUT | -22.0 / -21.1 / -20.1 | -17.6 / -16.7 / -15.7 |
+| WOBBLER | SPREAD | -20.7 / -21.0 / -21.3 | -16.4 / -16.6 / -16.9 |
+| WOBBLER | DIRT | -18.2 / -20.4 / -21.1 | -14.4 / -15.0 / -14.2 |
+| WOBBLER | SLIDE | -20.9 / -21.0 / -21.0 | -16.5 / -16.6 / -16.6 |
+| CHORDETTE | WARM | -18.1 / -13.7 / -12.7 | -20.1 / -17.8 / -19.6 |
+| CHORDETTE | SWELL | -13.5 / -13.3 / -14.0 | -18.2 / -18.0 / -18.9 |
+| CHORDETTE | SHIMMER | -12.4 / -12.4 / -11.7 | -17.3 / -16.7 / -16.0 |
+| CHORDETTE | SPACE | -13.6 / -12.7 / -12.1 | -18.6 / -17.4 / -16.0 |
+| CHORDETTE | PUMP | -12.2 / -13.8 / -15.1 | -17.0 / -18.7 / -20.1 |
+| CHORDETTE | AGE | -13.3 / -13.3 / -13.5 | -18.3 / -18.3 / -18.8 |
+| RAZOR | SCREAM | -10.1 / -9.8 / -10.3 | -22.4 / -22.2 / -20.9 |
+| RAZOR | SWEEP | -13.7 / -9.9 / -10.0 | -24.6 / -17.3 / -16.3 |
+| RAZOR | CUT | -18.0 / -10.6 / -9.8 | -23.4 / -18.5 / -20.9 |
+| RAZOR | GLIDE | -10.1 / -10.4 / -10.1 | -18.4 / -18.0 / -18.0 |
+| RAZOR | WIDTH | -9.4 / -10.0 / -10.9 | -15.6 / -17.5 / -19.4 |
+| RAZOR | ATTACK | -10.0 / -10.1 / -10.8 | -18.3 / -18.3 / -19.9 |
+| RAZOR | VIB | -9.9 / -10.0 / -9.7 | -18.5 / -18.6 / -18.1 |
+| RAZOR | ECHO | -10.1 / -9.9 / -10.2 | -18.9 / -17.9 / -16.8 |
+| HAZE | DRIFT | -11.6 / -11.3 / -11.4 | -18.2 / -18.0 / -18.1 |
+| HAZE | DUST | -11.5 / -11.5 / -11.4 | -18.0 / -18.1 / -18.3 |
+| HAZE | SPACE | -11.2 / -11.3 / -11.5 | -18.0 / -18.2 / -18.1 |
+| HAZE | BLOOM | -11.5 / -11.3 / -12.4 | -17.9 / -17.9 / -30.5 |
+| HAZE | TONE | -11.1 / -11.8 / -24.3 | -17.6 / -18.4 / -21.5 |
+| HAZE | SHINE | -11.5 / -11.5 / -11.3 | -18.3 / -17.4 / -16.7 |
+| HAZE | MOVE | -11.0 / -11.6 / -12.1 | -17.5 / -19.6 / -23.7 |
+| HAZE | HOLD | -11.5 / -11.5 / -11.6 | -20.5 / -18.0 / -17.0 |
+| PIXEL | SWEEP | -9.5 / -10.4 / -14.0 | -19.1 / -18.5 / -20.6 |
+| PIXEL | CRUSH | -9.5 / -9.5 / -9.5 | -18.1 / -18.1 / -18.1 |
+| PIXEL | VIB | -9.5 / -9.4 / -9.6 | -18.1 / -18.0 / -18.1 |
+| PIXEL | DECAY | -9.5 / -9.5 / -8.2 | -18.2 / -18.0 / -16.3 |
+| PIXEL | TONE | -10.8 / -9.7 / -9.4 | -19.3 / -18.2 / -17.9 |
+| PIXEL | DUTY | -12.3 / -10.4 / -9.2 | -18.7 / -18.4 / -18.8 |
+| TINE | BARK | -11.2 / -11.1 / -11.3 | -17.7 / -17.8 / -18.4 |
+| TINE | TINE | -11.1 / -11.2 / -11.1 | -17.8 / -17.8 / -17.9 |
+| TINE | TREM | -11.1 / -11.6 / -13.1 | -17.2 / -18.8 / -20.9 |
+| TINE | CHORUS | -11.2 / -10.9 / -10.4 | -18.0 / -17.5 / -15.8 |
+| TINE | DECAY | -11.2 / -11.1 / -11.2 | -17.7 / -17.8 / -17.8 |
+| TINE | WARMTH | -10.9 / -11.6 / -14.9 | -17.6 / -17.8 / -17.9 |
+| TINE | SPACE | -11.1 / -11.1 / -11.4 | -18.0 / -17.0 / -15.9 |
+| TINE | REL | -11.2 / -11.1 / -11.2 | -17.7 / -17.9 / -17.7 |
+| GLINT | METAL | -18.5 / -17.1 / -14.9 | -18.1 / -18.2 / -17.5 |
+| GLINT | BLOOM | -18.2 / -17.2 / -16.9 | -19.2 / -18.2 / -18.0 |
+| GLINT | DECAY | -17.2 / -17.1 / -17.2 | -18.2 / -18.2 / -18.2 |
+| GLINT | BITE | -17.2 / -17.1 / -17.1 | -18.2 / -18.2 / -18.2 |
+| GLINT | ATTACK | -17.2 / -17.1 / -17.2 | -18.2 / -18.2 / -18.2 |
+| GLINT | SPACE | -17.3 / -16.6 / -14.9 | -18.4 / -17.7 / -15.9 |
+| GLINT | SHIMMER | -16.9 / -18.1 / -18.9 | -18.0 / -19.2 / -20.0 |
+| PLUCK | BRIGHT | -33.0 / -32.2 / -28.9 | -23.9 / -24.0 / -22.8 |
+| PLUCK | DAMP | -37.0 / -29.0 / -17.4 | -28.0 / -20.4 / -11.3 |
+| PLUCK | BODY | -29.8 / -31.0 / -31.1 | -21.0 / -22.3 / -22.6 |
+| PLUCK | PICK | -27.0 / -29.2 / -28.9 | -18.8 / -20.4 / -20.4 |
+| PLUCK | BOW | -30.6 / -25.7 / -21.8 | -21.4 / -20.2 / -20.3 |
+| PLUCK | ACCENT | -32.3 / -30.9 / -29.6 | -23.4 / -22.2 / -21.0 |
+| PLUCK | SPACE | -31.3 / -30.0 / -27.7 | -21.4 / -21.6 / -21.3 |
+| PLUCK | ECHO | -30.9 / -30.7 / -30.0 | -22.0 / -21.7 / -21.2 |
+| VOX | VOWEL | -10.8 / -10.8 / -10.8 | -17.9 / -17.9 / -17.9 |
+| VOX | TALK | -11.1 / -10.8 / -11.0 | -18.5 / -17.8 / -18.7 |
+| VOX | BUZZ | -11.2 / -11.2 / -10.7 | -19.6 / -19.9 / -19.6 |
+| VOX | BREATH | -10.9 / -11.0 / -11.4 | -17.8 / -18.8 / -21.0 |
+| VOX | Q | -11.3 / -10.8 / -10.3 | -19.1 / -17.6 / -16.6 |
+| VOX | CHOIR | -10.8 / -11.2 / -11.3 | -17.4 / -19.1 / -18.6 |
+| VOX | SPACE | -10.6 / -11.1 / -11.2 | -17.6 / -18.0 / -17.5 |
+| WHEELHOUSE | DRIVE | -11.4 / -11.5 / -12.1 | -22.1 / -20.7 / -22.0 |
+| WHEELHOUSE | CLICK | -11.4 / -11.3 / -11.3 | -18.0 / -18.1 / -18.0 |
+| WHEELHOUSE | SUB | -11.2 / -11.2 / -11.8 | -17.1 / -17.1 / -18.2 |
+| WHEELHOUSE | BODY | -13.9 / -11.3 / -11.3 | -20.0 / -17.1 / -20.6 |
+| WHEELHOUSE | TOP | -11.4 / -11.4 / -11.6 | -17.8 / -17.7 / -18.8 |
+| WHEELHOUSE | SPACE | -11.0 / -11.6 / -11.4 | -18.3 / -17.6 / -16.0 |
+

@@ -11367,6 +11367,7 @@ int main(void)
     bad += test_r6_start();
     bad += test_r6_jam_here();
     bad += test_r6_chord_order();
+    bad += test_r6_loud();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

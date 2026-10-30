@@ -5,7 +5,7 @@
 #define R6_N (R6_FS * 2u)
 static int16_t r6_buf[R6_N];
 /* a preset rendered: C4 E4 G4 eighths then C5 held (a kit: kick, snare, hat, kick held), 2 s from a clean start */
-static void r6_render(uint32_t ins, uint32_t pre)
+static void r6_render(uint32_t ins, uint32_t pre)     /* (round 6 item 10: without the mix trims: item 4 audits the sound itself) */
 {
     static const uint8_t MEL[4] = {60, 64, 67, 72}, KIT[4] = {36, 38, 42, 36};
     static const uint32_t ON[4] = {0, 11025, 22050, 33075}, OFF[4] = {8820, 19845, 30870, 66150};
@@ -23,6 +23,7 @@ static void r6_render(uint32_t ins, uint32_t pre)
     song.sel = 0;
     tfm_load(t, ins, pre);
     t->p[P_ROOT] = 0; t->p[P_SCALE] = 1; t->p[P_QUANT] = QN_WHITE;
+    lvl_trim_fn = 0;
     panic_req = (1u << NTRK) - 1u; mix_block(o, CTL);
     for (f = 0; f < 256u && (t->xf_on || t->eng_req != t->engine); f++) mix_block(o, CTL);
     for (n = 0; n < R6_N; n += CTL) {
@@ -36,6 +37,7 @@ static void r6_render(uint32_t ins, uint32_t pre)
         for (i = 0; i < CTL && n + i < R6_N; i++)
             r6_buf[n + i] = (int16_t)clamp((o[2 * i] + o[2 * i + 1]) / 2, -32768, 32767);
     }
+    lvl_trim_fn = tfm_lvl_trim;
 }
 /* the features: 0 brightness (log2 of the RMS frequency, early), 1 its change late vs early (octaves), 2 attack (log2 ms to
  * 90 % of the first note's top), 3 sustain (the held note at 0.6 s over its top), 4 motion (the held note's level wobble), 5 level (dB / 6) */
@@ -214,5 +216,293 @@ static int test_r6_chord_order(void)
     R6(str_eq(name, "C") && str_eq(notes, "C E G"));
     trk[0].p[P_VOIC] = VC_CLOSE;
     bad += check("round 6 item 9: CHORDETTE lists the chord notes up from the root (C E G with OPEN and an inversion too)", ok);
+    return bad;
+}
+/* item 10: loudness. ITU BS.1770 style: K-weighting (its shelf and high-pass, re-derived for 44.1 kHz), 400 ms blocks
+ * every 100 ms, the absolute gate (-70) and the relative one (-10 LU) for the integrated loudness, the loudest 3 s for the
+ * short-term one. Each preset plays a part that fits its role (drums a beat, basses C2-C3, chords and pads C3-C4, leads
+ * and bells C4-C6) at its default mix level, from a clean start */
+#define R6L_N (R6_FS * 4u)                              /* 2 bars at 120 */
+static int16_t r6l_buf[2][R6L_N];
+enum { R6R_DRUMS, R6R_BASS, R6R_PAD, R6R_LEAD };
+static uint32_t r6_role(uint32_t ins)
+{
+    if (ins == TI_THUMP)
+        return R6R_DRUMS;
+    if (TFM_INS[ins].group == IG_BASS)
+        return R6R_BASS;
+    if (TFM_INS[ins].group == IG_LEAD || ins == TI_GLINT)
+        return R6R_LEAD;
+    return R6R_PAD;
+}
+typedef struct { uint32_t on, off; uint8_t note; } r6l_ev_t;
+static uint32_t r6l_part(uint32_t ins, int32_t tr, r6l_ev_t *ev)     /* the part's notes (sample times), transposed tr */
+{
+    static const uint8_t BASS[8] = {36, 36, 48, 36, 43, 36, 46, 48}, LEAD[8] = {60, 67, 72, 64, 76, 79, 84, 72};
+    static const uint8_t PAD[4][3] = {{48, 52, 55}, {45, 48, 52}, {50, 53, 57}, {47, 50, 55}};
+    uint32_t n = 0, i, k, role = r6_role(ins);
+    const uint32_t E = R6_FS / 4u;                      /* an eighth at 120 */
+    if (role == R6R_DRUMS) {
+        for (i = 0; i < 16u; i++) {                     /* hats on the eighths, kicks on 1 and 3 (and the and of 3), snares on 2 and 4 */
+            ev[n].on = i * E; ev[n].off = i * E + E / 2u; ev[n++].note = 42;
+            if ((i & 7u) == 0u || (i & 7u) == 4u || (i & 7u) == 5u) { ev[n].on = i * E; ev[n].off = i * E + E; ev[n++].note = 36; }
+            if ((i & 7u) == 2u || (i & 7u) == 6u) { ev[n].on = i * E; ev[n].off = i * E + E; ev[n++].note = 38; }
+        }
+        return n;
+    }
+    if (role == R6R_BASS) {
+        for (i = 0; i < 16u; i++) { ev[n].on = i * E; ev[n].off = i * E + E * 8u / 10u; ev[n++].note = (uint8_t)(BASS[i & 7u] + tr); }
+        return n;
+    }
+    if (role == R6R_LEAD) {
+        for (i = 0; i < 8u; i++) { ev[n].on = i * 2u * E; ev[n].off = i * 2u * E + E * 18u / 10u; ev[n++].note = (uint8_t)(LEAD[i] + tr); }
+        return n;
+    }
+    for (i = 0; i < 4u; i++)                            /* chords on the half bars (CHORDETTE: its root alone, it makes the chord) */
+        for (k = 0; k < (ins == TI_CHORDETTE ? 1u : 3u); k++) {
+            ev[n].on = i * 4u * E; ev[n].off = i * 4u * E + E * 38u / 10u; ev[n++].note = (uint8_t)(PAD[i][k] + tr);
+        }
+    return n;
+}
+/* track 0 plays what is loaded on it (a preset, macros moved), the part transposed tr; the master as everyone hears it */
+static uint8_t r6l_only;                                /* (a kit: one note of the beat alone, 0 all) */
+static int32_t r6l_peak;                                /* the part's peak before the master (the track's: fx.c mix_part) */
+static void r6l_play(uint32_t ins, int32_t tr)
+{
+    static r6l_ev_t ev[64];
+    track_t *t = &trk[0];
+    int32_t o[2 * CTL];
+    uint32_t n, k, ne = r6l_part(ins, tr, ev);
+    panic_req = (1u << NTRK) - 1u; mix_block(o, CTL);
+    for (n = 0; n < 256u && (t->xf_on || t->eng_req != t->engine); n++) mix_block(o, CTL);
+    r6l_peak = 0;
+    for (n = 0; n < R6L_N; n += CTL) {
+        uint32_t i;
+        for (k = 0; k < ne; k++) {
+            if (r6l_only && ev[k].note != r6l_only) continue;
+            if (ev[k].off >= n && ev[k].off < n + CTL) trk_note_off(t, ev[k].note);
+            if (ev[k].on >= n && ev[k].on < n + CTL) trk_note_on(t, ev[k].note, 100);
+        }
+        t->peak = 0;
+        mix_block(o, CTL);
+        if (t->peak > r6l_peak) r6l_peak = t->peak;
+        for (i = 0; i < CTL && n + i < R6L_N; i++) {
+            r6l_buf[0][n + i] = (int16_t)clamp(o[2 * i], -32768, 32767);
+            r6l_buf[1][n + i] = (int16_t)clamp(o[2 * i + 1], -32768, 32767);
+        }
+    }
+    for (k = 0; k < ne; k++) trk_note_off(t, ev[k].note);
+}
+static void r6l_setup(uint32_t ins, uint32_t pre)
+{
+    track_t *t = &trk[0];
+    ui_power_on();
+    memset(dly_buf, 0, sizeof dly_buf);
+    memset(cho_buf, 0, sizeof cho_buf);
+    rev_clear();
+    tu_off = 0;
+    song.master_q12 = 4096;
+    song.g[G_BPM] = 120;
+    rng_state = 0x12345678u;
+    song.sel = 0;
+    tfm_load(t, ins, pre);
+    t->p[P_ROOT] = 0; t->p[P_SCALE] = 1; t->p[P_QUANT] = QN_WHITE;
+}
+/* BS.1770 K-weighting at fs (the two biquads re-derived from the standard's analogue prototypes) */
+typedef struct { double b0, b1, b2, a1, a2, z1, z2; } r6bq_t;
+static double r6bq(r6bq_t *f, double x)
+{
+    double y = f->b0 * x + f->z1;
+    f->z1 = f->b1 * x - f->a1 * y + f->z2;
+    f->z2 = f->b2 * x - f->a2 * y;
+    return y;
+}
+static void r6_kw(r6bq_t *sh, r6bq_t *hp)
+{
+    double fs = R6_FS, G = 3.99984385397, Q = 0.7071752369554193, fc = 1681.9744509555319;
+    double A = pow(10.0, G / 40.0), w = 2.0 * 3.14159265358979 * fc / fs, cs = cos(w), al = sin(w) / (2.0 * Q), sa = 2.0 * sqrt(A) * al;
+    double a0 = (A + 1.0) - (A - 1.0) * cs + sa;
+    memset(sh, 0, sizeof *sh);
+    memset(hp, 0, sizeof *hp);
+    sh->b0 = A * ((A + 1.0) + (A - 1.0) * cs + sa) / a0;
+    sh->b1 = -2.0 * A * ((A - 1.0) + (A + 1.0) * cs) / a0;
+    sh->b2 = A * ((A + 1.0) + (A - 1.0) * cs - sa) / a0;
+    sh->a1 = 2.0 * ((A - 1.0) - (A + 1.0) * cs) / a0;
+    sh->a2 = ((A + 1.0) - (A - 1.0) * cs - sa) / a0;
+    Q = 0.5003270373253953; fc = 38.13547087613982;
+    w = 2.0 * 3.14159265358979 * fc / fs; cs = cos(w); al = sin(w) / (2.0 * Q);
+    a0 = 1.0 + al;
+    hp->b0 = (1.0 + cs) / 2.0 / a0; hp->b1 = -(1.0 + cs) / a0; hp->b2 = (1.0 + cs) / 2.0 / a0;
+    hp->a1 = -2.0 * cs / a0; hp->a2 = (1.0 - al) / a0;
+}
+/* the integrated loudness (LUFS, gated) and the loudest short-term (3 s) of r6l_buf */
+#define R6L_HOP (R6_FS / 10u)
+static double r6l_ms[R6L_N / R6L_HOP + 1u];                /* each 100 ms: the sum of both channels' K-weighted squares */
+static void r6_lufs(double *integ, double *st)
+{
+    uint32_t c, i, nb = R6L_N / R6L_HOP, b;
+    double gs = 0, l, rel, sum = 0;
+    uint32_t gn = 0;
+    memset(r6l_ms, 0, sizeof r6l_ms);
+    for (c = 0; c < 2u; c++) {
+        r6bq_t sh, hp;
+        r6_kw(&sh, &hp);
+        for (i = 0; i < R6L_N; i++) {
+            double y = r6bq(&hp, r6bq(&sh, r6l_buf[c][i] / 32768.0));
+            r6l_ms[i / R6L_HOP] += y * y;
+        }
+    }
+    for (b = 0; b + 4u <= nb; b++) {                    /* 400 ms blocks: the absolute gate */
+        double z = (r6l_ms[b] + r6l_ms[b + 1] + r6l_ms[b + 2] + r6l_ms[b + 3]) / (4.0 * R6L_HOP);
+        l = -0.691 + 10.0 * log10(z + 1e-20);
+        if (l > -70.0) { gs += z; gn++; }
+    }
+    rel = gn ? -0.691 + 10.0 * log10(gs / gn) - 10.0 : -70.0;
+    gs = 0; gn = 0;
+    for (b = 0; b + 4u <= nb; b++) {                    /* the relative gate */
+        double z = (r6l_ms[b] + r6l_ms[b + 1] + r6l_ms[b + 2] + r6l_ms[b + 3]) / (4.0 * R6L_HOP);
+        l = -0.691 + 10.0 * log10(z + 1e-20);
+        if (l > -70.0 && l > rel) { gs += z; gn++; }
+    }
+    *integ = gn ? -0.691 + 10.0 * log10(gs / gn) : -99.0;
+    *st = -99.0;
+    for (b = 0; b + 30u <= nb; b++) {                   /* 3 s windows */
+        sum = 0;
+        for (i = 0; i < 30u; i++) sum += r6l_ms[b + i];
+        l = -0.691 + 10.0 * log10(sum / (30.0 * R6L_HOP) + 1e-20);
+        if (l > *st) *st = l;
+    }
+}
+static double r6_loud(uint32_t ins, uint32_t pre, int32_t tr, double *st)
+{
+    double i, s;
+    r6l_setup(ins, pre);
+    r6l_play(ins, tr);
+    r6_lufs(&i, &s);
+    if (st) *st = s;
+    return i;
+}
+/* R6LOUD=1: the tables (each preset, the octaves, the macros); the checks always */
+static void r6_loud_tables(void)
+{
+    uint32_t i, a, m;
+    double s;
+    for (a = 0; a < 5u; a++) {                          /* THUMP LAB: the kick, the snare, the hats alone */
+        double k, sn, h;
+        r6l_only = 36; k = r6_loud(TI_THUMP, a, 0, 0);
+        r6l_only = 38; sn = r6_loud(TI_THUMP, a, 0, 0);
+        r6l_only = 42; h = r6_loud(TI_THUMP, a, 0, 0);
+        r6l_only = 0;
+        fprintf(stderr, "KIT %-14s kick %6.1f snare %6.1f hats %6.1f%c", TFM_INS[TI_THUMP].snd[a].name, k, sn, h, 10);
+    }
+    for (i = 0; i < TI_N; i++) {
+        for (a = 0; a < 5u; a++) {
+            double l = r6_loud(i, a, 0, &s), pk = 20.0 * log10(r6l_peak / 32768.0 + 1e-9), lo = r6_loud(i, a, -12, 0), hi = r6_loud(i, a, 12, 0);
+            fprintf(stderr, "LOUD %-10s %u %-14s I %6.1f S %6.1f  -1oct %6.1f  +1oct %6.1f  lvl %d  pk %5.1f%c", TFM_INS[i].name, a,
+                    TFM_INS[i].snd[a].name, l, s, lo, hi, trk[0].p[P_LEVEL], pk, 10);
+        }
+        for (m = 0; m < 8u; m++) {
+            const tfm_macro_t *mc = &TFM_INS[i].mac[m];
+            double v[3];
+            uint32_t k;
+            if (mc->nsw)
+                continue;
+            for (k = 0; k < 3u; k++) {
+                r6l_setup(i, 0);
+                tfm_macro_put(&trk[0], m, (int32_t)(k * 127u / 2u), 0);
+                r6l_play(i, 0);
+                r6_lufs(&v[k], &s);
+            }
+            fprintf(stderr, "MACRO %-10s %-7s 0 %6.1f  50 %6.1f  100 %6.1f%c", TFM_INS[i].name, mc->name, v[0], v[1], v[2], 10);
+        }
+    }
+}
+/* the share of r6l_buf's energy under ~100 Hz (two one-pole low-passes): a kick's low end */
+static double r6_lowfrac(void)
+{
+    double k = 1.0 - exp(-2.0 * 3.14159265358979 * 100.0 / R6_FS), y1 = 0, y2 = 0, sl = 0, sa = 0;
+    uint32_t i;
+    for (i = 0; i < R6L_N; i++) {
+        double x = r6l_buf[0][i] / 32768.0;
+        y1 += k * (x - y1);
+        y2 += k * (y1 - y2);
+        sl += y2 * y2;
+        sa += x * x;
+    }
+    return sl / (sa + 1e-12);
+}
+static int r6_cmpd(const void *a, const void *b) { double x = *(const double *)a, y = *(const double *)b; return x < y ? -1 : x > y; }
+/* the macros that brighten, resonate, drive or add space: their loudness over the whole turn (0 / 50 / 100) */
+static const char *const R6_MSTEADY[] = {
+    "THUMP LAB:SMACK", "THUMP LAB:DIRT", "THUMP LAB:ROOM", "THUMP LAB:ECHO", "SQUELCH:CUTOFF", "SQUELCH:RESO", "SQUELCH:ENV MOD",
+    "SQUELCH:BITE", "SQUELCH:GNAW", "WOBBLER:GROWL", "WOBBLER:CUT", "WOBBLER:DIRT", "CHORDETTE:WARM", "CHORDETTE:SHIMMER",
+    "CHORDETTE:SPACE", "RAZOR:SCREAM", "RAZOR:CUT", "HAZE:SPACE", "HAZE:TONE", "HAZE:SHINE", "PIXEL:CRUSH", "PIXEL:TONE",
+    "TINE:BARK", "TINE:TINE", "TINE:WARMTH", "TINE:SPACE", "GLINT:METAL", "GLINT:BITE", "GLINT:SPACE", "GLINT:SHIMMER",
+    "PLUCK:BRIGHT", "PLUCK:SPACE", "PLUCK:BOW", "VOX:BUZZ", "VOX:Q", "VOX:SPACE", "WHEELHOUSE:DRIVE", "WHEELHOUSE:CLICK",
+    "WHEELHOUSE:TOP", "WHEELHOUSE:SPACE", 0};
+#define R6_PRESET_LU 1.5                                /* a named preset from its instrument's reference (the median) */
+#define R6_KICK_LOW 0.45                                /* (56 % now; 33 % with the kick held up at ~160 Hz before) */
+#define R6_MACRO_LU 5.0                                 /* such a macro over its whole turn */
+static int test_r6_loud(void)
+{
+    int bad = 0, ok = 1, kt_ok = 1, kit_ok = 1, mac_ok = 1, pk_ok = 1;
+    uint32_t i, a, m;
+    double s;
+    if (getenv("R6LOUD"))
+        r6_loud_tables();
+    for (i = 0; i < TI_N; i++) {
+        double l[5], srt[5], ref, rise = 0;
+        uint32_t role = r6_role(i);
+        for (a = 0; a < 5u; a++) {
+            l[a] = srt[a] = r6_loud(i, a, 0, &s);
+            if (r6l_peak >= 32768) { pk_ok = 0; fprintf(stderr, "R6 PEAK %s %u %d ", TFM_INS[i].name, a, (int)r6l_peak); }
+            rise += r6_loud(i, a, 12, 0) - l[a];
+        }
+        qsort(srt, 5, sizeof srt[0], r6_cmpd);
+        ref = srt[2];
+        for (a = 0; a < 5u; a++) {                      /* (PLUCK's NYLON and MUTED: their pick's peak meets the ceiling first) */
+            double lim = i == TI_PLUCK && (a == 1u || a == 2u) ? 3.0 : R6_PRESET_LU;
+            if (fabs(l[a] - ref) > lim) { ok = 0; fprintf(stderr, "R6 LU %s %u %.1f ref %.1f ", TFM_INS[i].name, a, l[a], ref); }
+        }
+        if (role == R6R_DRUMS || role == R6R_BASS ? ref < -19.0 || ref > -15.5 : i == TI_PLUCK ? ref < -22.5 : ref < -19.5 || ref > -16.5) {
+            ok = 0;
+            fprintf(stderr, "R6 REF %s %.1f ", TFM_INS[i].name, ref);
+        }
+        if (rise / 5.0 > 2.0) { kt_ok = 0; fprintf(stderr, "R6 KT %s %.1f ", TFM_INS[i].name, rise / 5.0); }
+        for (m = 0; m < 8u; m++) {
+            const tfm_macro_t *mc = &TFM_INS[i].mac[m];
+            char nm[32];
+            uint32_t k, on = 0;
+            double v[3], lo, hi;
+            snprintf(nm, sizeof nm, "%s:%s", TFM_INS[i].name, mc->name);
+            for (k = 0; R6_MSTEADY[k]; k++)
+                on |= !strcmp(R6_MSTEADY[k], nm);
+            if (!on || mc->nsw)
+                continue;
+            for (k = 0; k < 3u; k++) {
+                r6l_setup(i, 0);
+                tfm_macro_put(&trk[0], m, (int32_t)(k * 127u / 2u), 0);
+                r6l_play(i, 0);
+                r6_lufs(&v[k], &s);
+            }
+            lo = v[0] < v[1] ? (v[0] < v[2] ? v[0] : v[2]) : (v[1] < v[2] ? v[1] : v[2]);
+            hi = v[0] > v[1] ? (v[0] > v[2] ? v[0] : v[2]) : (v[1] > v[2] ? v[1] : v[2]);
+            if (hi - lo > R6_MACRO_LU) { mac_ok = 0; fprintf(stderr, "R6 MACRO %s %.1f ", nm, hi - lo); }
+        }
+    }
+    {                                                   /* THUMP LAB WAREHOUSE (the first kit): kick, snare, hats alone */
+        double k, sn, h, low;
+        r6l_only = 36; k = r6_loud(TI_THUMP, 0, 0, 0); low = r6_lowfrac();
+        r6l_only = 38; sn = r6_loud(TI_THUMP, 0, 0, 0);
+        r6l_only = 42; h = r6_loud(TI_THUMP, 0, 0, 0);
+        r6l_only = 0;
+        fprintf(stderr, "KIT WAREHOUSE kick %.1f snare %.1f hats %.1f, the kick under 100 Hz %.0f %%%c", k, sn, h, low * 100.0, 10);
+        kit_ok = fabs(k - sn) <= 3.0 && fabs(k - h) <= 3.0 && low >= R6_KICK_LOW;
+    }
+    bad += check("round 6 item 10: levels: every named preset within 1.5 LU of its instrument (PLUCK NYLON / MUTED 3), the instruments matched (drums and bass -19..-15.5 LUFS, the rest -19.5..-16.5)", ok);
+    bad += check("round 6 item 10: no instrument alone peaks over 0 dBFS before the master (no loudness bought from the limiter)", pk_ok);
+    bad += check("round 6 item 10: key tracking: an octave up rises 2 LU at most (an instrument's mean)", kt_ok);
+    bad += check("round 6 item 10: THUMP LAB: the kick as loud as the snare and the hats on its own (3 LU), with its low end", kit_ok);
+    bad += check("round 6 item 10: the brightness, resonance, drive and space macros keep their loudness (5 LU over the turn)", mac_ok);
     return bad;
 }

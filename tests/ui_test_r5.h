@@ -347,7 +347,7 @@ static int test_r6_meters(void)
         if (tu.mlv[0] > top) top = tu.mlv[0];
     }
     fprintf(stderr, "METER SQUELCH: %u of 14 LEDs%c", (unsigned)(top / 16u), 10);
-    R5(top >= 4u * 16u && top <= 12u * 16u);                                 /* (mid-meter, not red) */
+    R5(top >= 4u * 16u && top < 14u * 16u);                                  /* (mid-meter to yellow, not red: round 6 levels) */
     R5(tu.mpk[0] >= top / 16u);
     trk_note_off(&trk[0], 48);
     trk_all_off(&trk[0]);
