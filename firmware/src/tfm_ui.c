@@ -705,20 +705,25 @@ static void tu_cab_draw(uint32_t c)
     acc = ins ? TFM_INS[tfm_ins_of(t) % TI_N].col[2] : TC_AMBER;
     if (mute)
         acc = TC_DIM;
+    if (!ins && !mute) {                                /* (round 7: no instrument: no dial, the words; DEEP is the MENU's) */
+        tu_text_c(cx, y0 + 30, &AF_TS, "NO", ink, mid);
+        tu_text_c(cx, y0 + 43, &AF_TS, "INSTRUMENT", ink, mid);
+        tu_text_c(cx, y0 + 57, &AF_TS, "HOLD EDIT", col, mid);
+    } else {
     tu_dial(cx, cy, 19, 16, (uint32_t)(pos * 1000 / 127), acc, tu_mix(mid, ink, 18));
     face = tu.flash[c] && !mute ? tu_mix(tu_mix(mid, TC_BG, 35), ink, 40) : tu_mix(mid, TC_BG, mute ? 10 : 35);
     tu_disc(cx, cy, 15, face);                          /* (a note flashes the dial) */
     if (mute) {
         tu_text_c(cx, cy, &AF_TS, "MUTED", TC_TEXT, face);
-    } else if (ins) {
+    } else {
         tfm_macro_text(t, tfm_jam_m(t), v, &unit);
         tu_text_c(cx, cy, &AF_TM, v, TC_TEXT, face);
-    } else {
-        fmt_int(v, pos * 100 / 127);
-        tu_text_c(cx, cy, &AF_TM, v, TC_TEXT, face);
     }
-    str_cpy(nm, ins ? TFM_INS[tfm_ins_of(t)].mac[tfm_jam_m(t)].name : "LEVEL", 12);
+    str_cpy(nm, TFM_INS[tfm_ins_of(t) % TI_N].mac[tfm_jam_m(t)].name, 12);
+    if (!ins)
+        str_cpy(nm, "LEVEL", 12);
     tu_text_c(x0 + 29, y0 + 64, &AF_TS, nm, ink, tu_mat_at(m, 64, CAB_H));
+    }
     tu_cut(x0 + 6, y0 + 72, 17, 12, col);                                              /* T1..T4 on a chip of the track colour */
     tu_text_c(x0 + 14, y0 + 78, &AF_TS, b, TC_BG, col);
     }

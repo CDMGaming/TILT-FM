@@ -583,9 +583,10 @@ static void tf_face(void)                               /* the whole body, y 22 
     case TI_VOX: tf_vox(); break;
     case TI_WHEEL: tf_wheel(); break;
     default:
-        tu_text_fit(14, 46, &AF_PN, ENGINES[trk[k].eng_req % NENGINES]->name, fc.acc, fc.bg, 212);
-        tu_text(14, 64, &AF_TS, "a sound without an instrument", fc.mute, fc.bg);
-        tu_text(14, 80, &AF_TL, "EDIT: DEEP", fc.ink, fc.bg);
+        /* (round 7: a plain face: DEEP is reached only from MENU > DEEP EDIT) */
+        tu_text_fit(14, 52, &AF_PN, "NO INSTRUMENT", fc.acc, fc.bg, 212);
+        tu_text(14, 74, &AF_TL, "HOLD EDIT TO PICK ONE", fc.ink, fc.bg);
+        tu_text_fit(14, 94, &AF_TS, ENGINES[trk[k].eng_req % NENGINES]->name, fc.mute, fc.bg, 212);
         break;
     }
 }
@@ -604,14 +605,14 @@ static void tu_head_sound(void)
     tu_timer_text(t);
     if (t[0])
         tu_text_c(120, 10, &AF_PS, t, TC_AMBER, hb);
-    {   /* "MACROS 1 . 2 . DEEP": the page's number in the accent */
-        static const char *const W[6] = {"MACROS", "1", "\xB7", "2", "\xB7", "DEEP"};
+    {   /* "MACROS 1 . 2": the page's number in the accent (round 7: DEEP is not reached from here any more) */
+        static const char *const W[4] = {"MACROS", "1", "\xB7", "2"};
         uint32_t j;
-        int32_t w = 5 * 4;
-        for (j = 0; j < 6u; j++)
+        int32_t w = 3 * 4;
+        for (j = 0; j < 4u; j++)
             w += text_w(&AF_TS, W[j]);
         x = 231 - w;
-        for (j = 0; j < 6u; j++)
+        for (j = 0; j < 4u; j++)
             x = tu_text(x, 10, &AF_TS, W[j], (j == 1u && tu.page == 0u) || (j == 3u && tu.page == 1u) ? fc.acc : TC_QUIET, hb) + 4;
     }
 }

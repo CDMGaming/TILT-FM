@@ -583,3 +583,27 @@ static int test_r7_instruments(void)
     bad += check("round 7 item 1: instruments stay after a SONG chain with SOUNDS SCENE, a chain from JAM, a power cycle (pack, restore) and MUTATE SOUND (every track keeps its instrument byte; SOUND keeps its face)", ok);
     return bad;
 }
+/* round 7 item 2: a track with no TFM instrument stays on TFM screens: EDIT toggles the pages, never DEEP; DEEP only from the MENU */
+static int test_r7_noinst(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t i;
+    ui_power_on();
+    tu_off = 0;
+    song.sel = 0;
+    tfm_load(&trk[0], TI_WOBBLER, 1u);
+    trk[0].preset = 4;                                  /* a raw engine preset: no instrument */
+    R7(tfm_ins_of(&trk[0]) == TI_NONE);
+    tu_goto(TU_SOUND);
+    frames(32);
+    for (i = 0; i < 3u; i++) {
+        press(B_EDIT); frames(32);
+        R7(tu.scr == TU_SOUND && tu.page == (i & 1u ? 0u : 1u));
+    }
+    R7(!tu_deep_on());
+    tu_goto(TU_JAM);
+    frames(32);
+    R7(tu.scr == TU_JAM && !tu_deep_on());
+    bad += check("round 7 item 2: a track with no instrument keeps SOUND on its TFM face (EDIT toggles the pages, never DEEP; DEEP is the MENU row only)", ok);
+    return bad;
+}
