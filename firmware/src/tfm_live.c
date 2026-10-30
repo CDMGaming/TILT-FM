@@ -261,3 +261,144 @@ static uint32_t jl_leds(uint32_t *br, uint32_t *mid)
     if (mid) *mid = m;
     return lit;
 }
+
+/* ================================================================== PERFORM (hold ARP) ============================ */
+/* The layer of the ARP button held (LAYER_SCENE's slot; tap stays the arpeggiator page): the white keys ROLL (the held note
+ * repeats at K1's rate: seq.c roll_tick; REC on, recorded as ratchets), F#3 G#3 A#3 C#4 mute T1-T4, D#4 held is FILL, F#4
+ * CAPTURE (the last 1, 2 or 4 bars played on the selected track, REC off too, written into its pattern, K2 the length), G#4
+ * MUTATE (the selected track's pattern and / or sound re-rolled in key, K3 the mode) */
+static uint8_t prf_rate, prf_cap, prf_mut;           /* K1 0..4: 1/8 1/8T 1/16 1/16T 1/32; K2 0..2: 1 2 4 bars; K3 0..2: PATTERN SOUND BOTH */
+static int prf_on(void) { return ui.layer == LAYER_SCENE && !tu_classic() && tu_on() && !ui.menu; }
+static int prf_fill_key(void) { return (prf_on() && jl_held(4)) || jl_fill_prev; }
+static void prf_mute(uint32_t i)
+{
+    track_t *t = &trk[i % NTRK];
+    t->p[P_MUTE] = t->p[P_MUTE] ? 0 : 1;
+    motion_capture(t, P_MUTE, t->p[P_MUTE]);
+    ui.force = 1;
+}
+static void prf_capture(void)
+{
+    track_t *t = TSEL;
+    uint32_t k = song.sel, win = (1u << prf_cap) * div_samples(2) * 16u, sp = div_samples((uint32_t)t->p[P_SDIV]), len = tq_len(t);
+    uint32_t i, j, base = 0xFFFFFFFFu, cur = song.playing ? t->seq_idx % len : 0u, nclr, n = 0;
+    if (chain_busy()) {
+        ui_message("STOP TO EDIT");
+        return;
+    }
+    for (i = 0; i < CAP_N; i++) {
+        const cap_ev_t *e = &cap_ev[k][i];
+        if (e->vel && cap_clock - e->t_on <= win && e->t_on < base) {
+            base = e->t_on;
+            n++;
+        }
+    }
+    if (!n) {
+        ui_message("NOTHING PLAYED");
+        return;
+    }
+    tl_undo_take(t);
+    nclr = win / sp < len ? win / sp : len;
+    for (j = 0; j < nclr; j++) {                        /* the bars it replaces */
+        uint32_t at = song.playing ? (cur + len * 4u - j % len) % len : j;
+        step_clear(&t->step[at]);
+        (void)motion_clear_locks(t, at);
+    }
+    for (i = 0; i < CAP_N; i++) {
+        const cap_ev_t *e = &cap_ev[k][(uint32_t)(cap_w[k] + i) % CAP_N];
+        uint32_t pos, ln, q;
+        step_t *st;
+        if (!e->vel || cap_clock - e->t_on > win)
+            continue;
+        if (song.playing) {
+            uint32_t back = (cap_clock - e->t_on + sp / 2u) / sp;
+            pos = (cur + len * 8u - back % len) % len;
+        } else {
+            pos = ((e->t_on - base + sp / 2u) / sp) % len;
+        }
+        ln = (e->len == CAP_OPEN ? cap_clock - e->t_on : (uint32_t)e->len << 6) + sp / 2u;
+        ln = ln / sp ? ln / sp : 1u;
+        st = &t->step[pos];
+        if (st->time != ST_NOTE) {
+            step_clear(st);
+            st->time = ST_NOTE;
+            st->vel = e->vel;
+        }
+        if (drum_track(t)) {
+            st->hit |= (uint8_t)(1u << drum_lane(e->note));
+        } else if (st->n < 4u) {
+            uint32_t d;
+            for (d = 0; d < st->n && st->note[d] != e->note; d++)
+                ;
+            if (d == st->n)
+                st->note[st->n++] = e->note;
+        }
+        for (q = 1; q < ln && q < len && !drum_track(t); q++) {
+            step_t *tie = &t->step[(pos + q) % len];
+            if (tie->time == ST_NOTE && tie->n)
+                break;
+            step_clear(tie);
+            tie->time = ST_TIE;
+        }
+    }
+    ui_message(prf_cap == 0u ? "CAPTURED 1 BAR" : prf_cap == 1u ? "CAPTURED 2 BARS" : "CAPTURED 4 BARS");
+    ui.force = 1;
+}
+static void prf_mutate(void)
+{
+    track_t *t = TSEL;
+    uint32_t i = tfm_ins_of(t);
+    if (chain_busy()) {
+        ui_message("STOP TO EDIT");
+        return;
+    }
+    if (prf_mut != 1u)
+        tools_key(TL_RANDOM);                           /* the pattern re-rolled in the track's key (one undo: SAVE held) */
+    if (prf_mut != 0u && i != TI_NONE)
+        tfm_load(t, i, (fm1_ms / 7u + cap_clock / 97u) % TFM_INS[i].nsnd);
+    ui_message(prf_mut == 0u ? "MUTATED: PATTERN" : prf_mut == 1u ? "MUTATED: SOUND" : "MUTATED: BOTH");
+    ui.force = 1;
+}
+static void prf_key(uint32_t k, uint32_t p)            /* a black key under the layer */
+{
+    uint32_t i;
+    (void)p;
+    if (!key_black(k))
+        return;
+    for (i = 0; i < 11u; i++)
+        if (jl_key(i) == (int32_t)k)
+            break;
+    if (i < 4u)
+        prf_mute(i);
+    else if (i == 5u)
+        prf_capture();
+    else if (i == 6u)
+        prf_mutate();
+}
+static void prf_knob(uint32_t k, int32_t s)
+{
+    int32_t d = s > 0 ? 1 : -1;
+    if (k == 0u)
+        prf_rate = (uint8_t)clamp((int32_t)prf_rate + d, 0, 4);
+    else if (k == 1u)
+        prf_cap = (uint8_t)clamp((int32_t)prf_cap + d, 0, 2);
+    else if (k == 2u)
+        prf_mut = (uint8_t)clamp((int32_t)prf_mut + d, 0, 2);
+    ui.force = 1;
+}
+static void prf_poll(void)                             /* every pass: the roll on while the layer is up */
+{
+    perf_roll_on = (uint8_t)prf_on();
+    perf_roll_rate = prf_rate;
+}
+static uint32_t prf_lit(void)                          /* the key lights: the tracks playing, FILL held */
+{
+    uint32_t i, m = 0;
+    for (i = 0; i < 4u; i++)
+        if (jl_key(i) >= 0 && !trk[i].p[P_MUTE])
+            m |= 1u << jl_key(i);
+    if (jl_held(4))
+        m |= 1u << jl_key(4);
+    return m;
+}
+static uint32_t prf_mid(void) { return (1u << jl_key(5)) | (1u << jl_key(6)); }

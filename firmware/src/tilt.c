@@ -1083,6 +1083,7 @@ static void tilt_scene_poll(void)
     tilt_scene_follow();
     scene_keys_poll();
     jl_poll();
+    prf_poll();
     if (tilt_ns_open == TILT_START || SCN_MEM == m)
         return;
     SCN_MEM = (uint8_t)m;                               /* (round 2: the song and the scene, project.c SCN_MEM) */
@@ -1329,17 +1330,23 @@ static void scene_keys_poll(void)
 static int tilt_addable(void) { return scene_cur() != SCENE_NONE && chain_config.count < CHAIN_ROWS && !chain_busy(); }
 static uint32_t scene_can(uint32_t k, uint32_t p)       /* (breathing: the cued scene, G4 when it can add) */
 {
+    if (!tu_classic())
+        return 0;
     return !key_black(k) && ((tu_classic() && p == SK_ADD && tilt_addable()) ||
                              (p >= SK_SCENE && p < SK_SCENE + scene_keys() && p - SK_SCENE == tsc.cue));
 }
 static uint32_t scene_on(uint32_t k, uint32_t p)
 {
+    if (!tu_classic())
+        return (prf_lit() >> k) & 1u;
     return !key_black(k) && p >= SK_SCENE && p < SK_SCENE + scene_keys() && p - SK_SCENE == scene_cur();
 }
 /* the keys at the mid level: the stored scenes (not the one now, lit, nor the cued one, breathing) */
 static uint32_t tilt_mid(void)
 {
     uint32_t k, m = 0, p;
+    if (!tu_classic())
+        return prf_mid();
     for (k = 0; k < 27u; k++)
         if (!key_black(k) && (p = key_place(k)) >= SK_SCENE && p < SK_SCENE + scene_keys() && p - SK_SCENE != scene_cur() &&
             p - SK_SCENE != tsc.cue && graph_project_used(p - SK_SCENE))

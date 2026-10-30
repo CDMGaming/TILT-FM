@@ -781,7 +781,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_START, S_START_BLANK, S_START_NONE, S_START_CRASH,
        S_TILT_SCENES, S_SCENE_DROP, S_TILT_CUED, S_SCENE_PEND, S_SCENE_OVR, S_SCENE_CLR,
        S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_TFM_JAM, S_TFM_JAM_LARGE,
-       S_UI_JAM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_SETUP, S_UI_TIME,
+       S_UI_JAM, S_UI_JAM_CHAIN, S_UI_JAM_WRITE, S_UI_PERFORM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_SETUP, S_UI_TIME,
        S_UI_SND0, S_UI_SND1, S_UI_SND2, S_UI_SND3, S_UI_SND4, S_UI_SND5, S_UI_SND6, S_UI_SND7, S_UI_SND8, S_UI_SND9, S_UI_SND10,
        S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_UI_SCENES, S_UI_SONG, S_UI_SONGS,
        S_UI_FX, S_UI_SPACE, S_UI_ARP, S_UI_CLOCK, S_UI_CLOCK2, S_UI_MOTION, S_SONG_OVR, S_SONG_COPY, S_SONG_CLR, S_SONGS_COPY, S_COUNT };
@@ -822,7 +822,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "start", "start_blank", "start_none", "start_crash",
     "tilt_scenes", "scene_drop", "tilt_cued", "scene_pending", "scene_overwrite", "scene_clear",
     "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large",
-    "ui_jam", "ui_mix", "ui_start", "ui_dice", "ui_setup", "ui_time",
+    "ui_jam", "ui_jam_chain", "ui_jam_write", "ui_perform", "ui_mix", "ui_start", "ui_dice", "ui_setup", "ui_time",
     "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
     "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_bars", "ui_notes", "ui_drums", "ui_sheet", "ui_scenes", "ui_song", "ui_songs",
     "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion", "ui_song_overwrite", "ui_song_copy", "ui_song_clear", "ui_songs_copy"};
@@ -1414,13 +1414,33 @@ static void setup(int s)
     case S_TFM_MACROS: song.playing = 0; tfm_load(TSEL, TI_SQUELCH, 2); go_page(GR_MACRO); break;
     case S_TFM_MACROS2: song.playing = 0; tfm_load(TSEL, TI_WOBBLER, 0); go_page(GR_MACRO); ui.page++; break;
     case S_TFM_PRESETS: song.playing = 0; tfm_load(TSEL, TI_SQUELCH, 1); go_page(GR_BROWSE); break;
-    case S_UI_JAM: case S_UI_MIX:                       /* TFM-UI: JAM (home), MIX (HOME again) over a playing song */
-        tu_off = 0; tu_goto(s == S_UI_JAM ? TU_JAM : TU_MIX);
+    case S_UI_JAM: case S_UI_JAM_CHAIN: case S_UI_JAM_WRITE: case S_UI_PERFORM: case S_UI_MIX:   /* TFM-UI: JAM (home), MIX (HOME again) over a playing song */
+        tu_off = 0; tu_goto(s == S_UI_MIX ? TU_MIX : TU_JAM);
         tfm_load(&trk[0], TI_THUMP, 0); tfm_load(&trk[1], TI_THUMP, 1); tfm_load(&trk[2], TI_SQUELCH, 0); tfm_load(&trk[3], TI_HAZE, 0);
         tfm_macro_set(&trk[0], 0, 79); tfm_macro_set(&trk[1], 0, 51); tfm_macro_set(&trk[2], 0, 99); tfm_macro_set(&trk[3], 0, 38);
         trk[3].p[P_MUTE] = 1; trk[0].peak = 5000; trk[1].peak = 2500; trk[2].peak = 7000;
         trk[0].p[P_LEVEL] = 100; trk[1].p[P_LEVEL] = 70; trk[2].p[P_LEVEL] = 89; trk[3].p[P_LEVEL] = 76;
         song.playing = 1; song.g[G_BPM] = 118; proj_cur = 1;
+        jw.held = 0; chain.running = 0; ui.layer = 0; tsc.cue = SCENE_NONE;
+        if (s == S_UI_JAM_CHAIN) {                      /* round 5: the chain playing (A A B B A C A D), 4th box lit */
+            static const uint8_t SC[8] = {0, 0, 1, 1, 0, 2, 0, 3};
+            uint32_t q;
+            chain_defaults(&chain_config);
+            for (q = 0; q < 8u; q++) {
+                if (chain_config.count && chain_config.row[chain_config.count - 1u].slot[0] == SC[q])
+                    chain_config.row[chain_config.count - 1u].repeat++;
+                else
+                    chain_config.row[chain_config.count++] = chain_row_of(SC[q], 1);
+            }
+            chain.config = chain_config; chain.running = 1; chain.row = 1; chain.remaining = 1; chain.clk = 0;
+        } else if (s == S_UI_JAM_WRITE) {
+            jw.held = 1; jw.n = 5;
+            jw.sc[0] = 0; jw.sc[1] = 0; jw.sc[2] = 1; jw.sc[3] = 1; jw.sc[4] = 0;
+        } else if (s == S_UI_PERFORM) {
+            ui.layer = LAYER_SCENE; prf_rate = 2; prf_cap = 1; prf_mut = 0;
+        } else if (s == S_UI_JAM) {
+            tsc.cue = 2;
+        }
         break;
     case S_UI_SND0: case S_UI_SND1: case S_UI_SND2: case S_UI_SND3: case S_UI_SND4: case S_UI_SND5: case S_UI_SND6:
     case S_UI_SND7: case S_UI_SND8: case S_UI_SND9: case S_UI_SND10: case S_UI_SND11: case S_UI_SND_P2: case S_UI_PICKER: {
@@ -1486,7 +1506,7 @@ static void setup(int s)
         chain_config.row[3] = chain_row_of(1, 1); chain_config.row[4] = chain_row_of(0, 1); chain_config.row[5] = chain_row_of(2, 2);
         chain_config.row[4].slot[1] = CHAIN_SILENT; chain_config.row[4].slot[3] = 3;
         ui.msg_t = 0; ui.frame++; song.playing = 1;
-        if (s == S_UI_SCENES) { ui.layer = LAYER_SCENE; }
+        if (s == S_UI_SCENES) { tu_goto(TU_SCENES); }
         else if (s == S_SONG_OVR) { song.playing = 0; ui.confirm = CF_SONG_OVR; ui.confirm_trk = 1; }      /* (SONGS' dialogs) */
         else if (s == S_SONG_COPY) { song.playing = 0; ui.confirm = CF_SONG_COPY; ui.confirm_trk = 0u << 2 | 1u; }
         else if (s == S_SONG_CLR) { song.playing = 0; ui.confirm = CF_SONG_CLR; ui.confirm_trk = 1; }

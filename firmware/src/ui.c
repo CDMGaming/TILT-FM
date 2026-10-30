@@ -542,6 +542,15 @@ static void jl_poll(void);
 static uint32_t jl_leds(uint32_t *br, uint32_t *mid);
 static int jl_on(void);
 static int jl_keep(void);
+static void prf_key(uint32_t k, uint32_t p);
+static void prf_knob(uint32_t k, int32_t s);
+static void prf_poll(void);
+static int prf_fill_key(void);
+static int prf_on(void);
+static uint32_t prf_lit(void);
+static uint32_t prf_mid(void);
+static void tu_jam_draw(void);
+static uint8_t jl_fill_prev;
 static int jl_play_chain(void);
 static uint32_t tilt_mid(void);                         /* (tilt.c: the TILT layer's keys at the mid level) */
 static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct);

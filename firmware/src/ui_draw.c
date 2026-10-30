@@ -1694,7 +1694,7 @@ static void ui_draw_page(uint32_t counting)
         return;
     }
     if (ui.layer == LAYER_SCENE && !tu_classic() && tu_on()) {   /* TFM-UI: SCENES (tfm_song.c) */
-        tu_scenes_draw();
+        tu_jam_draw();                                  /* (round 5: PERFORM over JAM) */
         return;
     }
     if (ui.layer == LAYER_EDIT && !tu_classic() && tu_on()) {   /* TFM-UI: the instrument picker (tfm_faces.c) */

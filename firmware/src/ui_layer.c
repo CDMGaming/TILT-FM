@@ -699,7 +699,10 @@ static void layer_key(uint32_t l, uint32_t k)
     } else if (l == LAYER_TILT) {
         tilt_key(k, p);                                 /* (TILT-FM: tilt.c) */
     } else if (l == LAYER_SCENE) {
-        scene_key(k, p);
+        if (tu_classic())
+            scene_key(k, p);
+        else
+            prf_key(k, p);                             /* (round 5: PERFORM, tfm_live.c) */
     } else if (l == LAYER_SEQ) {
         if (!key_black(k))
             tools_key(p);
@@ -720,8 +723,8 @@ static void layer_keys(uint32_t keys)
         eqa_release();
     lys.solo &= kb_layer;
     lys.fill &= kb_layer;
-    if (seq_fill != (lys.fill != 0u)) {                 /* (1.5.5: the steps' FILL / !FILL from the next step) */
-        seq_fill = (uint8_t)(lys.fill != 0u);
+    if (seq_fill != (lys.fill != 0u || prf_fill_key())) {   /* (1.5.5: the steps' FILL / !FILL from the next step) */
+        seq_fill = (uint8_t)(lys.fill != 0u || prf_fill_key());
         ui.force = 1;
     }
     for (k = 0; k < 27u; k++)
@@ -751,6 +754,8 @@ static void layer_knob(uint32_t k, int32_t s)
             edit_load(NENGINES, s);
         else if (k == 2u)
             preset_mark(s > 0);
+    } else if (l == LAYER_SCENE && !tu_classic()) {
+        prf_knob(k, s);                                /* (round 5: ROLL rate, CAPTURE length, MUTATE mode) */
     } else if (l == LAYER_TILT) {                       /* (TILT-FM: tilt.c) */
         tilt_knob(k, s);
     } else if (l == LAYER_REC) {                        /* CLICK, COUNT-IN, LEVEL (KNOB 4: none) */
@@ -811,7 +816,8 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     }
     if (mine & 1u) {                                    /* OCT-: back to when it opened */
         if (lys.l == LAYER_SCENE) {                     /* (TILT-FM: a scene held cleared, else the last undone) */
-            scene_oct();
+            if (tu_classic())
+                scene_oct();
         } else if (lys.l == LAYER_FX) {                        /* (FX LATCH) every effect and macro off */
             perf_latched = 0;
             perf_k[0] = perf_k[1] = perf_k[2] = perf_k[3] = 0;
