@@ -607,3 +607,20 @@ static int test_r7_noinst(void)
     bad += check("round 7 item 2: a track with no instrument keeps SOUND on its TFM face (EDIT toggles the pages, never DEEP; DEEP is the MENU row only)", ok);
     return bad;
 }
+/* round 7 item 3: the build name: START shows it, MENU > INFO's first row is it, ABOUT's TILT-FM line has it (tools/build.py: TILT_BUILD) */
+static int test_r7_build(void)
+{
+    int bad = 0, ok = 1;
+    R7(sizeof TILT_BUILD > 1 && sizeof TILT_BUILD <= 17);
+    st.has = 1; st.crash = 0; tilt_ns_open = TILT_START; sv.mode = SV_WAIT; sv.last_ok = 1;
+    tu_off = 0; ui.force = 1; frames(32);
+    {
+        uint32_t k, lit = 0;                            /* the build's pixels on START's display (x 14.., y 40..): not the display's blank */
+        for (k = 0; k < 60u; k++)
+            lit += host_screen[(41u + k % 8u) * 240u + 14u + k] != host_screen[(41u + k % 8u) * 240u + 200u];
+        R7(lit > 0u);
+    }
+    tilt_ns_open = 0;
+    bad += check("round 7 item 3: the build name (TILT_BUILD) is drawn on START's display", ok);
+    return bad;
+}

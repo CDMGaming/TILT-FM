@@ -50,6 +50,21 @@ SDK_SHA256 = {
 }
 
 PRODUCT = "FM-1_984"                # package identity: TILT-FM's own, every build (Felucca's: FM-1_900, releases FM-1_9XY)
+def _build_tag():
+    """TILT_BUILD: $TILT_BUILD (the package name's tag, e.g. r7-373313d), else dev-<git short sha>, else dev."""
+    t = os.environ.get("TILT_BUILD", "").strip()
+    if not t:
+        try:
+            t = "dev-" + subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=SRC, capture_output=True, text=True,
+                                        check=True).stdout.strip()
+        except Exception:
+            t = "dev"
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,16}", t):
+        raise SystemExit(f"TILT_BUILD {t!r}: up to 16 of A-Z a-z 0-9 . _ -")
+    return t
+
+
+BUILD = None                    # set in main(): TILT_BUILD
 VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/felucca.c)
 # FELUCCA_CPU2 (firmware/src/felucca.c), unset or 1, the default (1.6.1): the second core is built in, its entry and
 # stacks (firmware/hal/fm1_cpu1.S) linked and its waiting loop (.c1_text) checked; MENU > SYSTEM > 2ND CORE starts it
@@ -206,6 +221,7 @@ def build_app():
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
     if VERSION:
         flags.append(f'-DFELUCCA_VERSION="{VERSION}"')
+    flags.append(f'-DTILT_BUILD="{BUILD}"')            # round 7: START and MENU > ABOUT / INFO show it
     # felucca.c goes to LLVM IR without the optimizer, the main-loop functions (UI, stores, editor) are
     # marked minsize (tools/size_fns.py), then the IR is compiled at -Os. FELUCCA_SIZE=0: -Os everywhere
     size = os.environ.get("FELUCCA_SIZE") != "0"
@@ -374,7 +390,8 @@ def mmio_check():
 
 
 def main():
-    global PRODUCT, VERSION
+    global PRODUCT, VERSION, BUILD
+    BUILD = _build_tag()
     ap = argparse.ArgumentParser()
     ap.add_argument("--release", metavar="X.Y.Z", help="TILT-FM release X.Y.Z (= TILT_VERSION in src/ui.c): "
                     "tilt-fm-X.Y.Z.fwsc and build/release-X.Y.Z/; the identity stays FM-1_984")

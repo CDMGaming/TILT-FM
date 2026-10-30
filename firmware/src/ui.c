@@ -481,6 +481,9 @@ static uint8_t tilt_ns_open;
 #ifndef TILT_VERSION
 #define TILT_VERSION "0.2.1"
 #endif
+#ifndef TILT_BUILD                                      /* round 7: which build is installed (tools/build.py: the package name's tag, r7-<sha>) */
+#define TILT_BUILD "dev"
+#endif
 #define TILT_START 3u                                   /* (tilt_ns_open: the start screen, tilt.c) */
 /* TILT-FM: the start screen's NEW SONG or LOAD chosen, nothing changed since: a project loaded, a NEW SONG started are
  * the choice, not an edit (the autosave's baseline follows them: tilt.c, ui_input.c); the first change clears it

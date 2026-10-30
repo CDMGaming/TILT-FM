@@ -134,7 +134,7 @@ static int32_t menu_document(int32_t y, int draw)
         if (!text[0]) y += 8;
         else y = menu_text(text, y, c->kind == MC_TITLE ? T_THEME : c->kind == MC_URL ? T_MID : T_TEXT, draw);
     }
-    y = menu_text("TILT-FM " TILT_VERSION, y + 12, T_THEME, draw);   /* TILT-FM: what this build adds, whose it is */
+    y = menu_text("TILT-FM " TILT_VERSION " \xB7 " TILT_BUILD, y + 12, T_THEME, draw);   /* TILT-FM: what this build adds, whose it is */
     y = menu_text("A fork of Felucca by CDM Gaming, 2026: the start screen, the TILT layer (ENV held: NEW SONG, "
                   "STUCK, the TIMER and TIME), the song's SCENES A-D and their layer (ARP held), the SAVE pages named "
                   "MY SOUNDS, SOUNDS, STARTERS, SCENES and CLEAN UP, the TILT splash. Felucca's work and credits above "
@@ -407,7 +407,7 @@ static uint32_t info_sig(void)
 }
 static void info_rows(void)                            /* (in screen rows: cv_oy set by the caller) */
 {
-    static const char *const LBL[INFO_N] = {"FIRMWARE", "USB", "CPU"};
+    static const char *const LBL[INFO_N] = {"BUILD", "USB", "CPU"};
     static const char *const USB_N[5] = {"OFF", "WAIT", "BUS", "ENUM", "MIDI"};
     int32_t h = menu_large() ? 28 : 24;
     uint32_t k;
@@ -426,7 +426,7 @@ static void info_rows(void)                            /* (in screen rows: cv_oy
             GFX_HOOK_ALIGN(0, 0, 0, vy + AF_M.asc, AL_B, "info row unit on its value's baseline");
             cv_text_r(cv_text_r(MR_VR, vy + AF_M.asc - AF_S.asc, &AF_S, "%", T_MID, T_SURF) - 3, vy, &AF_M, cpu, T_THEME, T_SURF);
         } else {
-            cv_text_r(MR_VR, vy, &AF_M, k ? USB_N[info_usb()] : FELUCCA_VERSION, T_THEME, T_SURF);
+            cv_text_r(MR_VR, vy, &AF_M, k ? USB_N[info_usb()] : TILT_BUILD, T_THEME, T_SURF);   /* (round 7: the build; Felucca's version: ABOUT) */
         }
     }
 }

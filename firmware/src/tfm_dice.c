@@ -303,6 +303,7 @@ static void sv_display(void)                            /* y 0 .. 58: TILT in do
     tu_rrect(5, 5, 230, 48, 6, SV_EDGE, SV_BG);
     tu_rrect(7, 7, 226, 44, 5, RGB(10, 7, 4), SV_EDGE);
     dmd_str(14, 15, 3, "TILT", TC_AMBER, DMD_DIM);
+    tu_text(14, 40, &AF_TS, TILT_BUILD, RGB(150, 112, 50), RGB(10, 7, 4));   /* round 7: which build this is */
     if (sv.mode == SV_WAIT) {
         uint32_t n = song_nscenes(sng_cur), bars = song_bars_n(sng_cur, tfm_bar());
         tu_text(92, 15, &AF_PS, sv.last_ok ? "LAST GAME" : "NEW GAME", TC_AMBER, RGB(10, 7, 4));
