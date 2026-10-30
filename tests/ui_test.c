@@ -11365,6 +11365,7 @@ int main(void)
     bad += test_r6_meters();
     bad += test_r6_presets();
     bad += test_r6_start();
+    bad += test_r6_jam_here();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

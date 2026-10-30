@@ -159,3 +159,33 @@ static int test_r6_start(void)
     bad += check("round 6 item 5: START v2 (the reels stop left to right, a held one stays; OCT- back; SAVE SONGS; ENV from anywhere: START rolled)", ok);
     return bad;
 }
+/* item 8: SONGS: SEQ is SAVE JAM HERE: the jam log as the chain, then saved into the slot picked (the NAME screen; a song
+ * there: asked first) */
+static int test_r6_jam_here(void)
+{
+    int bad = 0, ok = 1;
+    ui_power_on();
+    tu_off = 0;
+    r5_scenes();
+    jl_n = 0;
+    tu_goto(TU_SONGS);
+    tsg_sel = 1;
+    frames(48);
+    stap(B_SEQ);                                        /* no jam yet: says so */
+    R6(str_eq(ui.msg, "NO JAM PLAYED YET") && !nm.kind && !ui.confirm);
+    jl_push(0); jl_push(1); jl_push(0);
+    stap(B_SEQ);
+    R6(nm.kind == NK_SONG_SAVE && nm.slot == 1u && chain_config.count == 3u && chain_config.row[0].slot[0] == 0u &&
+       chain_config.row[1].slot[0] == 1u && chain_config.row[2].slot[0] == 0u);
+    str_cpy(nm.s, "JAMMED", sizeof nm.s); nm.len = nm.cur = 6;
+    name_ok();
+    R6(!nm.kind && sng_cur == 1u && song_stored(1) && str_eq(song_name_of(1), "JAMMED"));
+    tsg_sel = 0;                                        /* over a stored song: asked first (Cancel the default) */
+    jl_push(2);
+    stap(B_SEQ);
+    R6(ui.confirm == CF_SONG_OVR && !nm.kind);
+    ui.confirm = 0;
+    tu_goto(TU_JAM);
+    bad += check("round 6 item 8: SONGS: SEQ saves the jam here (the jam log as the chain, the NAME screen; over a song: asks; no jam: says so)", ok);
+    return bad;
+}

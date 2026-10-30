@@ -54,6 +54,7 @@ static void tu_songs_copy(void);
 static void tu_songs_clear(void);
 static void tu_song_draw(void);
 static void tu_songs_draw(void);
+static void tu_songs_jam(void);
 static void tu_song_delete(void);
 static void tu_song_sounds(void);
 static uint8_t tq_bar;                                  /* (tfm_seq.c: the bar NOTES and DRUMS show) */
@@ -1081,6 +1082,10 @@ static void tu_tap(uint32_t b)
         tilt_ns_show();
         break;
     case B_SEQ:                                         /* NOTES (a drum track: DRUMS); again BARS; again NOTES / DRUMS */
+        if (tu.scr == TU_SONGS) {                       /* (round 6, SONGS: SAVE JAM HERE) */
+            tu_songs_jam();
+            break;
+        }
         if (tu.scr == TU_NOTES || tu.scr == TU_DRUMS)
             tu_goto(TU_BARS);
         else

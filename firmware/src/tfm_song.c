@@ -352,9 +352,11 @@ static void tsg_songs_rows(void)                        /* y 22 .. 215 */
     {
         static const char *const K0[3] = {"EDIT", "GLO", "OCT-"}, *const A0[3] = {"CLEAR", "COPY", "BACK"};
         static const char *const K1[3] = {"GLO", "SELECT", "OCT-"}, *const A1[3] = {"COPY HERE", "PICK", "CANCEL"};
-        if (tsg_copy == 0xFFu)
-            tu_hint_line(198, TC_BG, TC_QUIET, 3, K0, A0);
-        else
+        static const char *const KJ[1] = {"SEQ"}, *const AJ[1] = {"SAVE JAM HERE"};   /* (round 6) */
+        if (tsg_copy == 0xFFu) {
+            tu_hint_line(184, TC_BG, TC_QUIET, 1, KJ, AJ);
+            tu_hint_line(202, TC_BG, TC_QUIET, 3, K0, A0);
+        } else
             tu_hint_line(198, TC_BG, TC_QUIET, 3, K1, A1);
     }
 }
@@ -410,6 +412,21 @@ static void tu_songs_save(void)                         /* SAVE on SONGS: the so
         confirm_open(CF_SONG_OVR, tsg_sel);
     else
         name_open(NK_SONG_SAVE, tsg_sel);
+    ui.force = 1;
+}
+/* round 6: SEQ on SONGS: SAVE JAM HERE: the jam played becomes the song's chain (as NEXT BALL), then saved into the slot
+ * picked as SAVE does (another song there: asked first, Cancel the default; then the NAME screen) */
+static void tu_songs_jam(void)
+{
+    tsg_copy = 0xFF;
+    if (transport_busy()) {
+        ui_message("STOP TO SAVE");
+    } else if (!jl_keep()) {
+        ui_message("NO JAM PLAYED YET");
+    } else {
+        tu_songs_save();
+        return;
+    }
     ui.force = 1;
 }
 static void tu_songs_copy(void)                         /* GLO: the slot picked is the source; GLO again on another: the target */
