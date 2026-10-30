@@ -781,7 +781,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_START, S_START_BLANK, S_START_NONE, S_START_CRASH,
        S_TILT_SCENES, S_SCENE_DROP, S_TILT_CUED, S_SCENE_PEND, S_SCENE_OVR, S_SCENE_CLR,
        S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_TFM_JAM, S_TFM_JAM_LARGE,
-       S_UI_JAM, S_UI_JAM_CHAIN, S_UI_JAM_WRITE, S_UI_PERFORM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_SETUP, S_UI_TIME,
+       S_UI_JAM, S_UI_JAM_CHAIN, S_UI_JAM_WRITE, S_UI_PERFORM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_START_SPIN, S_UI_SETUP, S_UI_TIME,
        S_UI_SND0, S_UI_SND1, S_UI_SND2, S_UI_SND3, S_UI_SND4, S_UI_SND5, S_UI_SND6, S_UI_SND7, S_UI_SND8, S_UI_SND9, S_UI_SND10,
        S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_UI_SCENES, S_UI_SONG, S_UI_SONGS,
        S_UI_FX, S_UI_SPACE, S_UI_ARP, S_UI_CLOCK, S_UI_CLOCK2, S_UI_MOTION, S_SONG_OVR, S_SONG_COPY, S_SONG_CLR, S_SONGS_COPY, S_COUNT };
@@ -822,7 +822,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "start", "start_blank", "start_none", "start_crash",
     "tilt_scenes", "scene_drop", "tilt_cued", "scene_pending", "scene_overwrite", "scene_clear",
     "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large",
-    "ui_jam", "ui_jam_chain", "ui_jam_write", "ui_perform", "ui_mix", "ui_start", "ui_dice", "ui_setup", "ui_time",
+    "ui_jam", "ui_jam_chain", "ui_jam_write", "ui_perform", "ui_mix", "ui_start", "ui_start_rolled", "ui_start_spin", "ui_setup", "ui_time",
     "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
     "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_bars", "ui_notes", "ui_drums", "ui_sheet", "ui_scenes", "ui_song", "ui_songs",
     "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion", "ui_song_overwrite", "ui_song_copy", "ui_song_clear", "ui_songs_copy"};
@@ -1524,13 +1524,16 @@ static void setup(int s)
                 s == S_UI_CLOCK2 ? TU_CLOCK2 : TU_MOTION);
         ui.force = 1;
         break;
-    case S_UI_START: case S_UI_DICE: case S_UI_SETUP: case S_UI_TIME:   /* TFM-UI: the modal screens */
+    case S_UI_START: case S_UI_DICE: case S_UI_START_SPIN: case S_UI_SETUP: case S_UI_TIME:   /* TFM-UI: the modal screens */
         tu_off = 0; song.playing = 0; go_home();
         memset(proj_slot, 0, sizeof proj_slot);
         project_save_as(0, "NEON DRIFT"); project_save_as(1, "NEON DRIFT"); project_save_as(2, "NEON DRIFT");
         ui.msg_t = 0;
-        if (s == S_UI_START) {
+        if (s == S_UI_START) {                          /* (round 6: START v2, WAIT: the last game asleep) */
             st.has = 1; st.crash = 0; st.pick = SO_NEW; tilt_ns_open = TILT_START;
+            sv.mode = SV_WAIT; sv.last_ok = 1;
+            sv.last_ins[0] = TI_THUMP; sv.last_ins[1] = TI_WOBBLER; sv.last_ins[2] = TI_SQUELCH; sv.last_ins[3] = TI_HAZE;
+            str_cpy(song_rec[sng_cur].name, "NEON DRIFT", 16);
         } else if (s == S_UI_TIME) {
             te.saved = 1; te.pick = TO_PLAY; tilt_ns_open = TILT_TIME;
         } else {
@@ -1540,7 +1543,10 @@ static void setup(int s)
             ns.s.ins[0] = TI_THUMP; ns.s.pre[0] = 0; ns.s.ins[1] = TI_THUMP; ns.s.pre[1] = 2;
             ns.s.ins[2] = TI_SQUELCH; ns.s.pre[2] = 0; ns.s.ins[3] = TI_HAZE; ns.s.pre[3] = 1;
             tilt_timer_min = 10;
-            tilt_ns_open = TILT_NS; tu_setup_on = (uint8_t)(s == S_UI_SETUP);
+            tilt_ns_open = s == S_UI_SETUP ? TILT_NS : TILT_START; tu_setup_on = (uint8_t)(s == S_UI_SETUP);
+            ns.hold = 1u << 3;                          /* (round 6: T1 held) */
+            sv.mode = s == S_UI_START_SPIN ? SV_SPIN : SV_ROLLED; sv.t0 = fm1_ms - 700u;
+            if (s != S_UI_SETUP) { ns.s.ins[1] = TI_SQUELCH; ns.s.pre[1] = 1; ns.s.ins[2] = TI_CHORDETTE; ns.s.pre[2] = 1; ns.s.ins[3] = TI_PIXEL; ns.s.pre[3] = 0; }
             if (s == S_UI_SETUP) { CFG(CF_RULE) = 2; CFG(CF_RULE + 1) = 1; CFG(CF_RULE + 2) = 7 + TI_SQUELCH + 1; CFG(CF_RULE + 3) = 5;
                                    CFG(CF_LO) = 90; CFG(CF_HI) = 130; CFG(CF_TIMER) = 2; }
             else { CFG(CF_RULE) = 2; CFG(CF_RULE + 1) = 1; CFG(CF_RULE + 2) = 7 + TI_SQUELCH + 1; CFG(CF_RULE + 3) = 5; }

@@ -105,13 +105,13 @@ static int test_r1_home(void)
         }
         R1(r1_free() && tu.scr == TU_JAM);
     }
-    r1_reset();                                         /* DICE: back to where it was; its footer says HOME BACK */
+    r1_reset();                                         /* ENV: START, rolled (round 6: DICE merged into START) */
     stap(B_ENV); frames(3);
-    R1(tilt_ns_open == TILT_NS && !tu_setup_on);
+    R1(tilt_ns_open == TILT_START && sv.mode == SV_ROLLED && !tu_setup_on);
     {
         uint32_t i, f = 0;
         for (i = 0; i < tu_ft.n; i++)
-            if (str_eq(tu_ft.k[i], "HOME") && str_eq(tu_ft.a[i], "BACK"))
+            if (str_eq(tu_ft.k[i], "PLAY") && str_eq(tu_ft.a[i], "START"))
                 f = 1;
         R1(f);
     }
@@ -120,17 +120,17 @@ static int test_r1_home(void)
         stap(B_HOME); frames(3);
         R1(r1_free() && tu.scr == TU_JAM && ns.s.ins[0] == ins0 && ns.hold == hold);
     }
-    stap(B_ENV); frames(3);                             /* SETUP: HOME back to DICE, again out */
+    stap(B_ENV); frames(3);                             /* SETUP: HOME back to START, again out */
     stap(B_ENV); frames(3);
     R1(tilt_ns_open == TILT_NS && tu_setup_on);
     stap(B_HOME); frames(3);
-    R1(tilt_ns_open == TILT_NS && !tu_setup_on);
+    R1(tilt_ns_open == TILT_START && !tu_setup_on);
     stap(B_HOME); frames(3);
     R1(r1_free() && tu.scr == TU_JAM);
     stap(B_ENV); frames(3); stap(B_ENV); frames(3);     /* SETUP: OCT- is DICE's back too */
     R1(tu_setup_on);
     stap(B_OCTDN); frames(3);
-    R1(r1_free() || (tilt_ns_open == TILT_NS && !tu_setup_on));
+    R1(r1_free() || (tilt_ns_open == TILT_START && !tu_setup_on));
     {   /* a screen button closes DICE and opens its screen */
         static const uint8_t SB[8] = {B_SEQ, B_EDIT, B_GLO, B_SAVE, B_FX, B_SCL, B_LFO, B_ARP};
         static const uint8_t SC[8] = {TU_NOTES, TU_SOUND, TU_SONG, TU_SONGS, TU_FX, TU_CLOCK, TU_MOTION, TU_ARP};
@@ -147,12 +147,10 @@ static int test_r1_home(void)
     R1(tilt_ns_open == TILT_START);
     stap(B_HOME); frames(3);
     R1(r1_free() && tu.scr == TU_JAM);
-    r1_reset();                                         /* DICE opened from START: HOME back to START, HOME out */
+    r1_reset();                                         /* (round 6) a roll from START: START itself, HOME out */
     tilt_start_boot(1); frames(3);
     ns_from_start = 1; tilt_ns_show(); frames(3);
-    R1(tilt_ns_open == TILT_NS);
-    stap(B_HOME); frames(3);
-    R1(tilt_ns_open == TILT_START);
+    R1(tilt_ns_open == TILT_START && sv.mode == SV_ROLLED);
     stap(B_HOME); frames(3);
     R1(r1_free());
     r1_reset();                                         /* TIME */

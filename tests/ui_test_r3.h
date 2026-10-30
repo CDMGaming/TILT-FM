@@ -227,11 +227,11 @@ static int test_r3_newsong(void)
     press(B_PLAY); frames(32);
     R3(tu.scr == TU_SONGS && tsg_new && tilt_ns_open == 0 && sng_cur == 2u);
     press(B_OCTDN); frames(32);
-    R3(!tsg_new && tilt_ns_open == TILT_NS && sng_cur == 2u && song_stored(0) && song_stored(1));
+    R3(!tsg_new && tilt_ns_open == TILT_START && sv.mode == SV_ROLLED && sng_cur == 2u && song_stored(0) && song_stored(1));
     press(B_PLAY); frames(32);
     R3(tsg_new);
     stap(B_HOME);                                       /* HOME cancels too */
-    R3(!tsg_new && tilt_ns_open == TILT_NS);
+    R3(!tsg_new && tilt_ns_open == TILT_START);
     press(B_PLAY); frames(32);
     turn(EN_SELECT, 1);
     n = tsg_sel;

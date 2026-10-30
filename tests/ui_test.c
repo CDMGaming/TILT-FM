@@ -10805,7 +10805,7 @@ static int test_tfm_ui_shell(void)
         ok &= trk[2].p[P_MUTE] != m0;
     }
     press(B_HOME);
-    press(B_ENV); ok &= tilt_ns_open == TILT_NS && !tu_on();
+    press(B_ENV); ok &= tilt_ns_open == TILT_START && sv.mode == SV_ROLLED && !tu_on();   /* (round 6: START, rolled) */
     bad += check("TFM-UI shell: ALGORITHM picks the track, the black keys mute on MIX, ENV opens the dice", ok);
     ok = 1;
     ui_power_on();
@@ -10828,27 +10828,24 @@ static int test_tfm_ui_shell(void)
     bad += check("TFM-UI shell: EDIT toggles MACROS 1 / 2 (ten taps never leave the face); DEEP from MENU > DEEP EDIT; HOME back to SOUND, again JAM", ok);
     return bad;
 }
-/* TFM-UI phase 2: START (F3 NEW SONG, G3 CONTINUE, B3 SONGS), DICE (keys hold a row, OCT+ re-rolls the rest, the rules of
- * SETUP, no setup code), SETUP (ENV again; K1-K4 the lit rows, SELECT scrolls), PLAY starts the song on JAM */
+/* TFM-UI phase 2, round 6: START v2 (DICE merged in): WAIT (PLAY CONTINUE, OCT+ roll, SAVE SONGS, ENV SETUP), the spin (any
+ * button skips it), ROLLED (F3-B3 hold a player, OCT+ re-rolls the rest under SETUP's rules, ENV SETUP, PLAY starts the song) */
+static void r6_spin_end(void) { fm1_ms += 2000u; frame(); frame(); }
 static int test_tfm_ui_dice(void)
 {
     int bad = 0, ok;
-    uint32_t i, kF3 = key_at(0, 0), kG3 = key_at(0, 1), n;
+    uint32_t i, kG3 = key_at(0, 1), n;
     ui_power_on();
     tu_off = 0;
     memset(&ns, 0, sizeof ns);
-    st.has = 1; st.crash = 0; st.pick = SO_CONT; tilt_ns_open = TILT_START; ui.force = 1;
+    st.has = 1; st.crash = 0; st.pick = SO_CONT; tilt_ns_open = TILT_START; sv_boot(); ui.force = 1;
     ui_draw();
-    ok = so_shown(SO_NEW) && so_shown(SO_CONT) && !so_shown(SO_BLANK) && !so_shown(SO_JAM) && so_shown(SO_LOAD);
-    ok &= so_ord()[0] == SO_NEW && so_ord()[1] == SO_CONT && so_ord()[3] == SO_LOAD;
-    turn(EN_SELECT, -1); ok &= st.pick == SO_NEW;       /* NEW SONG is above CONTINUE */
-    tfm_jam_has = 1; ok &= so_shown(SO_JAM); turn(EN_SELECT, 1); turn(EN_SELECT, 1); ok &= st.pick == SO_JAM;
-    tfm_jam_has = 0;
-    st.pick = SO_CONT;
-    fm1_in.notes |= 1u << kF3; host_notes |= 1u << kF3; frame();           /* F3: NEW SONG: the dice open */
-    fm1_in.notes &= ~(1u << kF3); frame();
-    ok &= tilt_ns_open == TILT_NS && !tu_setup_on;
-    bad += check("TFM-UI START: F3 NEW SONG (G3 CONTINUE, B3 SONGS, A3 TODAY'S JAM only when TILT sent one), SELECT moves; F3 opens DICE", ok);
+    ok = sv.mode == SV_WAIT && sv.last_ok && !so_shown(SO_JAM);
+    press(B_OCTUP);                                     /* OCT+: a new band, spinning */
+    ok &= tilt_ns_open == TILT_START && sv.mode == SV_SPIN;
+    press(B_SEQ);                                       /* any button: to the end */
+    ok &= tilt_ns_open == TILT_START && sv.mode == SV_ROLLED && !tu_setup_on;
+    bad += check("TFM-UI START v2: WAIT (the last game), OCT+ rolls and spins, any button skips to ROLLED", ok);
     ok = 1;
     memset(favorites.factory[13] + 16, 0, 16);
     CFG(CF_RULE) = (uint8_t)(7 + TI_SQUELCH + 1);       /* T1 always SQUELCH */
@@ -10858,17 +10855,18 @@ static int test_tfm_ui_dice(void)
     ns.hold = 0;
     for (n = 0; n < 12u; n++) {
         press(B_OCTUP);                                 /* OCT+: re-roll */
-        ok &= ns.s.ins[0] == TI_SQUELCH && ns.s.ins[1] == TI_THUMP && ns.s.key == 9u && ns.s.bpm == 100u;
+        r6_spin_end();
+        ok &= sv.mode == SV_ROLLED && ns.s.ins[0] == TI_SQUELCH && ns.s.ins[1] == TI_THUMP && ns.s.key == 9u && ns.s.bpm == 100u;
     }
-    {   /* a held row stays: hold T3 (D4 .. place 5), the key row (F3) */
-        uint8_t ins3 = ns.s.ins[2], pre3 = ns.s.pre[2], key = ns.s.key;
-        uint32_t kT3 = key_at(0, 5);
+    {   /* a held player stays: T3 on A3 */
+        uint8_t ins3 = ns.s.ins[2], pre3 = ns.s.pre[2];
+        uint32_t kT3 = key_at(0, 2);
         fm1_in.notes |= 1u << kT3; host_notes |= 1u << kT3; frame(); fm1_in.notes &= ~(1u << kT3); frame();
         ok &= (ns.hold >> 5) & 1u;
-        for (n = 0; n < 8u; n++) { press(B_OCTUP); ok &= ns.s.ins[2] == ins3 && ns.s.pre[2] == pre3 && ns.s.key == key; }
+        for (n = 0; n < 8u; n++) { press(B_OCTUP); r6_spin_end(); ok &= ns.s.ins[2] == ins3 && ns.s.pre[2] == pre3; }
         ok &= (tilt_ns_leds() & (1u << kT3)) != 0u;
     }
-    bad += check("TFM-UI DICE: OCT+ re-rolls what is not held (a held row stays); the rules (an instrument, a TYPE, a fixed key and tempo) rule the rolls", ok);
+    bad += check("TFM-UI START v2 ROLLED: OCT+ re-rolls what is not held (a held player stays); the rules (an instrument, a TYPE, a fixed key and tempo) rule the rolls", ok);
     ok = 1;
     press(B_ENV); ok &= tu_setup_on && tilt_ns_open == TILT_NS;
     ok &= tu_su_top == 0u;
@@ -10880,15 +10878,15 @@ static int test_tfm_ui_dice(void)
         turn(EN_K1, 1); ok &= CFG(CF_KEY) == 11u;       /* the window moved: K1 is the KEY row now */
         turn(EN_K4, 1); ok &= CFG(CF_TIMER) == 3u && tilt_timer_min == 15u;   /* K4: TIMER (round 3: the default is 10, so up is 15) */
     }
-    press(B_ENV); ok &= !tu_setup_on;
-    bad += check("TFM-UI SETUP: ENV again from DICE; K1-K4 change the four lit rows, SELECT scrolls the window; ENV back", ok);
+    press(B_ENV); ok &= !tu_setup_on && tilt_ns_open == TILT_START && sv.mode == SV_ROLLED;
+    bad += check("TFM-UI SETUP: ENV from START; K1-K4 change the four lit rows, SELECT scrolls the window; ENV back to START", ok);
     ok = 1;
-    for (i = 0; i < NTRK; i++) { ns.hold = 0; }
+    ns.hold = 0;
     press(B_PLAY);                                      /* PLAY: the song starts, on JAM */
     ok &= tilt_ns_open == 0 && tu_on() && tu.scr == TU_JAM;
     for (i = 0; i < NTRK; i++)
         ok &= tfm_ins_of(&trk[i]) == ns.s.ins[i];
-    bad += check("TFM-UI DICE: PLAY starts the song on JAM with the rolled instruments", ok);
+    bad += check("TFM-UI START v2: PLAY starts the song on JAM with the rolled instruments", ok);
     (void)kG3;
     return bad;
 }
@@ -11133,23 +11131,15 @@ static int test_tfm_ui_pages(void)
     bad += check("TFM-UI MOTION: LFO opens it (RATE, DEPTH, DESTINATION, SHAPE); a new destination takes the depth", ok);
     return bad;
 }
-/* TFM-UI phase 8: TODAY'S JAM: the code of the day (sent over USB) decodes into a setup; START offers it (A3), picking it
- * starts that jam (its instruments, key, scale, tempo) once */
+/* round 6: TODAY'S JAM is gone (START, the editor's button, command 100) */
 static int test_tfm_ui_jam_day(void)
 {
     int bad = 0, ok;
     ui_power_on();
     tu_off = 0;
-    memset(&ns, 0, sizeof ns);
-    ok = tfm_decode("09VJ-2003-000H-00RC-1C", &tfm_jam_s);
-    tfm_jam_has = 1;
-    st.has = 0; st.crash = 0; st.pick = SO_NEW; tilt_ns_open = TILT_START;
-    ok &= so_shown(SO_JAM) && so_ord()[2] == SO_JAM;
-    turn(EN_SELECT, 1); ok &= st.pick == SO_JAM;
-    st_do(SO_JAM);
-    ok &= tilt_ns_open == 0 && !tfm_jam_has && song.g[G_BPM] == tfm_jam_s.bpm && trk[0].p[P_ROOT] == tfm_jam_s.key;
-    ok &= tfm_ins_of(&trk[0]) == tfm_jam_s.ins[0] && tfm_ins_of(&trk[3]) == tfm_jam_s.ins[3];
-    bad += check("TFM-UI START: TODAY'S JAM (A3) starts the jam of the day once: its instruments, key, tempo", ok);
+    st.has = 0; st.crash = 0; tilt_ns_open = TILT_START;
+    ok = !so_shown(SO_JAM);
+    bad += check("TFM-UI START: no TODAY'S JAM (round 6)", ok);
     return bad;
 }
 /* TFM-UI acceptance (TFM-UI-SPEC 7): five minutes from power-on, no Felucca page at any point: START > NEW SONG > DICE (hold a
@@ -11173,13 +11163,14 @@ static int test_tfm_ui_acceptance(void)
     ui_power_on();
     tu_off = 0;
     memset(&ns, 0, sizeof ns);
-    st.has = 0; st.crash = 0; st.pick = SO_NEW; tilt_ns_open = TILT_START; ui.force = 1; frame();
+    st.has = 0; st.crash = 0; st.pick = SO_NEW; tilt_ns_open = TILT_START; sv_boot(); ui.force = 1; frame();
     ok = tfm_only();
-    fm1_in.notes |= 1u << kF3; host_notes |= 1u << kF3; frame(); fm1_in.notes &= ~(1u << kF3); frame();   /* F3: NEW SONG */
-    ok &= tilt_ns_open == TILT_NS && tfm_only();
-    fm1_in.notes |= 1u << kF3; host_notes |= 1u << kF3; frame(); fm1_in.notes &= ~(1u << kF3); frame();   /* hold the key row */
-    ok &= (ns.hold & 1u) != 0u;
+    press(B_OCTUP); ok &= tilt_ns_open == TILT_START && tfm_only();          /* (round 6: START v2) OCT+: roll */
+    press(B_SEQ); ok &= sv.mode == SV_ROLLED && tfm_only();                 /* (the spin skipped) */
+    fm1_in.notes |= 1u << kF3; host_notes |= 1u << kF3; frame(); fm1_in.notes &= ~(1u << kF3); frame();   /* F3: hold T1 */
+    ok &= (ns.hold & 8u) != 0u;
     press(B_OCTUP); ok &= tfm_only();                    /* re-roll */
+    fm1_ms += 2000u; frame();
     press(B_PLAY); ok &= tilt_ns_open == 0 && tu.scr == TU_JAM && tfm_only();
     for (i = 0; i < 4u; i++) { turn(EN_K1 + i, 3); ok &= tfm_only(); }
     stap(B_EDIT); ok &= tu.scr == TU_SOUND && tfm_only(); turn(EN_K1, 3); turn(EN_PRESET, 1);
@@ -11370,6 +11361,7 @@ int main(void)
     bad += test_r6_live_scene();
     bad += test_r6_meters();
     bad += test_r6_presets();
+    bad += test_r6_start();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

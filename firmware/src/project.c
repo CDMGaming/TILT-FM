@@ -1724,6 +1724,11 @@ static void autosave_rebase(void)
  * written until it changes). After a crash, a hang or a failed boot (`clean` 0) only whether one is there (a stored
  * object at all): as autosave_boot's rule, the music of that boot is never parsed (it could be what crashed). 1 = there
  * is one */
+static void autosave_track(uint32_t k, uint8_t *eng, uint8_t *pre)   /* (round 6: START's last game, after autosave_peek) */
+{
+    *eng = proj_scratch.t[k % NTRK].engine;
+    *pre = proj_scratch.t[k % NTRK].preset;
+}
 static int autosave_peek(int clean)
 {
     int ok = 0;

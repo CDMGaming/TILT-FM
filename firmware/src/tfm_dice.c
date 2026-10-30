@@ -188,55 +188,310 @@ static void tu_opt_row(int32_t y, int32_t h, const char *key, const char *name, 
     tu_text_r(220, y + h / 2, &AF_TS, hint, sel ? TC_BG : hintc, bg);
 }
 
-/* ================================================================== START ===================================== */
-static const char *const SO_TFM_NAME[SO_N] = {"CONTINUE", "BLANK", "NEW SONG", "SONGS", "TODAY'S JAM"};
-static const char *const SO_TFM_HINT[SO_N] = {"THE LAST SESSION", "EMPTY TRACKS", "roll the dice", "load one", "sent from TILT"};
-static const uint8_t SO_ROW[4] = {SO_NEW, SO_CONT, SO_JAM, SO_LOAD};   /* F3 NEW SONG, G3 CONTINUE, A3 TODAY'S JAM, B3 SONGS */
-static void tu_start_title(void)
+/* ================================================================== START v2 ================================== */
+/* round 6 item 5 (tfm-spec/screens/StartWait, StartSpin, StartRolled): DICE merged into START. WAIT: the last game's band
+ * asleep in their cabinets, PLAY = CONTINUE, OCT+ rolls a new band, SAVE = SONGS, ENV = SETUP. SPIN: the cabinets run like
+ * reels (the instrument names streaming past) and stop one by one, left to right (the held ones stay), about 1.5 s; any
+ * button skips to the end. ROLLED: the new band awake (each cabinet its material, role and preset), F3 G3 A3 B3 hold / let
+ * go a player, OCT+ rolls the rest again, PLAY starts the new song (fresh, as round 3) and the clock, OCT- back to WAIT.
+ * ENV from anywhere opens it ROLLED (a fresh roll waiting for PLAY); ENV again is SETUP. Cool neutral greys; the display
+ * stays TILT's amber dot matrix */
+enum { SV_WAIT, SV_SPIN, SV_ROLLED };
+#define SV_SPIN_MS 1500u
+#define SV_BG RGB(14, 15, 18)
+#define SV_CARD RGB(27, 29, 35)
+#define SV_EDGE RGB(46, 49, 58)
+#define SV_QUIET RGB(150, 154, 166)
+static struct {
+    uint8_t mode, last_ok, last_ins[NTRK];
+    uint32_t t0;
+} sv;
+static void tsg_time_text(char *b, uint32_t bars);     /* (tfm_song.c) */
+static void autosave_track(uint32_t k, uint8_t *eng, uint8_t *pre);   /* (project.c: the autosave just read, track k) */
+static const char *const SV_ROLE[IG_N] = {"DRUMS", "BASS", "CHORDS", "LEAD"};
+static void sv_boot(void)                               /* power-on (tilt_start_boot): the last game's band, from the autosave read */
 {
-    tu_rect(0, 0, TU_W, 58, TC_BG);
-    tu_text_sp(120, 30, &AF_PL, "TILT", 4, TC_AMBER, TC_BG);
-    tu_text_sp(120, 53, &AF_TS, "INSERT IDEA \xB7 PRESS START", 1, TC_QUIET, TC_BG);
+    uint32_t k;
+    sv.mode = SV_WAIT;
+    sv.last_ok = (uint8_t)(st.has && !st.crash);
+    for (k = 0; k < NTRK; k++) {
+        uint8_t e = 0, pr = 0;
+        uint32_t p, i;
+        autosave_track(k, &e, &pr);
+        p = pr;
+        i = p >= TFM_PRE0 ? (p - TFM_PRE0) / 16u : TI_N;
+        sv.last_ins[k] = (uint8_t)(sv.last_ok && i < TI_N && TFM_INS[i].eng == e ? i : TI_NONE);
+    }
 }
-static void tu_start_rows(void)
+static void sv_roll(void)                               /* OCT+ / NEXT BALL: roll (the held ones stay) and spin */
 {
-    uint32_t i;
-    int32_t y = 73;
-    tu_rect(0, 58, TU_W, 157, TC_BG);
-    for (i = 0; i < 4u; i++) {
-        uint32_t o = SO_ROW[i], on = so_shown(o), sel = on && o == st.pick;
-        char key[3] = {W_NOTE[i], '3', 0}, hint[32], pn[16];
-        int32_t h = sel ? 26 : 23;
-        if (!on) {
-            if (o == SO_CONT && st.crash) {
-                tu_text_c(120, y + 12, &AF_TS, "LAST SESSION SKIPPED - CRASH", TC_REC, TC_BG);
-                y += 28;
-            }
-            continue;
+    if (!tilt_start_pending) {
+        scene_claim();
+        tilt_start_pending = 1;
+    }
+    ns_from_start = 1;
+    tilt_ns_show();                                     /* (the dice: tu_dice_nudge, the timer's default) */
+    tilt_ns_open = TILT_START;
+    sv.mode = SV_SPIN;
+    sv.t0 = fm1_ms;
+    ui.force = 1;
+}
+static int sv_stopped(uint32_t k)                       /* reel k has stopped (a held one never ran) */
+{
+    return sv.mode != SV_SPIN || ((ns.hold >> (3u + k)) & 1u) || fm1_ms - sv.t0 >= 600u + 300u * k;
+}
+static void sv_frame(void)                              /* (each frame) the spin ends on its own */
+{
+    if (sv.mode == SV_SPIN && fm1_ms - sv.t0 >= SV_SPIN_MS) {
+        sv.mode = SV_ROLLED;
+        ui.force = 1;
+    }
+}
+static void sv_cab(uint32_t k)
+{
+    int32_t x0 = 5 + 58 * (int32_t)k, y0 = 60, w = 54, h = 75;
+    uint32_t ins = sv.mode == SV_WAIT ? sv.last_ins[k] : ns.s.ins[k] % TI_N, held = (ns.hold >> (3u + k)) & 1u;
+    const tu_mat_t *m = ins < TI_N ? &TU_MAT[ins] : &TU_MAT_NONE;
+    int sleep = sv.mode == SV_WAIT;
+    uint16_t top = sleep ? tu_mix(SV_BG, m->top, 55) : m->top, bot = sleep ? tu_mix(SV_BG, m->bot, 55) : m->bot;
+    uint16_t ink = sleep ? tu_mix(SV_BG, m->ink, 60) : m->ink, mid = tu_mix(top, bot, 50);
+    int32_t i;
+    if (held && sv.mode != SV_WAIT)                     /* a held player: outlined amber */
+        tu_cut(x0 - 2, y0 - 2, w + 4, h + 4, TC_AMBER);
+    tu_cut(x0, y0, w, h, bot);
+    tu_cut(x0, y0, w, h / 2, top);
+    for (i = 8; i < h - 8; i += 4)
+        tu_rect(x0, y0 + i, w, 4, tu_mix(top, bot, (uint32_t)i * 100u / (uint32_t)h));
+    tu_rect(x0 + 2, y0, w - 4, 3, sleep ? tu_mix(SV_BG, TU_TC[k], 50) : TU_TC[k]);
+    if (!sv_stopped(k)) {                               /* a reel: the names stream past */
+        uint32_t ph = (fm1_ms - sv.t0) / 40u, r;
+        for (r = 0; r < 4u; r++) {
+            uint32_t n = (ph / 3u + r * 5u + k * 3u) % TI_N;
+            int32_t y = y0 + 12 + (int32_t)r * 17 + (int32_t)(ph % 3u) * 6 - 6;
+            if (y > y0 + 6 && y < y0 + h - 6)
+                tu_text_c(x0 + w / 2, y, &AF_TS, TFM_INS[n].name, tu_mix(mid, ink, r == 1u || r == 2u ? 80 : 35), mid);
         }
-        str_cpy(hint, SO_TFM_HINT[o], sizeof hint);
-        project_cur_name(pn);
-        if (o == SO_CONT && pn[0]) {                    /* "NEON DRIFT · 3 scenes" */
-            uint32_t n = 0, s;
-            for (s = 0; s < NSCN; s++)
-                n += (uint32_t)project_used(s);
-            str_cpy(hint, pn, 14);
-            str_cpy(hint + str_len(hint), " \xB7 ", 5);
-            fmt_int(hint + str_len(hint), (int32_t)n);
-            str_cpy(hint + str_len(hint), n == 1u ? " scene" : " scenes", 8);
+        return;
+    }
+    if (ins >= TI_N) {
+        tu_text_c(x0 + w / 2, y0 + 36, &AF_TS, sleep ? "z z" : "--", ink, mid);
+        return;
+    }
+    tu_text_c(x0 + w / 2, y0 + 13, &AF_TS, TFM_INS[ins].name, ink, tu_mix(top, bot, 15));
+    if (sleep) {
+        tu_text_c(x0 + w / 2, y0 + 40, &AF_TL, "z z", ink, mid);
+        return;
+    }
+    tu_text_c(x0 + w / 2, y0 + 32, &AF_TS, SV_ROLE[TFM_INS[ins].group % IG_N], tu_mix(mid, ink, 60), mid);
+    tu_text_c(x0 + w / 2, y0 + 46, &AF_TS, TFM_INS[ins].snd[ns.s.pre[k] % TFM_INS[ins].nsnd].name, ink, mid);
+    {
+        char kb[12] = "HELD \xB7 F3";
+        kb[7] = W_NOTE[k];
+        if (held) {
+            tu_cut(x0 + 4, y0 + h - 15, w - 8, 12, TC_AMBER);
+            tu_text_c(x0 + w / 2, y0 + h - 9, &AF_TS, kb, SV_BG, TC_AMBER);
+        } else {
+            tu_cut(x0 + 4, y0 + h - 15, w - 8, 12, tu_mix(bot, SV_BG, 45));
+            tu_text_c(x0 + w / 2, y0 + h - 9, &AF_TS, kb + 7, tu_mix(bot, ink, 70), tu_mix(bot, SV_BG, 45));
         }
-        tu_opt_row(y, h, key, SO_TFM_NAME[o], hint, (int)sel, TC_TEXT, o == SO_JAM ? TC_CYAN : TC_QUIET);
-        y += h + 5;
+    }
+}
+static void sv_display(void)                            /* y 0 .. 58: TILT in dots, and what the mode says */
+{
+    char b[28];
+    tu_rect(0, 0, TU_W, 58, SV_BG);
+    tu_rrect(5, 5, 230, 48, 6, SV_EDGE, SV_BG);
+    tu_rrect(7, 7, 226, 44, 5, RGB(10, 7, 4), SV_EDGE);
+    dmd_str(14, 15, 3, "TILT", TC_AMBER, DMD_DIM);
+    if (sv.mode == SV_WAIT) {
+        uint32_t n = song_nscenes(sng_cur), bars = song_bars_n(sng_cur, tfm_bar());
+        tu_text(92, 15, &AF_PS, sv.last_ok ? "LAST GAME" : "NEW GAME", TC_AMBER, RGB(10, 7, 4));
+        str_cpy(b, song_name_of(sng_cur), 16);
+        tu_text(92, 30, &AF_TM, sv.last_ok ? (b[0] ? b : "UNTITLED") : "roll a band", RGB(255, 217, 160), RGB(10, 7, 4));
+        if (sv.last_ok) {
+            fmt_int(b, (int32_t)n);
+            str_cpy(b + str_len(b), n == 1u ? " SCENE \xB7 " : " SCENES \xB7 ", 12);
+            tsg_time_text(b + str_len(b), bars);
+            tu_text(92, 44, &AF_TS, b, RGB(185, 138, 58), RGB(10, 7, 4));
+        }
+    } else if (sv.mode == SV_SPIN) {
+        uint32_t i, ph = fm1_ms / 60u;
+        tu_text(92, 15, &AF_PS, "ROLLING", TC_AMBER, RGB(10, 7, 4));
+        for (i = 0; i < 6u; i++)
+            b[i] = (char)('A' + (ph * 7u + i * 5u) % 26u);
+        b[6] = 0;
+        tu_text(92, 30, &AF_TM, b, RGB(255, 217, 160), RGB(10, 7, 4));
+        tu_text(92, 44, &AF_TS, "KEY \xB7 SCALE \xB7 TEMPO", RGB(185, 138, 58), RGB(10, 7, 4));
+    } else {
+        tu_note_name(60u + ns.s.key % 12u, b);
+        b[str_len(b) - 1u] = 0;                         /* (the octave's digit off: "A") */
+        str_cpy(b + str_len(b), " ", 2);
+        str_cpy(b + str_len(b), tu_scale_full(ns.s.scale), 12);
+        tu_text(92, 17, &AF_TM, b, TC_AMBER, RGB(10, 7, 4));
+        fmt_int(b, ns.s.bpm);
+        str_cpy(b + str_len(b), " BPM", 6);
+        tu_text(92, 37, &AF_TM, b, TC_AMBER, RGB(10, 7, 4));
+        str_cpy(b, "TIMER ", 8);
+        if (tilt_timer_min) {
+            fmt_int(b + 6, tilt_timer_min);
+            str_cpy(b + str_len(b), ":00", 4);
+        } else {
+            str_cpy(b + 6, "OFF", 4);
+        }
+        tu_text_r(226, 37, &AF_TS, b, RGB(255, 217, 160), RGB(10, 7, 4));
+    }
+}
+static void sv_band(void)                               /* y 58 .. 138 */
+{
+    uint32_t k;
+    tu_rect(0, 58, TU_W, 80, SV_BG);
+    for (k = 0; k < NTRK; k++)
+        sv_cab(k);
+}
+static void sv_card(int32_t x, const char *key, const char *title, const char *sub, uint16_t tc)
+{
+    tu_cut(x, 174, 74, 38, SV_CARD);
+    tu_text(x + 5, 181, &AF_TS, key, TC_AMBER, SV_CARD);
+    tu_text(x + 5, 193, &AF_TM, title, tc, SV_CARD);
+    tu_text(x + 5, 205, &AF_TS, sub, SV_QUIET, SV_CARD);
+}
+static void sv_bottom(void)                             /* y 138 .. 215: the PLAY button and the three cards */
+{
+    int32_t x;
+    tu_rect(0, 138, TU_W, 77, SV_BG);
+    if (sv.mode == SV_SPIN)
+        return;
+    for (x = 0; x < 230; x++) {                         /* PLAY: a gradient through the track colours */
+        uint32_t seg = (uint32_t)x * 3u / 230u, f = ((uint32_t)x * 3u % 230u) * 100u / 230u;
+        static const uint8_t ORD[4] = {0, 2, 1, 1};     /* (blue, pink, yellow) */
+        uint16_t c = tu_mix(TU_TC[ORD[seg]], TU_TC[ORD[seg + 1u]], f);
+        tu_rect(5 + x, 141 + (x < 3 || x > 226 ? 2 : 0), 1, 30 - (x < 3 || x > 226 ? 4 : 0), c);
+    }
+    tu_cut(10, 146, 26, 20, SV_BG);
+    tu_text_c(23, 156, &AF_TS, "PLAY", TC_AMBER, SV_BG);
+    tu_text(42, 156, &AF_TL, sv.mode == SV_WAIT && sv.last_ok ? "CONTINUE" : "START", SV_BG, tu_mix(TU_TC[0], TU_TC[2], 30));
+    tu_text_r(228, 156, &AF_TS, sv.mode == SV_WAIT && sv.last_ok ? "wake the band" : "the clock starts", SV_BG, TU_TC[1]);
+    if (sv.mode == SV_WAIT) {
+        sv_card(5, "OCT+", "NEW ROLL", "shuffle a band", TC_AMBER);
+        sv_card(83, "SAVE", "SONGS", "3 slots", TC_TEXT);
+        sv_card(161, "ENV", "SETUP", "roll rules", TC_TEXT);
+    } else {
+        sv_card(5, "OCT+", "RE-ROLL", "the unheld ones", TC_AMBER);
+        sv_card(83, "F3-B3", "HOLD", "keep a player", TC_TEXT);
+        sv_card(161, "OCT-", "BACK", "your last song", TC_TEXT);
     }
 }
 static void tu_start_draw(void)
 {
-    uint32_t sig = st.pick * 7u + st.has * 3u + st.crash * 5u + tfm_jam_has * 17u + 1u;
-    tu_zone(2, 0, 58, TC_BG, 1u, tu_start_title);
-    tu_zone(3, 58, 124, TC_BG, sig, tu_start_rows);
-    tu_zone(4, 182, 33, TC_BG, 1u, tu_gap_draw);
-    tu_foot(3, "OCT+", "START", "SELECT", "PICK", "F3-B3", "GO", 0, 0, 0, 0);
+    uint32_t sig = sv.mode * 7u + (uint32_t)ns.hold * 31u + fnv(2166136261u, &ns.s, sizeof ns.s) + tilt_timer_min * 977u + sv.last_ok * 3u +
+                   (sv.mode == SV_SPIN ? fm1_ms / 40u : 0u);
+    uint32_t k;
+    sv_frame();
+    for (k = 0; k < NTRK; k++)
+        sig = sig * 31u + sv.last_ins[k];
+    tu_pbg = SV_BG;
+    tu_pline = SV_EDGE;
+    tu_pq = SV_QUIET;
+    tu_zone(1, 0, 58, SV_BG, sig, sv_display);
+    tu_zone(2, 58, 80, SV_BG, sig, sv_band);
+    tu_zone(3, 138, 77, SV_BG, sig, sv_bottom);
+    if (sv.mode == SV_WAIT)
+        tu_foot(3, "PLAY", sv.last_ok ? "CONTINUE" : "START", "OCT+", "ROLL", "SAVE", "SONGS", 0, 0, 0, 0);
+    else if (sv.mode == SV_SPIN)
+        tu_foot(2, "HELD", "PLAYERS STAY", "THE REST", "STOP ONE BY ONE", 0, 0, 0, 0, 0, 0);
+    else
+        tu_foot(3, "PLAY", "START", "OCT+", "RE-ROLL", "ENV", "SETUP", 0, 0, 0, 0);
+    tu_pbg = TC_BG;
+    tu_pline = TC_SURF;
+    tu_pq = TC_QUIET;
     ui.force = 0;
+}
+static void sv_rolled(void)                             /* tilt_ns_show in TFM: START rolled, a fresh roll waiting for PLAY */
+{
+    tilt_ns_open = TILT_START;
+    sv.mode = SV_ROLLED;
+}
+static void sv_setup(void)                              /* ENV: SETUP (leaving it comes back here) */
+{
+    tilt_ns_open = TILT_NS;
+    tu_setup_on = 1;
+    ui.force = 1;
+}
+static void sv_input(uint32_t pressed, uint32_t notes, uint32_t oct)
+{
+    uint32_t k, p;
+    int32_t s;
+    song.grid = 2;                                      /* (silent keys: keys_mode, as NAME's) */
+    sv_frame();
+    if (sv.mode == SV_SPIN) {                           /* any button (or key) skips to the end */
+        if (pressed || notes || oct) {
+            sv.mode = SV_ROLLED;
+            ui.force = 1;
+        }
+        enc_drop();
+        return;
+    }
+    if ((pressed >> panel.btn[B_ENV]) & 1u) {
+        sv_setup();
+        enc_drop();
+        return;
+    }
+    {   /* a screen button closes START and opens its screen (SAVE on WAIT: SONGS, below) */
+        static const uint8_t SB[7] = {B_SEQ, B_EDIT, B_GLO, B_FX, B_SCL, B_LFO, B_ARP};
+        for (k = 0; k < 7u; k++)
+            if ((pressed >> panel.btn[SB[k]]) & 1u) {
+                tilt_ns_open = 0;
+                name_close();
+                ns_from_start = 0;
+                tu_tap(SB[k]);
+                enc_drop();
+                return;
+            }
+        if (sv.mode == SV_ROLLED && ((pressed >> panel.btn[B_SAVE]) & 1u)) {
+            tilt_ns_open = 0;
+            name_close();
+            tu_tap(B_SAVE);
+            enc_drop();
+            return;
+        }
+    }
+    if (sv.mode == SV_WAIT) {
+        enc_drop();
+        if ((pressed >> panel.btn[B_PLAY]) & 1u) {
+            if (sv.last_ok)
+                st_do(SO_CONT);
+            else
+                sv_roll();
+        } else if (oct & 2u) {
+            sv_roll();
+        } else if ((pressed >> panel.btn[B_SAVE]) & 1u) {
+            st_do(SO_LOAD);
+        }
+        return;
+    }
+    for (k = 0; k < 27u; k++)                           /* ROLLED: F3 G3 A3 B3 hold / let go a player */
+        if (((notes >> k) & 1u) && !key_black(k) && (p = key_place(k)) < NTRK) {
+            ns.hold ^= (uint16_t)(1u << (3u + p));
+            ui.force = 1;
+        }
+    if ((s = panel_enc(EN_K4)) != 0 && !tm.on) {       /* K4: this song's timer (OFF 5 10 15 20) */
+        uint32_t ix = 0, j;
+        for (j = 0; j < 5u; j++)
+            if (TM_LIST[j] == tilt_timer_min)
+                ix = j;
+        tilt_timer_min = TM_LIST[(uint32_t)clamp((int32_t)ix + s, 0, 4)];
+        ui.force = 1;
+    }
+    enc_drop();
+    if (oct & 2u) {
+        sv_roll();
+    } else if (oct & 1u) {
+        sv.mode = SV_WAIT;
+        ui.force = 1;
+    } else if ((pressed >> panel.btn[B_PLAY]) & 1u) {
+        sv.mode = SV_WAIT;
+        ns_start();
+    }
 }
 
 /* ================================================================== TIME ====================================== */
@@ -525,6 +780,7 @@ static int tu_modal_home(void)
         if (tu_setup_on) {
             tu_setup_on = 0;
             settings_save();
+            tilt_ns_open = TILT_START;                  /* (round 6: SETUP's HOME is START) */
             ui.force = 1;
         } else {
             tu_dice_back(1);
@@ -565,8 +821,10 @@ static void tu_dice_input(uint32_t pressed, uint32_t notes, uint32_t oct)
     }
     if ((pressed >> panel.btn[B_ENV]) & 1u) {           /* ENV: SETUP, and back */
         tu_setup_on = (uint8_t)!tu_setup_on;
-        if (!tu_setup_on)
+        if (!tu_setup_on) {
             settings_save();                            /* (the rules, written once left) */
+            tilt_ns_open = TILT_START;                  /* (round 6: back to START) */
+        }
         ui.force = 1;
         enc_drop();
         return;
@@ -583,6 +841,7 @@ static void tu_dice_input(uint32_t pressed, uint32_t notes, uint32_t oct)
         if (oct & 1u) {
             tu_setup_on = 0;
             settings_save();
+            tilt_ns_open = TILT_START;                  /* (round 6: back to START) */
             ui.force = 1;
         }
         return;

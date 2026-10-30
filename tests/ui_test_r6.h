@@ -18,6 +18,8 @@ static void r6_render(uint32_t ins, uint32_t pre)
     rev_clear();
     tu_off = 0;
     song.master_q12 = 4096;
+    song.g[G_BPM] = 120;
+    rng_state = 0x12345678u;                            /* (the same render whatever ran before) */
     song.sel = 0;
     tfm_load(t, ins, pre);
     t->p[P_ROOT] = 0; t->p[P_SCALE] = 1; t->p[P_QUANT] = QN_WHITE;
@@ -123,5 +125,37 @@ static int test_r6_presets(void)
         R6(dmin >= R6_CLOSE);
     }
     bad += check("round 6 item 4: the five named presets of every instrument sound apart (brightness, its change, attack, sustain, motion, level: no two nearer than R6_CLOSE)", ok);
+    return bad;
+}
+/* item 5: START v2: the reels stop one by one left to right (a held one never runs), ENV from anywhere opens START rolled,
+ * SAVE on WAIT is SONGS, PLAY on WAIT continues */
+static int test_r6_start(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t t0;
+    ui_power_on();
+    tu_off = 0;
+    memset(&ns, 0, sizeof ns);
+    st.has = 0; st.crash = 0; tilt_ns_open = TILT_START; sv_boot();
+    R6(sv.mode == SV_WAIT && !sv.last_ok);
+    ns.rolled = 1; ns.hold = 1u << (3u + 2u);           /* T3 held (a roll before: the first one clears the holds) */
+    sv_roll();
+    t0 = sv.t0;
+    R6(sv.mode == SV_SPIN && sv_stopped(2) && !sv_stopped(0) && !sv_stopped(1) && !sv_stopped(3));
+    fm1_ms = t0 + 700u;
+    R6(sv_stopped(0) && !sv_stopped(1) && !sv_stopped(3));
+    fm1_ms = t0 + 1000u;
+    R6(sv_stopped(1) && !sv_stopped(3));
+    fm1_ms = t0 + 1600u; frame();
+    R6(sv.mode == SV_ROLLED && sv_stopped(3));
+    press(B_OCTDN);                                     /* OCT-: back to WAIT */
+    R6(sv.mode == SV_WAIT && tilt_ns_open == TILT_START);
+    press(B_SAVE);                                      /* SAVE: SONGS */
+    R6(tilt_ns_open == 0 && tu.scr == TU_SONGS);
+    tu_goto(TU_MIX); frames(16);
+    press(B_ENV);                                       /* ENV from anywhere: START, rolled */
+    R6(tilt_ns_open == TILT_START && sv.mode == SV_ROLLED);
+    press(B_HOME);
+    bad += check("round 6 item 5: START v2 (the reels stop left to right, a held one stays; OCT- back; SAVE SONGS; ENV from anywhere: START rolled)", ok);
     return bad;
 }

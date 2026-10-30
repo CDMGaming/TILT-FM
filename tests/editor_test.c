@@ -64,15 +64,6 @@ static int st_read(uint32_t off, void *p, uint32_t n) { (void)off; (void)p; (voi
 static int st_prog(uint32_t off, const void *p, uint32_t n) { (void)off; (void)p; (void)n; return -1; }
 static int st_erase(uint32_t off) { (void)off; return -1; }
 #include "../firmware/src/storage.c"
-static char jam_seen[48];
-static int jam_stub(const uint8_t *a, uint32_t n)       /* (the stub of tilt.c's: the code as it arrived; accepted when it is TILT's) */
-{
-    uint32_t i;
-    for (i = 0; i < n && i < 47u && a[i]; i++)
-        jam_seen[i] = (char)a[i];
-    jam_seen[i] = 0;
-    return !strncmp(jam_seen, "09", 2);
-}
 #include "../firmware/src/editor.c"
 
 static int check(const char *what, int ok)
@@ -953,16 +944,10 @@ static int menu_protocol(void)
              request(ED_MENU_SET, a, 1) == 0;
         bad += check("MENU_DESC / MENU_SET with the wrong length: no reply", ok);
     }
-    {   /* TFM: "Send today's jam": TILT's setup code over USB; START then offers TODAY'S JAM (tilt.c tfm_jam_has) */
-        static const char good[] = "09VJ-2003-000H-00RC-1C";
-        uint8_t c[40];
-        jam_seen[0] = 0;
-        tfm_jam_hook = jam_stub;
-        memcpy(c, good, sizeof good - 1u);
-        ok = request(ED_JAM, c, (uint32_t)sizeof good - 1u) > 0u && !strcmp(jam_seen, good);   /* the code reaches tilt.c as sent */
-        memcpy(c, "NOT-A-CODE", 10);
-        ok &= request(ED_JAM, c, 10) > 0u && !strncmp(jam_seen, "NOT-A-CODE", 10);
-        bad += check("TFM: ED_JAM takes TILT's code of the day (TODAY'S JAM waits on the start screen), refuses a bad one", ok);
+    {   /* round 6: TODAY'S JAM is gone: ED_JAM gets no reply */
+        uint8_t c[8] = {'0', '9', 'V', 'J'};
+        ok = request(ED_JAM, c, 4) == 0u;
+        bad += check("round 6: ED_JAM (TODAY'S JAM) is gone: no reply", ok);
     }
 
     /* MENU_SET: each setting, applied as the menu applies it; RAM only here (no flash: rc 3) */

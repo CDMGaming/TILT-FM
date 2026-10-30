@@ -57,24 +57,9 @@ enum { NS_KEY, NS_SCALE, NS_BPM, NS_LINEUP, NS_T1, NS_CODE = NS_T1 + NTRK, NS_RO
 #include "tfm_rng.c"                                    /* TFM: TILT's generator, its roll's tables, a setup */
 #include "tfm_instr.c"                                  /* TFM: the instruments over the engines, their macros */
 #include "tfm_code.c"                                   /* TFM: TILT's setup codes */
-static tfm_setup_t tfm_jam_s;                           /* TODAY'S JAM: the setup TILT's code of the day gave (the editor's "Send today's jam") */
-static uint8_t tfm_jam_has;                             /* (a jam waits on the start screen) */
-static int tfm_jam_accept(const uint8_t *a, uint32_t n) /* a code (ASCII, from the editor): decoded, kept, START offers it */
-{
-    char code[TFM_CODE_MAX + 1u];
-    tfm_setup_t sj;
-    uint32_t i;
-    for (i = 0; i < n && i < TFM_CODE_MAX && a[i]; i++)
-        code[i] = (char)a[i];
-    code[i] = 0;
-    if (!tfm_decode(code, &sj))
-        return 0;
-    tfm_jam_s = sj;
-    tfm_jam_has = 1;
-    ui.force = 1;
-    return 1;
-}
-static int (*tfm_jam_hook)(const uint8_t *a, uint32_t n) = tfm_jam_accept;
+/* (round 6: TODAY'S JAM, its code over USB and the START row, are gone) */
+static void sv_rolled(void);                            /* (tfm_dice.c: START v2) */
+static void sv_boot(void);
 #include "tfm_jam.c"                                     /* TFM: HOME > JAM */
 #include "tfm_sheet.c"                                   /* TFM: the STEP SHEET (OCT+ held on STEP) */
 /* (tfm_ui.c: TFM-UI, included at the end of this file; tilt.c's own forward declarations of what it uses) */
@@ -89,7 +74,6 @@ static struct {
 } ns;
 static uint8_t ns_from_start;                           /* (opened from the start screen: OCT- goes back there) */
 /* TFM-UI (tfm_dice.c): in TFM mode (not CLASSIC) the modal screens are drawn and driven by these */
-static uint8_t tfm_jam_has;                             /* TILT sent a jam over USB and it was not played yet */
 static void tu_dice_draw(void);
 static void tu_dice_input(uint32_t pressed, uint32_t notes, uint32_t oct);
 static void tu_dice_nudge(void);
@@ -148,6 +132,8 @@ static void tilt_ns_show(void)
         tfm_dice_timer();
     }
     tilt_ns_open = TILT_NS;
+    if (!tu_classic())
+        sv_rolled();                                    /* (round 6: START, a fresh roll waiting for PLAY) */
     ui.force = 1;
 }
 
@@ -382,6 +368,7 @@ static void te_input(uint32_t pressed, uint32_t notes, uint32_t oct);
 static void st_input(uint32_t pressed, uint32_t notes, uint32_t oct);
 static uint32_t st_leds(void);
 static void st_draw(void);
+static void sv_input(uint32_t pressed, uint32_t notes, uint32_t oct);   /* (tfm_dice.c: START v2) */
 static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct)
 {
     uint32_t k, p;
@@ -394,7 +381,12 @@ static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct)
         st_input(pressed, notes, oct);
         return;
     }
-    if (!tu_classic()) {                                /* TFM-UI: DICE, SETUP (tfm_dice.c) */
+    if (!tu_classic() && !tu_setup_on) {                /* TFM-UI round 6: no DICE of its own: START, rolled */
+        tilt_ns_open = TILT_START;
+        sv_input(pressed, notes, oct);
+        return;
+    }
+    if (!tu_classic()) {                                /* TFM-UI: SETUP (tfm_dice.c) */
         tu_dice_input(pressed, notes, oct);
         return;
     }
@@ -544,7 +536,12 @@ static void tilt_ns_draw(void)
         st_draw();
         return;
     }
-    if (!tu_classic()) {                                /* TFM-UI: DICE, SETUP (tfm_dice.c) */
+    if (!tu_classic() && !tu_setup_on) {                /* TFM-UI round 6: START, rolled */
+        tilt_ns_open = TILT_START;
+        st_draw();
+        return;
+    }
+    if (!tu_classic()) {                                /* TFM-UI: SETUP (tfm_dice.c) */
         tu_dice_draw();
         return;
     }
@@ -1442,7 +1439,7 @@ static struct {
 static int so_shown(uint32_t o)
 {
     if (!tu_classic())                                  /* (TFM: no BLANK; TODAY'S JAM only when TILT sent one) */
-        return o == SO_CONT ? st.has && !st.crash : o == SO_JAM ? tfm_jam_has != 0u : o == SO_NEW || o == SO_LOAD;
+        return o == SO_CONT ? st.has && !st.crash : o == SO_NEW || o == SO_LOAD;   /* (round 6: no TODAY'S JAM) */
     return o == SO_CONT ? st.has && !st.crash : o < SO_JAM;
 }
 static void tilt_start_boot(int clean)
@@ -1451,6 +1448,8 @@ static void tilt_start_boot(int clean)
     st.crash = (uint8_t)(!clean && st.has);
     st.pick = so_shown(SO_CONT) ? SO_CONT : tu_classic() ? SO_BLANK : SO_NEW;
     tilt_ns_open = TILT_START;
+    if (!tu_classic())
+        sv_boot();                                      /* (round 6: the last game's band) */
     ui.force = 1;
 }
 static void st_do(uint32_t o)
@@ -1474,13 +1473,6 @@ static void st_do(uint32_t o)
         tilt_start_pending = 1;
         ns_from_start = 1;
         tilt_ns_show();
-    } else if (o == SO_JAM) {                           /* TFM-UI: today's jam: its sounds, key, scale, tempo, played once */
-        scene_claim();
-        tilt_start_pending = 1;
-        ns.s = tfm_jam_s;
-        tfm_jam_has = 0;
-        ns_start();
-        ui_message("TODAY'S JAM");
     } else if (!tu_classic()) {                         /* TFM-UI: SONGS */
         tilt_start_pending = 1;
         tu_goto(TU_SONGS);
@@ -1512,6 +1504,10 @@ static void st_input(uint32_t pressed, uint32_t notes, uint32_t oct)
 {
     uint32_t k, p;
     int32_t s;
+    if (!tu_classic()) {                                /* (round 6: START v2, tfm_dice.c) */
+        sv_input(pressed, notes, oct);
+        return;
+    }
     (void)pressed;                                      /* (PLAY, REC, the page buttons: nothing here) */
     song.grid = 2;
     for (k = 0; k < 27u; k++)
@@ -1529,6 +1525,12 @@ static void st_input(uint32_t pressed, uint32_t notes, uint32_t oct)
 static uint32_t st_leds(void)                           /* the shown options' keys lit */
 {
     uint32_t o, m = 0;
+    if (!tu_classic()) {                                /* (round 6: START v2: the held players' keys, F3 .. B3) */
+        for (o = 0; o < NTRK; o++)
+            if ((ns.hold >> (3u + o)) & 1u)
+                m |= 1u << (2u * o);
+        return m;
+    }
     static const uint8_t KEY[4] = {0, 2, 4, 6};         /* (F3 G3 A3 B3) */
     for (o = 0; o < 4u; o++)
         if (so_shown(so_ord()[o]))
