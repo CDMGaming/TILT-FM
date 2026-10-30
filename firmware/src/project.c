@@ -1496,7 +1496,8 @@ static uint32_t chain_prepare(void)
                     for (j = 0; j < P_COUNT; j++)
                         chain_snd.src[i].p[k][j] = (int16_t)param_fit(param_desc_of(e, j), p->t[k].p[j]);
                     chain_snd.src[i].eng[k] = (uint8_t)e;
-                    chain_snd.src[i].preset[k] = (uint8_t)(ENGINES[e]->npresets ? p->t[k].preset % ENGINES[e]->npresets : 0u);
+                    chain_snd.src[i].preset[k] = (uint8_t)(p->t[k].preset >= TFM_PRE0 && p->t[k].preset < PROJ_DEF_KEEP ? p->t[k].preset :   /* (round 7: an */
+                                                           ENGINES[e]->npresets ? p->t[k].preset % ENGINES[e]->npresets : 0u);   /* instrument's byte, kept) */
                     fm6_unpack(p->fm6[k], v);
                     fm6_sanitize(v);
                     memcpy(chain_snd.src[i].fm6[k], v, sizeof chain_snd.src[i].fm6[k]);

@@ -506,3 +506,80 @@ static int test_r6_loud(void)
     bad += check("round 6 item 10: the brightness, resonance, drive and space macros keep their loudness (5 LU over the turn)", mac_ok);
     return bad;
 }
+/* ------------------------------------------------------------ round 7 item 1: the instruments stay --- */
+#define R7(c) do { if (!(c)) { ok = 0; fprintf(stderr, "R7 line %d ", __LINE__); } } while (0)
+static uint32_t r7_all(const uint8_t *want)             /* every track still has its instrument */
+{
+    uint32_t k, n = 0;
+    for (k = 0; k < NTRK; k++)
+        n += tfm_ins_of(&trk[k]) == want[k] && trk[k].preset >= TFM_PRE0;
+    return n == NTRK;
+}
+static int test_r7_instruments(void)
+{
+    static const uint8_t A[NTRK] = {TI_THUMP, TI_SQUELCH, TI_CHORDETTE, TI_PIXEL}, B[NTRK] = {TI_THUMP, TI_WOBBLER, TI_HAZE, TI_GLINT};
+    int bad = 0, ok = 1;
+    uint32_t k, n;
+    ui_power_on();
+    tu_off = 0;
+    sng_cur = 0;
+    memset(proj_slot, 0, sizeof proj_slot);
+    memset(song_rec, 0, sizeof song_rec);
+    chain_defaults(&chain_config);
+    scene_claim();
+    for (k = 0; k < NTRK; k++) tfm_load(&trk[k], A[k], 1u);
+    sc_note(0, 0, 55);
+    tilt_scene_go(1, 0);                                /* B: other instruments on three tracks */
+    for (k = 0; k < NTRK; k++) tfm_load(&trk[k], B[k], 2u);
+    sc_note(0, 0, 66);
+    tilt_scene_go(0, 0);
+    R7(r7_all(A));
+    chain_config.count = 2;
+    chain_config.row[0] = chain_row_of(0, 1);
+    chain_config.row[1] = chain_row_of(1, 1);
+    ui_prefs3 |= PREF_SONG_SCENE;                       /* SOUNDS SCENE: each scene brings its sounds */
+    tu_goto(TU_SONG);
+    frames(16);
+    R7(chain_prepare() == 0);
+    events_block(32);
+    for (n = 0; n < 4000u && chain.running && chain.row == 0u; n++) { events_block(32); tilt_scene_poll(); }
+    R7(chain.running && chain.row == 1u);
+    R7(r7_all(B));                                      /* B with its instruments, bytes and all */
+    seq_stop(); transport_req = 0; events_block(32);
+    R7(r7_all(A));                                      /* (stopped: the live sounds come back, each with its byte) */
+    /* the chain again from JAM (the same path), then stopped */
+    tu_goto(TU_JAM);
+    frames(16);
+    R7(chain_prepare() == 0);
+    events_block(32);
+    for (n = 0; n < 4000u && chain.running && chain.row == 0u; n++) { events_block(32); tilt_scene_poll(); }
+    seq_stop(); transport_req = 0; events_block(32);
+    R7(r7_all(A));
+    /* JAM shows the jam macros, SOUND the face, EDIT toggles its pages there and never drops into DEEP */
+    song.sel = 1; tu_goto(TU_JAM); frames(16);
+    R7(tfm_ins_of(TSEL) == TI_SQUELCH && tu.scr == TU_JAM);
+    tu_goto(TU_SOUND); frames(16);
+    press(B_EDIT); frames(16);
+    R7(tu.scr == TU_SOUND && tu.page == 1);
+    press(B_EDIT); frames(16);
+    R7(tu.scr == TU_SOUND && tu.page == 0);
+    /* a power cycle: the autosave's way (capture, pack, unpack, restore) */
+    {
+        static project_t q, r;
+        static project_store_t ps;
+        project_capture(&q);
+        proj_pack(&ps, &q);
+        memset(&r, 0, sizeof r);
+        R7(proj_unpack(&r, ps.raw, PROJ_STORE_SIZE) == 1);
+        for (k = 0; k < NTRK; k++) tfm_load(&trk[k], TI_PLUCK, 0u);   /* (the power-on state: other sounds) */
+        R7(project_restore_runtime(&r) == 0);
+        R7(r7_all(A));
+        R7(chain_config.count == 2u);
+    }
+    /* MUTATE SOUND keeps the instrument */
+    song.sel = 2; prf_mut = 1u;
+    prf_mutate();
+    R7(tfm_ins_of(&trk[2]) == TI_CHORDETTE && trk[2].preset >= TFM_PRE0);
+    bad += check("round 7 item 1: instruments stay after a SONG chain with SOUNDS SCENE, a chain from JAM, a power cycle (pack, restore) and MUTATE SOUND (every track keeps its instrument byte; SOUND keeps its face)", ok);
+    return bad;
+}
