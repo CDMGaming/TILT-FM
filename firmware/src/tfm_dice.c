@@ -495,8 +495,8 @@ static void sv_input(uint32_t pressed, uint32_t notes, uint32_t oct)
 }
 
 /* ================================================================== TIME ====================================== */
-static const char *const TO_TFM_NAME[TO_N] = {"PLAY IT BACK", "KEEP AS A SONG", "EXTRA BALL", "KEEP WORKING"};
-static const char *const TO_TFM_HINT[TO_N] = {"from the top", "name it", "+5 min", "no clock"};
+static const char *const TO_TFM_NAME[TO_N] = {"PLAY IT BACK", "NEXT BALL", "EXTRA BALL", "KEEP WORKING"};   /* (round 6: NEXT BALL) */
+static const char *const TO_TFM_HINT[TO_N] = {"from the top", "save it, roll a band", "+5 min", "no clock"};
 static void tu_time_top(void)
 {
     char b[40];
@@ -519,11 +519,12 @@ static void tu_time_rows(void)
     uint32_t i;
     int32_t y = 12 + 76 - 12;
     tu_rect(0, 76, TU_W, 139, TC_BG);
-    for (i = 0; i < TO_N; i++) {
+    for (i = 0; i < TO_N; i++) {                        /* (round 6: in te_ord's order: PLAY IT BACK, EXTRA BALL, KEEP WORKING, NEXT BALL) */
+        uint32_t o = te_ord(i);
         int sel = i == te.pick;
         char key[3] = {W_NOTE[i], '3', 0};
         int32_t h = sel ? 25 : 23;
-        tu_opt_row(y, h, key, TO_TFM_NAME[i], TO_TFM_HINT[i], sel, i == TO_EXTRA ? TC_CYAN : TC_TEXT, TC_QUIET);
+        tu_opt_row(y, h, key, TO_TFM_NAME[o], TO_TFM_HINT[o], sel, o == TO_EXTRA ? TC_CYAN : o == TO_SAVE ? TC_AMBER : TC_TEXT, TC_QUIET);
         y += h + 4;
     }
 }

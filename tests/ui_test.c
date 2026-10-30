@@ -11199,12 +11199,15 @@ static int test_tfm_ui_acceptance(void)
     tilt_timer_set(5); tm.end = fm1_ms; tilt_timer_poll(); frames(2);                  /* the TIMER runs out */
     ok &= tilt_ns_open == TILT_TIME && tfm_only();
     {
-        uint32_t kG3 = key_at(0, 1);
-        fm1_in.notes |= 1u << kG3; host_notes |= 1u << kG3; frame(); fm1_in.notes &= ~(1u << kG3); frame();   /* G3: KEEP AS A SONG */
-        ok &= tu.scr == TU_SONGS && name_on() && tfm_only();                            /* named on the NAME screen */
+        uint32_t kB3 = key_at(0, 3);
+        jl_n = 0; jl_push(0); jl[0].loops = 2; jl_push(1);
+        fm1_in.notes |= 1u << kB3; host_notes |= 1u << kB3; frame(); fm1_in.notes &= ~(1u << kB3); frame();   /* B3: NEXT BALL (round 6) */
+        ok &= tilt_ns_open == TILT_START && sv.mode == SV_SPIN && tfm_only();     /* START mid-roll */
+        ok &= chain_config.count == 2u && chain_config.row[0].slot[0] == 0u && chain_config.row[0].repeat == 2u && chain_config.row[1].slot[0] == 1u;
+        ok &= song_stored(sng_cur);                                                 /* (the jam saved as the song) */
     }
     (void)seen;
-    bad += check("TFM-UI acceptance: from power-on to KEEP AS A SONG, no Felucca page at any step", ok);
+    bad += check("TFM-UI acceptance: from power-on to NEXT BALL (the jam saved as a song, START mid-roll), no Felucca page at any step", ok);
     return bad;
 }
 static int test_tfm_nosample(void)

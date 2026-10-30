@@ -369,6 +369,7 @@ static void st_input(uint32_t pressed, uint32_t notes, uint32_t oct);
 static uint32_t st_leds(void);
 static void st_draw(void);
 static void sv_input(uint32_t pressed, uint32_t notes, uint32_t oct);   /* (tfm_dice.c: START v2) */
+static void sv_roll(void);
 static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct)
 {
     uint32_t k, p;
@@ -794,17 +795,10 @@ static void te_do(uint32_t o)
     if (o == TO_PLAY) {
         transport_req = 1;
         ui_message("THE TAKE");
-    } else if (o == TO_SAVE && !tu_classic()) {         /* TFM-UI: KEEP AS A SONG: SONGS, and the NAME screen for it */
-        uint32_t sl = scene_cur() < NSCN ? scene_cur() : 0u;
-        for (i = 0; i < NSCN && scene_cur() >= NSCN; i++)
-            if (!project_used(i)) {
-                sl = i;
-                break;
-            }
-        (void)sl;
-        (void)jl_keep();                                /* (round 5: the jam played becomes the song's chain) */
-        tu_goto(TU_SONGS);
-        name_open(NK_SONG_SAVE, sng_cur);
+    } else if (o == TO_SAVE && !tu_classic()) {         /* TFM-UI round 6: NEXT BALL: this jam saved as the song (its log the */
+        (void)jl_keep();                                /* chain), START mid-roll; PLAY there makes the next song in an empty */
+        (void)song_store_cur();                         /* slot or asks which to replace (round 3) */
+        sv_roll();
     } else if (o == TO_SAVE) {
         for (i = 0; i < NPAGES && PAGES[i].graph != GR_SLOTS; i++)
             ;
@@ -821,6 +815,12 @@ static void te_do(uint32_t o)
         ui_message("KEEP WORKING");
     }
 }
+/* round 6: TFM's TIME rows, F3 .. B3: PLAY IT BACK, EXTRA BALL, KEEP WORKING, NEXT BALL (TO_SAVE is NEXT BALL there) */
+static uint32_t te_ord(uint32_t row)
+{
+    static const uint8_t T[TO_N] = {TO_PLAY, TO_EXTRA, TO_KEEP, TO_SAVE};
+    return tu_classic() ? row : T[row % TO_N];
+}
 static void te_input(uint32_t pressed, uint32_t notes, uint32_t oct)
 {
     uint32_t k, p;
@@ -828,7 +828,7 @@ static void te_input(uint32_t pressed, uint32_t notes, uint32_t oct)
     song.grid = 2;
     for (k = 0; k < 27u; k++)
         if (((notes >> k) & 1u) && !key_black(k) && (p = key_place(k)) < TO_N) {
-            te_do(p);
+            te_do(te_ord(p));
             enc_drop();
             return;
         }
@@ -836,7 +836,7 @@ static void te_input(uint32_t pressed, uint32_t notes, uint32_t oct)
         te.pick = (uint8_t)clamp((int32_t)te.pick + (s > 0 ? 1 : -1), 0, TO_N - 1);
     enc_drop();
     if (oct & 2u)
-        te_do(te.pick);
+        te_do(te_ord(te.pick));
     else if (oct & 1u)
         te_do(TO_KEEP);
     else if ((pressed >> panel.btn[B_PLAY]) & 1u)
