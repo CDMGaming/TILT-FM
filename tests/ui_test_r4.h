@@ -229,7 +229,7 @@ static int test_r4_notes(void)
     for (i = 0; i < 16u; i++) t->step[i] = (step_t){{(uint8_t)(62 + (i & 7u))}, 1, ST_NOTE, 0, 90, 0, 0};          /* bar 1: D4 up */
     for (i = 16; i < 32u; i += 2u) t->step[i] = (step_t){{(uint8_t)(36 + (i - 16u) * 5u)}, 1, ST_NOTE, 0, 90, 0, 0};   /* bar 2: C2 .. C7 */
     t->step[63] = (step_t){{49}, 1, ST_NOTE, 0, 100, 0, 0};                                                          /* bar 4: one note, out of the key maybe */
-    stap(B_SEQ); stap(B_SEQ);
+    stap(B_SEQ);
     R4(tu.scr == TU_NOTES && tq_zoom == 0u);
     /* the rows are the scale's notes, whatever the key */
     frames(64);
@@ -432,5 +432,105 @@ static int test_r4_faces(void)
     tfm_macro_put(&trk[0], 4, 120, 0); frames(64); b = r4_hash(20, 70, 215, 175);
     R4(a != b);
     bad += check("round 4 item 5: SOUND faces v2 (pads, accent lamp, wobbler ring and tiles, chord name, wave screen, tremolo lever, string, mouth and eyes, drawbars and rotor tile, MACROS 2)", ok);
+    return bad;
+}
+/* 6: BARS replaces STEP */
+static int r4_same_bar(const track_t *t, uint32_t a, uint32_t b)       /* two bars hold the same steps */
+{
+    uint32_t i;
+    for (i = 0; i < 16u; i++)
+        if (memcmp(&t->step[a * 16u + i], &t->step[b * 16u + i], sizeof(step_t)))
+            return 0;
+    return 1;
+}
+static void r4_hold_oct(void)                            /* OCT+ held past 0.45 s (frames a few hundred ms apart) */
+{
+    int q;
+    btn_down(B_OCTUP);
+    for (q = 0; q < 4; q++) {
+        fm1_ms += 200u;
+        frame();
+    }
+}
+static int test_r4_bars(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t i;
+    track_t *t;
+    step_t keep[NSTEP];
+    ui_power_on();
+    tu_off = 0;
+    song.rec = 0; song.playing = 0;
+    tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[1], TI_THUMP, 0);
+    song.sel = 0;
+    t = &trk[0];
+    t->p[P_SLEN] = 16;
+    for (i = 0; i < NSTEP; i++) step_clear(&t->step[i]);
+    for (i = 0; i < 16u; i++) t->step[i] = (step_t){{(uint8_t)(60 + i)}, 1, ST_NOTE, 0, 90, 0, 0};
+    tu_goto(TU_JAM);
+    stap(B_SEQ);                                                              /* NOTES, then BARS */
+    R4(tu.scr == TU_NOTES);
+    stap(B_SEQ);
+    R4(tu.scr == TU_BARS && !song.seq_mode);
+    frames(64);
+    /* LENGTH: growing repeats the bars there are, shrinking keeps the first n; the longest is what 64 steps hold */
+    turn(EN_K2, 1);
+    R4(t->p[P_SLEN] == 32 && r4_same_bar(t, 0, 1));
+    turn(EN_K2, 1);
+    R4(t->p[P_SLEN] == 64 && r4_same_bar(t, 0, 3) && r4_same_bar(t, 0, 2));
+    turn(EN_K2, 1);
+    R4(t->p[P_SLEN] == 64);
+    turn(EN_K2, -1);
+    R4(t->p[P_SLEN] == 32);
+    turn(EN_K2, -1);
+    R4(t->p[P_SLEN] == 16 && t->step[3].note[0] == 63 && t->step[20].note[0] == 64);          /* (the first bar kept) */
+    turn(EN_K2, -1);
+    R4(t->p[P_SLEN] == 16);
+    /* DOUBLE: OCT+ tapped copies every bar after itself */
+    press(B_OCTUP); frames(32);
+    R4(t->p[P_SLEN] == 32 && r4_same_bar(t, 0, 1));
+    turn(EN_K3, 1); R4(tb_bar == 1u);
+    turn(EN_K3, 1); R4(tb_bar == 1u);                                         /* (no further than the last bar) */
+    /* CLEAR BAR: EDIT clears the selected bar only */
+    for (i = 0; i < NSTEP; i++) keep[i] = t->step[i];
+    stap(B_EDIT);
+    R4(!t->step[16].n && !t->step[31].n && t->step[0].n == 1u && t->step[15].n == 1u && t->p[P_SLEN] == 32);
+    undo_swap();                                                              /* all undoable */
+    R4(!memcmp(t->step, keep, sizeof keep) && t->p[P_SLEN] == 32);
+    /* SHIFT: the whole track a step, wrapping */
+    for (i = 0; i < NSTEP; i++) keep[i] = t->step[i];
+    turn(EN_K4, 1);
+    R4(t->step[1].note[0] == keep[0].note[0] && t->step[0].note[0] == keep[31].note[0] && t->step[31].note[0] == keep[30].note[0]);
+    R4(tb_shift == 1);
+    undo_swap();
+    R4(!memcmp(t->step, keep, sizeof keep) && t->p[P_SLEN] == 32);
+    turn(EN_K4, -1);
+    R4(t->step[0].note[0] == keep[1].note[0] && t->step[31].note[0] == keep[0].note[0]);
+    undo_swap();
+    /* COPY: hold OCT+, K3 the target, OCT+ pastes; OCT- cancels */
+    for (i = 0; i < 16u; i++) t->step[16u + i].note[0] = (uint8_t)(80 + i);    /* bar 2 is its own */
+    tb_bar = 0; frames(32);
+    r4_hold_oct();
+    R4(tb_copy == 1u && tb_tgt == 1u);
+    btn_up(B_OCTUP); frame(); frame(); frame();
+    R4(tb_copy == 1u && t->p[P_SLEN] == 32);                                  /* (the hold's release is no DOUBLE) */
+    stap(B_OCTDN);
+    R4(tb_copy == 0u && t->step[16].note[0] == 80);                           /* cancelled: nothing pasted */
+    r4_hold_oct();
+    btn_up(B_OCTUP); frame(); frame(); frame();
+    R4(tb_copy == 1u);
+    press(B_OCTUP); frames(32);                                               /* paste: bar 1 onto bar 2 */
+    R4(tb_copy == 0u && r4_same_bar(t, 0, 1) && t->p[P_SLEN] == 32);
+    undo_swap();
+    R4(t->step[16].note[0] == 80);
+    /* the track: K1; a bar of the other track (a drum track draws by lanes) */
+    turn(EN_K1, 1);
+    R4(song.sel == 1u && tb_bar < tb_nbars(&trk[1]));
+    turn(EN_K1, -1);
+    /* the scene's length: the longest track; shorter tracks repeat (dashed) up to it */
+    R4(tb_scene_bars() == 2u && tb_nbars(&trk[1]) == 1u);
+    stap(B_SEQ);
+    R4(tu.scr == TU_NOTES);
+    bad += check("round 4 item 6: BARS replaces STEP (SEQ NOTES then BARS, K2 length 1/2/4, DOUBLE, K3 bar, EDIT clears a bar, K4 shift wraps, hold OCT+ COPY and paste, OCT- cancels, every change one undo)", ok);
     return bad;
 }

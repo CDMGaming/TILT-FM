@@ -10962,13 +10962,14 @@ static int test_tfm_ui_seq(void)
     tu_goto(TU_JAM);
     tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[1], TI_THUMP, 0);
     trk[0].p[P_SLEN] = 32; trk[0].p[P_SCALE] = 1;       /* MAJ */
-    stap(B_SEQ); ok = tu.scr == TU_STEP && song.seq_mode && tu_on();
+    stap(B_SEQ); ok = tu.scr == TU_NOTES && song.seq_mode && tu_on();                  /* (round 4: STEP is gone; BARS is the second) */
+    stap(B_SEQ); ok &= tu.scr == TU_BARS && !song.seq_mode;
     stap(B_SEQ); ok &= tu.scr == TU_NOTES;
-    stap(B_SEQ); ok &= tu.scr == TU_STEP;
-    turn(EN_ALGO, 1); stap(B_SEQ); ok &= tu.scr == TU_DRUMS;   /* T2 is a drum track */
-    stap(B_SEQ); ok &= tu.scr == TU_STEP;
-    turn(EN_ALGO, -1);
-    bad += check("TFM-UI SEQ: STEP, again NOTES (a drum track DRUMS), again STEP", ok);
+    turn(EN_ALGO, 1); ok &= tu.scr == TU_DRUMS;                                         /* T2 is a drum track */
+    stap(B_SEQ); ok &= tu.scr == TU_BARS;
+    stap(B_SEQ); ok &= tu.scr == TU_DRUMS;
+    turn(EN_ALGO, -1); ok &= tu.scr == TU_NOTES;
+    bad += check("TFM-UI SEQ: NOTES (a drum track DRUMS), again BARS, again NOTES / DRUMS", ok);
     ok = 1;
     ui.cursor = 0;
     song.rec |= 1u << song.sel;                         /* (round 3: REC on and stopped: the keys write) */
@@ -10984,12 +10985,12 @@ static int test_tfm_ui_seq(void)
         turn(EN_K1, 3); ok &= ui.cursor == 4u;
     }
     song.rec = 0;
-    bad += check("TFM-UI STEP: the keys write at the cursor, G5 is a REST, K1 moves the cursor", ok);
+    bad += check("TFM-UI NOTES: the keys write at the cursor (REC on), G5 is a REST, K1 moves the cursor", ok);
     ok = 1;
     for (i = 0; i < 4u; i++) { trk[0].step[i * 4u].time = ST_NOTE; trk[0].step[i * 4u].n = 1; trk[0].step[i * 4u].note[0] = (uint8_t)(60 + i * 2); trk[0].step[i * 4u].vel = 80; }
     trk[0].step[1].time = ST_REST; trk[0].step[1].n = 0;
     ui.cursor = 0;
-    stap(B_SEQ);   /* NOTES */
+    tu_goto(TU_NOTES);   /* NOTES */
     ok &= tu.scr == TU_NOTES;
     {
         uint8_t n0 = trk[0].step[0].note[0];
@@ -11167,13 +11168,14 @@ static int test_tfm_ui_acceptance(void)
     for (i = 0; i < 4u; i++) { turn(EN_K1 + i, 3); ok &= tfm_only(); }
     stap(B_EDIT); ok &= tu.scr == TU_SOUND && tfm_only(); turn(EN_K1, 3); turn(EN_PRESET, 1);
     stap(B_EDIT); ok &= tu.scr == TU_SOUND && tu.page == 1u && tfm_only();
-    stap(B_SEQ); ok &= tu.scr == TU_STEP && tfm_only();
+    stap(B_SEQ); ok &= (tu.scr == TU_NOTES || tu.scr == TU_DRUMS) && tfm_only();
     song.playing = 0;
     {
         uint32_t kC4 = key_at(0, 4);
         fm1_in.notes |= 1u << kC4; host_notes |= 1u << kC4; frame(); fm1_in.notes &= ~(1u << kC4); frame();
         fm1_in.notes |= 1u << 26; host_notes |= 1u << 26; frame(); fm1_in.notes &= ~(1u << 26); frame();    /* G5: a rest */
     }
+    stap(B_SEQ); ok &= tu.scr == TU_BARS && tfm_only();                                  /* (round 4: the second SEQ is BARS) */
     stap(B_SEQ); ok &= (tu.scr == TU_NOTES || tu.scr == TU_DRUMS) && tfm_only(); turn(EN_K2, 1);
     {   /* hold ARP: SCENES, scene keys; the layer is TFM's SCENES screen */
         uint32_t q;
@@ -11344,6 +11346,7 @@ int main(void)
     bad += test_r4_jam();
     bad += test_r4_notes();
     bad += test_r4_faces();
+    bad += test_r4_bars();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

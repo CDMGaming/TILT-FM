@@ -66,116 +66,323 @@ static void tq_range(const track_t *t)                  /* the pattern's lowest 
     tq_pitch_lo = lo <= hi ? lo : 48u;
     tq_pitch_hi = lo <= hi ? hi : 72u;
 }
-static void tq_step_body(void)                          /* y 22 .. 160 */
+/* ================================================================== BARS ==================================== */
+/* round 4 item 6 (tfm-spec/screens/Bars.dc.html): one row per track, each bar a block with a picture of its notes; bars past a
+ * track's length are dashed repeats up to the scene's length. K1 TRACK, K2 LENGTH in bars (1, 2, 4; 8 when the bar is 8 steps:
+ * the pattern holds 64 steps), K3 BAR, K4 SHIFT (the whole track a step, wrapping). OCT+ tap DOUBLE, EDIT clears the bar, hold OCT+
+ * COPY (K3 the target, OCT+ pastes, OCT- cancels). Every change is one undo (SAVE held) */
+static uint8_t tb_bar;                                  /* the selected bar of the selected track */
+static uint8_t tb_copy;                                 /* COPY: 1 + the bar being copied (0: not copying) */
+static uint8_t tb_tgt;                                  /* COPY: the bar it goes to */
+static uint8_t tb_used;                                 /* the OCT+ hold became COPY: its release is no tap */
+static int16_t tb_shift;                                /* the net shift of the selected track (K4) */
+static uint32_t tb_t0;
+static uint32_t tb_nbars(const track_t *t) { uint32_t b = tfm_bar(); return (tq_len(t) + b - 1u) / b; }
+static uint32_t tb_scene_bars(void)
 {
-    uint32_t k, i, b, c, len = tq_len(TSEL), cur = ui.cursor % NSTEP;
-    char s[24];
-    tu_rect(0, 22, TU_W, 138, TC_BG);
-    tu_text(16, 31, &AF_TS, "ALL TRACKS", TC_QUIET, TC_BG);
-    str_cpy(s, " \xB7 ", 5);
-    tq_len_text(s + 3, 64u);
-    tu_text(16 + text_w(&AF_TS, "ALL TRACKS") + 1, 31, &AF_TS, s, TC_QUIET, TC_BG);
-    for (k = 0; k < NTRK; k++) {                        /* the thin overview: 64 steps of each track */
-        const track_t *t = &trk[k];
-        uint32_t tl = tq_len(t);
-        int32_t y = 37 + (int32_t)k * 5;
-        for (i = 0; i < 64u; i++) {
-            const step_t *st = &t->step[i];
-            int32_t x = 16 + (int32_t)(i * 208u / 64u);
-            uint16_t col = i >= tl ? tu_mix(TC_BG, TC_SURF, 50) : tq_has_note(t, st) ? TU_TC[k] : TC_SURF;
-            if (k != song.sel && col != TC_SURF && i < tl)
-                col = tu_mix(TC_BG, col, 70);
-            tu_rect(x, y, 2, 4, col);
-        }
-    }
-    tq_range(TSEL);
-    for (b = 0; b < 4u; b++) {                          /* the track's four rows of 16 */
-        int32_t y = 62 + (int32_t)b * 24;
-        char n[3] = {'1', 0, 0};
-        uint32_t inlen = b * 16u < len;
-        n[0] = (char)('1' + b);
-        tu_text(8, y + 10, &AF_TS, "BAR", inlen ? TC_QUIET : TC_DIM, TC_BG);
-        tu_text(8 + text_w(&AF_TS, "BAR") + 2, y + 10, &AF_TS, n, inlen ? TC_QUIET : TC_DIM, TC_BG);
-        for (c = 0; c < 16u; c++) {
-            uint32_t idx = b * 16u + c;
-            const step_t *st = &TSEL->step[idx];
-            int32_t x = 36 + (int32_t)c * 12;
-            int has = tq_has_note(TSEL, st) && idx < len, playing = song.playing && TSEL->seq_idx == idx;
-            uint16_t bg = playing ? TC_AMBER : has ? TU_TC[song.sel] : idx < len && st->time == ST_TIE ? tu_mix(TC_SURF, TU_TC[song.sel], 40) : TC_SURF;
-            if (!inlen)
-                bg = tu_mix(TC_BG, bg, 30);
-            tu_rrect(x, y, 10, 21, 3, bg, TC_BG);
-            if (has && !drum_track(TSEL)) {
-                int32_t pad = 3 + (int32_t)(st->note[0] - (int32_t)tq_pitch_lo) * 12 / (int32_t)(tq_pitch_hi - tq_pitch_lo + 1u);
-                tu_rect(x + 2, y + 17 - pad, 6, 2, TC_BG);
-            }
-            if (idx == cur) {
-                tu_rect(x, y, 10, 1, TC_TEXT); tu_rect(x, y + 20, 10, 1, TC_TEXT);
-                tu_rect(x, y, 1, 21, TC_TEXT); tu_rect(x + 9, y, 1, 21, TC_TEXT);
-            }
-        }
+    uint32_t k, n = 1;
+    for (k = 0; k < NTRK; k++)
+        if (tb_nbars(&trk[k]) > n)
+            n = tb_nbars(&trk[k]);
+    return n;
+}
+static uint32_t tb_max_bars(void)                       /* the longest a track can be: 8 bars, as many as 64 steps hold */
+{
+    uint32_t n = NSTEP / tfm_bar();
+    return n > 8u ? 8u : n;
+}
+static void tb_len_set(track_t *t, uint32_t nb)         /* nb bars: growing repeats the bars there are, shrinking keeps the first nb */
+{
+    uint32_t b = tfm_bar(), old = tq_len(t), nl = nb * b, i;
+    if (nl > old)
+        for (i = old; i < nl && i < NSTEP; i++)
+            t->step[i] = t->step[i % old];
+    t->p[P_SLEN] = (int16_t)(nl > NSTEP ? NSTEP : nl);
+}
+static void tb_clear(track_t *t, uint32_t bar)
+{
+    uint32_t b = tfm_bar(), i, len = tq_len(t);
+    for (i = bar * b; i < (bar + 1u) * b && i < len; i++) {
+        step_clear(&t->step[i]);
+        (void)motion_clear_locks(t, i);
     }
 }
-static void tq_step_info(void)                          /* y 160 .. 215: the step, or the step sheet */
+static void tb_paste(track_t *t, uint32_t src, uint32_t dst)
 {
-    const step_t *st = &TSEL->step[ui.cursor % NSTEP];
-    char a[12], b[40], nn[6];
-    tu_rect(0, 160, TU_W, 55, TC_BG);
-    if (sheet_on()) {
-        static const char *const L[4] = {"MOVE", "COPY", "NUDGE", "SLIDE"};
-        uint32_t k;
-        for (k = 0; k < 4u; k++) {
-            char v[8], kb[3] = {'K', (char)('1' + k), 0};
-            int32_t x = 8 + (int32_t)k * 57;
-            if (k == 2u)
-                fmt_int(v, step_nudge(st));
-            else if (k == 3u)
-                str_cpy(v, drum_track(TSEL) ? "RATCH" : (st->flags & SF_SLIDE) ? "ON" : "OFF", 8);
-            else
-                fmt_int(v, (int32_t)ui.cursor + 1);
-            tu_rrect(x, 164, 54, 26, 5, TC_DEEP, TC_BG);
-            tu_text(x + 5, 172, &AF_TS, kb, TU_TC[k], TC_DEEP);
-            tu_text(x + 18, 172, &AF_TS, L[k], TU_TC[k], TC_DEEP);
-            tu_text_c(x + 27, 183, &AF_TL, k < 2u && 0 ? "" : v, TC_TEXT, TC_DEEP);
-        }
+    uint32_t b = tfm_bar(), i, len = tq_len(t);
+    if (src == dst)
         return;
-    }
-    str_cpy(a, "STEP ", 8);
-    fmt_int(a + 5, (int32_t)ui.cursor % NSTEP + 1);
-    tu_text(16, 168, &AF_TM, a, TC_TEXT, TC_BG);
-    if (drum_track(TSEL)) {
-        str_cpy(b, st->hit ? "hit" : "empty", 8);
-    } else if (st->time == ST_NOTE && st->n) {
-        str_cpy(b, tu_note_name(st->note[0], nn), 6);
-        if (st->flags & SF_ACCENT)
-            str_cpy(b + str_len(b), " \xB7 accent", 12);
-        if (st->flags & SF_SLIDE)
-            str_cpy(b + str_len(b), " \xB7 slide", 12);
+    for (i = 0; i < b; i++)
+        if (dst * b + i < len && src * b + i < len)
+            t->step[dst * b + i] = t->step[src * b + i];
+}
+static void tb_rotate(track_t *t, int32_t d)            /* the whole track a step left (d < 0) or right, wrapping */
+{
+    uint32_t len = tq_len(t), i;
+    step_t first, last;
+    if (len < 2u)
+        return;
+    first = t->step[0];
+    last = t->step[len - 1u];
+    if (d < 0) {
+        for (i = 0; i + 1u < len; i++)
+            t->step[i] = t->step[i + 1u];
+        t->step[len - 1u] = first;
     } else {
-        str_cpy(b, st->time == ST_TIE ? "tie" : "rest", 8);
-    }
-    tu_text(16 + text_w(&AF_TM, a) + 6, 168, &AF_TL, b, TC_MID, TC_BG);
-    {
-        static const char *const K[2] = {"K1", "SELECT"}, *const A[2] = {"STEP", "16 STEPS"};
-        tu_hint_line(198, TC_BG, TC_QUIET, 2, K, A);
+        for (i = len - 1u; i > 0; i--)
+            t->step[i] = t->step[i - 1u];
+        t->step[0] = last;
     }
 }
-static void tq_zero(void) { }
-static void tq_step_draw(void)
+static void tb_dot(int32_t x, int32_t y, int32_t w, uint16_t c) { tu_rect(x, y, w, 2, c); }
+static void tb_block(const track_t *t, uint32_t k, uint32_t bar, int32_t x, int32_t y, int sel)
 {
-    uint32_t k, i, sig = ui.cursor * 31u + song.sel * 7u + tq_len(TSEL) * 977u + (sheet_on() ? 99u : 0u);
+    uint32_t b = tfm_bar(), nb = tb_nbars(t), src = bar % nb, i, len = tq_len(t), lo = 127, hi = 0;
+    int past = bar >= nb;
+    uint16_t col = TU_TC[k], dim = tu_mix(TC_BG, col, past ? 55 : 100), edge = past ? tu_mix(TC_BG, col, 55) : RGB(42, 32, 18);
+    if (past) {
+        int32_t q;
+        for (q = 0; q < 41; q += 4) {                   /* the dashed outline of a repeat */
+            tu_rect(x + q, y, 2, 1, edge);
+            tu_rect(x + q, y + 25, 2, 1, edge);
+        }
+        for (q = 0; q < 26; q += 4) {
+            tu_rect(x, y + q, 1, 2, edge);
+            tu_rect(x + 40, y + q, 1, 2, edge);
+        }
+    } else {
+        tu_cut(x, y, 41, 26, k == song.sel ? RGB(40, 30, 18) : RGB(26, 20, 12));
+    }
+    if (sel) {                                          /* the selected bar: outlined white */
+        tu_rect(x - 1, y - 1, 43, 1, TC_TEXT); tu_rect(x - 1, y + 26, 43, 1, TC_TEXT);
+        tu_rect(x - 1, y - 1, 1, 28, TC_TEXT); tu_rect(x + 41, y - 1, 1, 28, TC_TEXT);
+    }
+    for (i = 0; i < len; i++)
+        if (!drum_track(t) && t->step[i].time == ST_NOTE && t->step[i].n) {
+            if (t->step[i].note[0] < lo) lo = t->step[i].note[0];
+            if (t->step[i].note[0] > hi) hi = t->step[i].note[0];
+        }
+    for (i = 0; i < b && src * b + i < len; i++) {      /* the picture: a dot a note (a bar for a long one), a drum lane a row */
+        const step_t *s = &t->step[src * b + i];
+        int32_t dx = x + 3 + (int32_t)(i * 35u / b);
+        if (drum_track(t)) {
+            uint32_t l;
+            for (l = 0; l < 8u; l++)
+                if ((s->hit >> l) & 1u)
+                    tu_rect(dx, y + 3 + (int32_t)l * 2, 2, 1, dim);
+        } else if (s->time == ST_NOTE && s->n) {
+            uint32_t l = 1;
+            while (src * b + i + l < len && (src * b + i + l) < (src + 1u) * b && t->step[src * b + i + l].time == ST_TIE)
+                l++;
+            tb_dot(dx, y + 3 + (int32_t)((hi - s->note[0]) * 17u / (hi - lo + 1u)), l > 1u ? (int32_t)(l * 35u / b) : 2, dim);
+        }
+    }
+    if (past) {                                         /* the arrow of a repeat */
+        int32_t cx = x + 20, cy = y + 13;
+        tu_ring(cx, cy, 5, 4, tu_mix(TC_BG, col, 80));
+        tu_rect(cx + 1, cy - 6, 4, 3, RGB(18, 14, 8));
+        tu_rect(cx + 3, cy - 6, 1, 3, tu_mix(TC_BG, col, 80));
+        tu_rect(cx + 2, cy - 5, 3, 1, tu_mix(TC_BG, col, 80));
+    }
+}
+static void tb_body(void)                               /* y 22 .. 215 */
+{
+    uint32_t k, bar, nb, sb = tb_scene_bars();
+    char b[28], n[12];
+    tu_rect(0, 22, TU_W, 193, TC_BG);
+    for (bar = 0; bar < sb && bar < 4u; bar++) {
+        char bn[8] = "BAR ";
+        fmt_int(bn + 4, (int32_t)bar + 1);
+        tu_text_c(85 + 44 * (int32_t)bar, 30, &AF_TS, bn, tb_copy && bar == tb_tgt ? TC_AMBER : TC_QUIET, TC_BG);
+    }
+    for (k = 0; k < NTRK; k++) {
+        const track_t *t = &trk[k];
+        int32_t y = 37 + (int32_t)k * 33, w = 0;
+        nb = tb_nbars(t);
+        if (k == song.sel)
+            tu_rect(0, y - 3, TU_W, 32, RGB(30, 22, 12));
+        tu_disc(14, y + 7, 6, TU_TC[k]);
+        b[0] = (char)('1' + k); b[1] = 0;
+        tu_text_c(14, y + 7, &AF_TS, b, TC_BG, TU_TC[k]);
+        {
+            const char *nm = tfm_ins_of(t) != TI_NONE ? tfm_ins_name(t) : tu_inst_name(t);
+            if (text_w(&AF_TS, nm) > 38 && tfm_ins_of(t) != TI_NONE)
+                nm = tfm_ins_tag(t);
+            tu_text_fit(24, y + 5, &AF_TS, nm, TC_TEXT, k == song.sel ? RGB(30, 22, 12) : TC_BG, 38);
+        }
+        fmt_int(n, (int32_t)nb);
+        str_cpy(n + str_len(n), nb == 1u ? " BAR" : " BARS", 6);
+        if (nb < sb) {
+            str_cpy(n + str_len(n), " \xD7", 3);
+            fmt_int(n + str_len(n), (int32_t)((sb + nb - 1u) / nb));
+        }
+        tu_text(24, y + 18, &AF_TS, n, TU_TC[k], k == song.sel ? RGB(30, 22, 12) : TC_BG);
+        (void)w;
+        for (bar = 0; bar < sb && bar < 4u; bar++)
+            tb_block(t, k, bar, 64 + 44 * (int32_t)bar, y, k == song.sel && bar == (tb_copy ? tb_tgt : tb_bar));
+    }
+    nb = tb_nbars(TSEL);
+    b[0] = 'T'; b[1] = (char)('1' + song.sel); b[2] = 0;
+    str_cpy(b + 2, " ", 2);
+    str_cpy(b + str_len(b), tfm_ins_of(TSEL) != TI_NONE ? tfm_ins_name(TSEL) : tu_inst_name(TSEL), 12);
+    {
+        int32_t x = tu_text(9, 177, &AF_TM, b, TC_TEXT, TC_BG);
+        char c[40];
+        str_cpy(c, "\xB7 bar ", 8);
+        fmt_int(c + 6, (int32_t)tb_bar + 1);
+        str_cpy(c + str_len(c), " of ", 5);
+        fmt_int(c + str_len(c), (int32_t)nb);
+        str_cpy(c + str_len(c), " \xB7 scene is ", 14);
+        fmt_int(c + str_len(c), (int32_t)sb);
+        str_cpy(c + str_len(c), sb == 1u ? " bar" : " bars", 6);
+        tu_text(x + 5, 177, &AF_TS, c, TC_QUIET, TC_BG);
+    }
+    for (k = 0; k < 4u; k++) {
+        static const char *const LB[4] = {"K1 TRACK", "K2 LENGTH", "K3 BAR", "K4 SHIFT"};
+        char v[12];
+        int32_t x = 7 + (int32_t)k * 58;
+        if (k == 0u) { v[0] = 'T'; v[1] = (char)('1' + song.sel); v[2] = 0; }
+        else if (k == 1u) { fmt_int(v, (int32_t)nb); str_cpy(v + str_len(v), nb == 1u ? " BAR" : " BARS", 6); }
+        else if (k == 2u) fmt_int(v, (int32_t)(tb_copy ? tb_tgt : tb_bar) + 1);
+        else fmt_int(v, tb_shift);
+        tu_rrect(x, 188, 55, 26, 5, TC_DEEP, TC_BG);
+        tu_text_c(x + 27, 195, &AF_TS, LB[k], TU_TC[k], TC_DEEP);
+        tu_text_c(x + 27, 207, &AF_TL, v, TC_TEXT, TC_DEEP);
+    }
+}
+static void tb_clamp(void);
+static void tb_draw(void)
+{
+    uint32_t k, sig = song.sel * 31u + tb_bar * 7u + tb_copy * 977u + tb_tgt * 131u + (uint32_t)(tb_shift + 128) * 4001u + tu_rec_sig() * 6007u;
+    char h[24] = "BARS \xB7 SCENE A";
+    uint32_t cur = tu_scene_cur();
+    tb_clamp();
+    h[13] = cur < TU_NSCENE ? (char)('A' + cur) : '-';
     for (k = 0; k < NTRK; k++)
         sig = sig * 31u + steps_hash(&trk[k]) + (uint32_t)clamp(trk[k].p[P_SLEN], 1, NSTEP);
-    if (song.playing)
-        sig += TSEL->seq_idx * 131071u;
-    (void)i;
-    tq_head("STEP");
-    tu_zone(2, 22, 70, TC_BG, sig, tq_step_body);
-    tu_zone(3, 92, 68, TC_BG, sig, tq_step_body);
-    tu_zone(4, 160, 55, TC_BG, sig, tq_step_info);
-    tu_foot(3, "KEYS", "WRITE", "G5", "REST", "HOLD OCT+", "SHEET", 0, 0, 0, 0);
-    (void)tq_zero;
+    tu_head(-1, h, 0, "SEQ NOTES", 0);
+    tu_zone(2, 22, 100, TC_BG, sig, tb_body);
+    tu_zone(3, 122, 93, TC_BG, sig, tb_body);
+    if (tb_copy)
+        tu_foot(3, "K3", "TARGET", "OCT+", "PASTE", "OCT-", "CANCEL", 0, 0, 0, 0);
+    else
+        tu_foot(3, "OCT+", "DOUBLE", "EDIT", "CLEAR BAR", "HOLD OCT+", "COPY", 0, 0, 0, 0);
+    ui.force = 0;
 }
+static void tb_clamp(void)
+{
+    uint32_t nb = tb_nbars(TSEL);
+    if (tb_bar >= nb)
+        tb_bar = (uint8_t)(nb - 1u);
+    if (tb_tgt >= nb)
+        tb_tgt = (uint8_t)(nb - 1u);
+}
+static int tb_busy(void)
+{
+    if (chain_busy()) {
+        ui_message("STOP TO EDIT");
+        return 1;
+    }
+    return 0;
+}
+static void tb_input(uint32_t pressed, uint32_t oct, uint32_t busy)
+{
+    track_t *t = TSEL;
+    int32_t s;
+    uint32_t nb = tb_nbars(t), held = (fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u;
+    if (busy)
+        return;
+    if ((pressed >> panel.btn[B_OCTUP]) & 1u) {
+        tb_t0 = fm1_ms;
+        tb_used = 0;
+    }
+    if (held && !tb_copy && !tb_used && fm1_ms - tb_t0 > 450u) {        /* hold OCT+: COPY this bar; K3 picks where it goes */
+        tb_copy = (uint8_t)(tb_bar + 1u);
+        tb_tgt = (uint8_t)(tb_bar + 1u < nb ? tb_bar + 1u : tb_bar);
+        tb_used = 1;
+        ui.force = 1;
+    }
+    if ((s = panel_enc(EN_K1)) != 0) {                  /* TRACK */
+        track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
+        tb_shift = 0;
+        tb_copy = 0;
+        tb_clamp();
+        ui.force = 1;
+    }
+    if ((s = panel_enc(EN_K2)) != 0 && !tb_busy()) {    /* LENGTH in bars: 1, 2, 4 (8) */
+        uint32_t n = nb, mx = tb_max_bars();
+        if (s > 0) {
+            n = nb < 2u ? 2u : nb < 4u ? 4u : 8u;
+            if (n > mx) n = nb;
+        } else {
+            n = nb > 4u ? 4u : nb > 2u ? 2u : 1u;
+        }
+        if (n != nb) {
+            tl_undo_take(t);
+            tb_len_set(t, n);
+            tb_tgt = (uint8_t)(tb_tgt < n ? tb_tgt : n - 1u);
+            tb_clamp();
+            ui.force = 1;
+        } else {
+            ui_message(s > 0 ? "AS LONG AS IT GOES" : "ONE BAR");
+        }
+    }
+    if ((s = panel_enc(EN_K3)) != 0) {                  /* BAR (COPY: the target) */
+        uint32_t *p = tb_copy ? (uint32_t *)0 : 0;
+        int32_t v = tb_copy ? (int32_t)tb_tgt : (int32_t)tb_bar;
+        (void)p;
+        v = clamp(v + (s > 0 ? 1 : -1), 0, (int32_t)nb - 1);
+        if (tb_copy)
+            tb_tgt = (uint8_t)v;
+        else
+            tb_bar = (uint8_t)v;
+        ui.force = 1;
+    }
+    if ((s = panel_enc(EN_K4)) != 0 && !tb_busy()) {    /* SHIFT: the whole track a step */
+        tl_undo_take(t);
+        tb_rotate(t, s > 0 ? 1 : -1);
+        tb_shift = (int16_t)clamp(tb_shift + (s > 0 ? 1 : -1), -99, 99);
+        ui.force = 1;
+    }
+    if (oct & 1u && tb_copy) {                          /* OCT-: cancel */
+        tb_copy = 0;
+        ui_message("COPY CANCELLED");
+        ui.force = 1;
+    }
+    if (oct & 2u) {
+        if (tb_used) {
+            tb_used = 0;                                /* (the release of the hold that began COPY) */
+        } else if (tb_copy) {                           /* paste */
+            if (!tb_busy()) {
+                tl_undo_take(t);
+                tb_paste(t, (uint32_t)tb_copy - 1u, tb_tgt);
+                tb_bar = tb_tgt;
+                ui_message("PASTED");
+            }
+            tb_copy = 0;
+            ui.force = 1;
+        } else if (fm1_ms - tb_t0 <= 450u && !tb_busy()) {        /* tap: DOUBLE */
+            if (nb * 2u > tb_max_bars()) {
+                ui_message("AS LONG AS IT GOES");
+            } else {
+                tl_undo_take(t);
+                tb_len_set(t, nb * 2u);
+                ui_message("DOUBLED");
+            }
+            ui.force = 1;
+        }
+    }
+}
+static void tb_edit(void)                               /* EDIT: clear the selected bar */
+{
+    if (tb_busy())
+        return;
+    tl_undo_take(TSEL);
+    tb_clear(TSEL, tb_bar);
+    ui_message("BAR CLEARED");
+    ui.force = 1;
+}
+
 /* the keys of the screens: a drum track's grid, else the cursor step (STEP's entry), G5 a REST */
 static void tq_rest(void)
 {
@@ -786,8 +993,6 @@ static void tq_input(uint32_t notes, uint32_t busy)
                         tq_notes_knob(k, s);
                     else if (tu.scr == TU_DRUMS)
                         tq_drums_knob(k, s);
-                    else if (k == 0u)
-                        cursor_set((uint32_t)clamp((int32_t)ui.cursor + s, 0, (int32_t)tq_len(TSEL) - 1));
                 }
         }
         s = panel_enc(EN_PRESET);
@@ -815,12 +1020,8 @@ static void tq_input(uint32_t notes, uint32_t busy)
             cursor_set((uint32_t)clamp((int32_t)ui.cursor + (sel > 0 ? 1 : -1), 0, (int32_t)tq_len(TSEL) - 1));
             tq_bar = (uint8_t)(ui.cursor / 16u);
         }
-        if ((s = panel_enc(EN_PRESET)) != 0 && tu.scr == TU_STEP)
-            tu_sound_step(s);
-        if (sel != 0 && tu.scr == TU_STEP)
-            cursor_set((uint32_t)clamp((int32_t)ui.cursor + (sel > 0 ? 1 : -1) * 16, 0, (int32_t)tq_len(TSEL) - 1));
     }
     tq_keys(notes);
-    if (tu.scr == TU_NOTES || tu.scr == TU_STEP || tu.scr == TU_DRUMS)
+    if (tu.scr == TU_NOTES || tu.scr == TU_DRUMS)
         tq_bar = (uint8_t)(tq_bar > (tq_len(TSEL) - 1u) / 16u ? (tq_len(TSEL) - 1u) / 16u : tq_bar);
 }

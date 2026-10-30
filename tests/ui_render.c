@@ -824,7 +824,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large",
     "ui_jam", "ui_mix", "ui_start", "ui_dice", "ui_setup", "ui_time",
     "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
-    "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_step", "ui_notes", "ui_drums", "ui_sheet", "ui_scenes", "ui_song", "ui_songs",
+    "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_bars", "ui_notes", "ui_drums", "ui_sheet", "ui_scenes", "ui_song", "ui_songs",
     "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion", "ui_song_overwrite", "ui_song_copy", "ui_song_clear", "ui_songs_copy"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
@@ -1458,7 +1458,7 @@ static void setup(int s)
         trk[2].step[2].flags |= SF_ACCENT; trk[2].step[3].time = ST_NOTE; trk[2].step[3].flags |= SF_SLIDE;
         trk[2].step[3].time = ST_NOTE; trk[2].step[4].time = ST_TIE;
         song.sel = s == S_UI_DRUMS ? 0 : 2; ui.cursor = 5; ui.lane = 1;
-        tu_goto(s == S_UI_NOTES ? TU_NOTES : s == S_UI_DRUMS ? TU_DRUMS : TU_STEP);
+        tu_goto(s == S_UI_NOTES ? TU_NOTES : s == S_UI_DRUMS ? TU_DRUMS : TU_BARS);
         if (s == S_UI_SHEET) fm1_in.buttons |= 1u << panel.btn[B_OCTUP];
         ui.force = 1;
         break;

@@ -59,7 +59,9 @@ static void tu_song_sounds(void);
 static uint8_t tq_bar;                                  /* (tfm_seq.c: the bar NOTES and DRUMS show) */
 static void tq_input(uint32_t notes, uint32_t busy);
 static void tq_oct(uint32_t pressed, uint32_t oct);
-static void tq_step_draw(void);
+static void tb_draw(void);                              /* (tfm_seq.c: BARS) */
+static void tb_input(uint32_t pressed, uint32_t oct, uint32_t busy);
+static void tb_edit(void);
 static void tq_notes_draw(void);
 static void tq_drums_draw(void);
 static void tq_notes_delete(void);
@@ -106,7 +108,7 @@ static void tu_goto(uint32_t scr)
     ui.layer = 0;
     ui.menu = 0;
     ui.force = 1;
-    song.seq_mode = scr == TU_STEP || scr == TU_NOTES || scr == TU_DRUMS;
+    song.seq_mode = scr == TU_NOTES || scr == TU_DRUMS;
     ui.home = !song.seq_mode;                           /* (the sequencer's own state: the cursor, the keys' entry) */
     if (song.seq_mode) {
         ui.page = (uint8_t)page_first(FAM_SEQ);
@@ -795,7 +797,7 @@ static void tu_black_mute(uint32_t notes)               /* MIX: the black keys, 
 static int tu_song_on(void) { return tu.scr == TU_SONG; }
 static int tu_oct_ok(void)                              /* OCT+ is OK and OCT- BACK here (no octave) */
 {
-    return !tu_classic() && !ui.menu && (tu.scr == TU_SONG || tu.scr == TU_SONGS || tu.scr == TU_NOTES);
+    return !tu_classic() && !ui.menu && (tu.scr == TU_SONG || tu.scr == TU_SONGS || tu.scr == TU_NOTES || tu.scr == TU_BARS);
 }
 static void tu_deep(void)                               /* SOUND > DEEP: Felucca's own pages for this track */
 {
@@ -830,7 +832,10 @@ static void tu_screen_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint
     case TU_SOUND:
         tu_sound_input(busy);
         break;
-    case TU_STEP: case TU_NOTES: case TU_DRUMS:
+    case TU_BARS:
+        tb_input(pressed, oct, busy);
+        break;
+    case TU_NOTES: case TU_DRUMS:
         tq_input(notes, busy);
         if (tu.scr == TU_NOTES)
             tq_oct(pressed, oct);
@@ -873,7 +878,7 @@ static void tu_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint32_t bu
         tq_adapt();
         tu_sel_until = fm1_ms + 1000u;                  /* (JAM: the track's name big for about a second) */
     }
-    if (!busy && tu.scr != TU_SOUND && tu.scr != TU_NOTES && tu.scr != TU_DRUMS && tu.scr != TU_SONG && (s = panel_enc(EN_PRESET)) != 0)
+    if (!busy && tu.scr != TU_SOUND && tu.scr != TU_NOTES && tu.scr != TU_DRUMS && tu.scr != TU_SONG && tu.scr != TU_BARS && (s = panel_enc(EN_PRESET)) != 0)
         tu_sound_step(s);                               /* PRESETS: the track's sound, everywhere it is not a list */
     tu_screen_input(pressed, notes, oct, busy);
     enc_drop();                                         /* (the knobs nobody took) */
@@ -903,13 +908,11 @@ static void tu_tap(uint32_t b)
     case B_ENV:                                         /* DICE (a modal screen of tilt.c) */
         tilt_ns_show();
         break;
-    case B_SEQ:                                         /* STEP; again NOTES (a drum track: DRUMS); again STEP */
-        if (tu.scr == TU_STEP)
-            tu_goto(drum_track(TSEL) ? TU_DRUMS : TU_NOTES);
-        else if (tu.scr == TU_NOTES || tu.scr == TU_DRUMS)
-            tu_goto(TU_STEP);
+    case B_SEQ:                                         /* NOTES (a drum track: DRUMS); again BARS; again NOTES / DRUMS */
+        if (tu.scr == TU_NOTES || tu.scr == TU_DRUMS)
+            tu_goto(TU_BARS);
         else
-            tu_goto(TU_STEP);
+            tu_goto(drum_track(TSEL) ? TU_DRUMS : TU_NOTES);
         break;
     case B_FX: case B_SCL: case B_LFO: case B_ARP:      /* FX (again SPACE), CLOCK (again page 2), MOTION, ARP */
         tu_pages_tap(b);
@@ -935,6 +938,8 @@ static void tu_tap(uint32_t b)
             tu_songs_clear();
         } else if (tu.scr == TU_NOTES) {
             tq_notes_delete();
+        } else if (tu.scr == TU_BARS) {
+            tb_edit();
         } else if (tu.scr != TU_SOUND) {
             tu_goto(TU_SOUND);
             tu.page = 0;
@@ -978,8 +983,8 @@ static void tu_draw_screen(void)
     case TU_SOUND:
         tu_sound_draw();
         break;
-    case TU_STEP:
-        tq_step_draw();
+    case TU_BARS:
+        tb_draw();
         break;
     case TU_NOTES:
         tq_notes_draw();

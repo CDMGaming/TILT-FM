@@ -16,7 +16,7 @@ static int test_r1_cursor(void)
             song.sel = (uint8_t)scr;                    /* T1 melodic (NOTES), T2 drums (DRUMS) */
             tu_goto(TU_JAM);
             trk[scr].p[P_SLEN] = (int16_t)len;
-            stap(B_SEQ); stap(B_SEQ);
+            stap(B_SEQ);
             R1(tu.scr == (scr ? TU_DRUMS : TU_NOTES));
             ui.cursor = 0; tq_bar = 0;
             for (i = 0; i < len; i++) {                 /* up: every step 1..LEN, empty or not, the shown bar following */
@@ -129,7 +129,7 @@ static int test_r1_home(void)
     R1(r1_free() || (tilt_ns_open == TILT_NS && !tu_setup_on));
     {   /* a screen button closes DICE and opens its screen */
         static const uint8_t SB[8] = {B_SEQ, B_EDIT, B_GLO, B_SAVE, B_FX, B_SCL, B_LFO, B_ARP};
-        static const uint8_t SC[8] = {TU_STEP, TU_SOUND, TU_SONG, TU_SONGS, TU_FX, TU_CLOCK, TU_MOTION, TU_ARP};
+        static const uint8_t SC[8] = {TU_NOTES, TU_SOUND, TU_SONG, TU_SONGS, TU_FX, TU_CLOCK, TU_MOTION, TU_ARP};
         for (s = 0; s < 8u; s++) {
             r1_reset();
             stap(B_ENV); frames(3);

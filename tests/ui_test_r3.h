@@ -30,7 +30,7 @@ static int test_r3_notes(void)
     t->step[8] = (step_t){{67}, 1, ST_NOTE, 0, 70, 0, 0};
     t->step[9].time = ST_TIE;
     t->step[31] = (step_t){{64}, 1, ST_NOTE, 0, 110, 0, 0};
-    stap(B_SEQ); stap(B_SEQ);
+    stap(B_SEQ);
     R3(tu.scr == TU_NOTES);
     ui.cursor = 0; tq_bar = 0;
     for (i = 1; i < 32u; i++) {                                              /* K1: every step, empty ones too; the bar follows */
@@ -119,7 +119,7 @@ static int test_r3_rec(void)
     ui_power_on();
     tu_off = 0;
     tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[1], TI_THUMP, 0);
-    for (scr = 0; scr < 3; scr++) {                     /* STEP, NOTES, DRUMS */
+    for (scr = 1; scr < 3; scr++) {                     /* NOTES, DRUMS (round 4: STEP is BARS now, no keys there) */
         track_t *t;
         song.sel = scr == 2 ? 1 : 0;
         t = &trk[song.sel];
@@ -127,8 +127,7 @@ static int test_r3_rec(void)
         for (i = 0; i < NSTEP; i++) step_clear(&t->step[i]);
         t->p[P_SLEN] = 16;
         stap(B_SEQ);
-        if (scr >= 1) stap(B_SEQ);
-        R3(tu.scr == (scr == 0 ? TU_STEP : scr == 1 ? TU_NOTES : TU_DRUMS) || scr == 2);
+        R3(tu.scr == (scr == 1 ? TU_NOTES : TU_DRUMS));
         if (scr == 2) tu_goto(TU_DRUMS);
         kC4 = key_at(0, 4);
         ui.cursor = 3;
