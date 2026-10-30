@@ -11352,6 +11352,7 @@ int main(void)
     bad += test_r5_chain();
     bad += test_r5_log();
     bad += test_r5_perform();
+    bad += test_r6_live_scene();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

@@ -65,6 +65,7 @@ static int jl_keep(void)                                /* the jam as the song's
 {
     if (!jl_n || chain_busy())
         return 0;
+    scene_keep_live();
     jw_undo = chain_config;
     jw_undo_ok = 1;
     jl_to_chain(&chain_config);

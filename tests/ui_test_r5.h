@@ -276,3 +276,33 @@ static int test_r5_perform(void)
     bad += check("round 5 item 4: hold ARP = PERFORM (roll rates 1/8..1/32, a ratchet when REC, mutes, FILL, CAPTURE 1 / 2 / 4 bars with REC off, MUTATE in key, undo)", ok);
     return bad;
 }
+/* round 6 item 1: SONG plays what you hear: B's notes written without leaving B, a chain A B on JAM, PLAY on SONG: B sounds */
+static int test_r6_live_scene(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t n;
+    ui_power_on();
+    tu_off = 0;
+    sng_cur = 0;
+    memset(proj_slot, 0, sizeof proj_slot);
+    memset(song_rec, 0, sizeof song_rec);
+    chain_defaults(&chain_config);
+    scene_claim();
+    sc_note(0, 0, 55);
+    tilt_scene_go(1, 0);                                /* B: new, empty when entered */
+    sc_note(0, 0, 70);                                  /* notes written in B, B never left */
+    R5(scene_cur() == 1u && scene_edited());
+    tu_goto(TU_JAM);
+    frames(16);
+    r5_down(10); r5_key(0); r5_key(1); r5_up(10);
+    R5(chain_config.count == 2u && chain_config.row[1].slot[0] == 1u);
+    tu_goto(TU_SONG);
+    frames(16);
+    R5(chain_prepare() == 0 && chain.config.row[1].slot[0] == 1u);      /* (B is not blank) */
+    events_block(32);
+    for (n = 0; n < 4000u && chain.running && chain.row == 0u; n++) events_block(32);
+    R5(chain.running && chain.row == 1u && seq_steps(&trk[0])[0].note[0] == 70u);
+    seq_stop(); transport_req = 0; events_block(32);
+    bad += check("round 6 item 1: SONG plays the scene now as it sounds (unsaved notes of B, a chain A B: B sounds)", ok);
+    return bad;
+}

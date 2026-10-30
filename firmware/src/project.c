@@ -1440,6 +1440,17 @@ static int scn_stored(uint32_t g)         /* scene g is stored; flash: its bit, 
 }
 static int project_used(uint32_t slot) { return scn_stored(scn_g(slot)); }   /* (a scene of the song the music is in) */
 
+/* round 6: the scene the music is in, stored as it sounds before anything reads the scenes (SONG's PLAY, a chain, KEEP
+ * AS A SONG, NEXT BALL): its edits are only in the working pattern until a scene change stores them, and a chain read
+ * them as a blank scene. Stored as a RAM image (as a scene change while playing does; a stop takes it to flash) */
+static void scene_keep_live(void)
+{
+    uint32_t cur = scene_cur();
+    if (tu_classic())                                   /* (CLASSIC: Felucca's project slots, as they were) */
+        return;
+    if (cur < NSCN && (scene_edited() || !project_used(cur)))
+        (void)scene_store_ram(cur);
+}
 /* Main loop only: no flash access or copies when the ISR changes rows. */
 static uint32_t chain_prepare(void)
 {
@@ -1448,6 +1459,7 @@ static uint32_t chain_prepare(void)
         return 2;
     if (!chain_valid(&chain_config) || !chain_config.count)
         return 1;
+    scene_keep_live();                                  /* (round 6: the scene now as it sounds, never read as blank) */
     for (i = 0; i < chain_config.count; i++)            /* the slots the lanes play (not the silent ones) */
         for (k = 0; k < NTRK; k++) {
             uint32_t s = chain_config.row[i].slot[k];
