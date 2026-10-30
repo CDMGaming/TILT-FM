@@ -255,3 +255,31 @@ Branch `tfm-ui`, one commit per item: `1f0fb6e` (1), `ad37ad8` (2), `a9590f9` (3
 **Renders:** tfm-spec/built re-rendered (ui_dice is gone: START's ui_start, ui_start_rolled, ui_start_spin), the contact sheet redone; 0 lint findings.
 
 **Suite (round 6):** tests=0 (ALL HOST TESTS PASSED, after the DEEP EDIT row fix above), no FAIL lines, target_budget 0 (the audio ISR fm1_alnk0_irq costs 8,705 against 8,285: +5 %, inside the +10 %; round 5 was +4 %: the per-part level trim and the per-voice key level). Final build `63e9414`: 503,104 B, RAM 63,224 B (headroom 4,360 B), pool 365,752 B. Published as the installer preview (`next/`), the tested release at the root unchanged.
+
+## Round 7 (ROUND-7.md: the instruments that vanished, and three small things)
+
+Branch `tfm-ui`: `95435e4` (1), `91ff2d2` (2 and 4: one commit, they share tfm_faces.c and the same screens), `2419f94` (3). Package `tilt-fm-ui-r7-<sha>.fwsc`. Nothing was run on an FM-1.
+
+**Flash and RAM** (app image / RAM .data+.bss; pool 365,752 B throughout): round 6 final 503,104 / 63,224. Item 1: 503,108 (+4). Items 2 + 4: 503,132 (+24). Item 3: 503,164 (+32). RAM unchanged (63,224 B, headroom 4,360 B).
+
+1. **Instruments vanish after a song plays: found and fixed.** Your cause was right: `project.c` `chain_prepare`, SOUNDS SCENE, stored each scene's preset as `preset % npresets`, which wraps a TFM byte (0x20 and up) into the engine's factory range; `chain_sound_put` wrote it to `t->preset`, `tfm_ins_of` said TI_NONE, and the autosave kept it. It now keeps `preset >= TFM_PRE0` as is (as the scene stage at ~1899 and the restore at ~1263 did). **Test first, against the old line:** `test_r7_instruments` (a 4-track band, two scenes with different instruments on all four tracks, a chain of the two with SOUNDS SCENE on): it fails on the old code (the playing row's tracks lose their bytes) and passes on the new. Then: stopped (the live sounds come back, each with its byte), the chain again from JAM, JAM and SOUND on the instrument (JAM stays JAM, EDIT toggles the pages, never DEEP), a power cycle done the autosave's way (capture, pack, unpack, restore; the tracks set to other sounds first), MUTATE SOUND. **The audit, every place a preset byte is copied, wrapped, clamped or defaulted** (project.c, song_chain.c, seq.c, ui.c, upreset.c, editor*.c, tilt.c, tfm_*.c, web/):
+   - project.c 1499 (chain_prepare, the SOUNDS SCENE source): **the bug, fixed**.
+   - project.c 1899 (scene stage) and 1263 (project restore): keep the byte already.
+   - project.c 258/266 (proj_trk_from), 290, 415, 436, 563, 651, 735 (the format copies and the pack / unpack), 1040 (capture), 1476 (the live copy for the chain): copy the byte as it is.
+   - project.c 301, 479, 1284-1287: PROJ_DEF_KEEP / PROJ_DEF_SOUND (the old formats' own markers, never a TFM byte), their conversions at 323, 349-350, 381-382 only touch DIGITAL and SAMPLE PERC tracks (engines that have no instrument): fine.
+   - song_chain.c 73 (chain_sound_put): copies the byte it is given (it was given the wrapped one).
+   - seq.c 1363 (the scene stage onto the track): copies.
+   - ui.c 1149 / 1207 / 1259 (undo): save and restore the byte; 1461 (the retired DIGITAL load), 1518 (apply_preset_to, an engine's own preset chosen on purpose: PRESETS in DEEP, the editor's PRESET command): a deliberate choice of an engine preset, so it ends the instrument by design.
+   - ui.c 1686 / 1848 (`% npresets` in the PRESETS list position), ui_draw.c 846 (`% npresets`, the name shown): reads only, tagged tracks are handled (`tagged`).
+   - upreset.c 481 (loading a user preset sets `preset = 0`, `t->user` marks it; a TFM sound saved as a user preset is the tagged case at ui.c 1682): by design.
+   - editor.c 122-180 (the byte sent to the web editor, `& 0x7F` by ed_b: a display value only, never written back), editor.c 515-532 (ED_PRESET: an engine preset on purpose).
+   - tfm_instr.c 482 (tfm_load), tfm_live.c prf_mutate (calls tfm_load: keeps the instrument): fine.
+   - web: fm1backup.js moves objects as bytes (no preset field read); editor.html's applyPreset is the editor's own engine preset choice.
+   So after this nothing but a deliberate PRESETS / editor / user-preset action can turn an instrument's byte into a raw engine preset. **No repair on load**, as the spec says: a wrapped byte cannot be told from a real Felucca preset; projects already damaged have to pick the instrument again (hold EDIT).
+2. **No instrument: a plain TFM face.** SOUND on a track with no instrument shows "NO INSTRUMENT / HOLD EDIT TO PICK ONE" (and its engine's name small); EDIT toggles its pages as everywhere (the old "EDIT: DEEP" line is gone). JAM's cabinet says NO / INSTRUMENT / HOLD EDIT in place of the dial (a muted one still says MUTED); the knob no longer drives LEVEL from there. DEEP is reached only from MENU > DEEP EDIT. Renders: `ui_snd_none`, `ui_jam_none`. Test: `test_r7_noinst`.
+3. **Which build is this.** `TILT_BUILD` (ui.c, default `dev`): small on START's display under TILT; MENU > INFO's first row is now BUILD (it was FIRMWARE showing Felucca's v1.6.1; the INFO page has no room for a fourth row, so Felucca's version stays on ABOUT's FELUCCA page and ABOUT's TILT-FM line now reads "TILT-FM 0.2.1 . r7-<sha>"). `tools/build.py` passes `-DTILT_BUILD=` from `$TILT_BUILD` (this round's package: `r7-<sha>`, the package name's tag), else `dev-<git short sha>`. Test: it is drawn on START.
+4. **SOUND's header** reads MACROS 1 . 2 (done in the item 2 commit).
+
+**Tests:** tests/ui_test_r6.h (round 7 section): `test_r7_instruments`, `test_r7_noinst`, `test_r7_build`.
+
+**Suite (round 7):** tests=0 (ALL HOST TESTS PASSED), no FAIL lines, target_budget 0 (the audio ISR 8,705 against 8,285: +5 %, unchanged from round 6). 0 lint findings, both renders 0 off. Final build 503,164 B, RAM 63,224 B, pool 365,752 B. Published as the installer preview (next/), the tested release at the root unchanged.
