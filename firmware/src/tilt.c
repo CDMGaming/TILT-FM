@@ -805,6 +805,7 @@ static void te_do(uint32_t o)
                 break;
             }
         (void)sl;
+        (void)jl_keep();                                /* (round 5: the jam played becomes the song's chain) */
         tu_goto(TU_SONGS);
         name_open(NK_SONG_SAVE, sng_cur);
     } else if (o == TO_SAVE) {
@@ -1052,6 +1053,7 @@ static void tilt_scene_follow(void)
     if (scene_armed == 2u) {
         tilt_scene_uncue();
         scene_enter(s);
+        jl_push(s);                                     /* (round 5: the jam is remembered) */
         undo.trk = 0;                                   /* (ui.c: the undo copy was the scene before) */
         for (k = 0; k < NTRK; k++) {
             trk[k].user = 0;
@@ -1080,6 +1082,7 @@ static void tilt_scene_poll(void)
     uint32_t v = scene_cur() < NSCN ? scene_cur() + 1u : 0u, m = (uint32_t)(sng_cur & 3u) | 4u | v << 4;
     tilt_scene_follow();
     scene_keys_poll();
+    jl_poll();
     if (tilt_ns_open == TILT_START || SCN_MEM == m)
         return;
     SCN_MEM = (uint8_t)m;                               /* (round 2: the song and the scene, project.c SCN_MEM) */
@@ -1615,3 +1618,4 @@ static void st_draw(void)
 #include "tfm_seq.c"                                       /* TFM-UI: STEP, NOTES, DRUMS */
 #include "tfm_song.c"                                      /* TFM-UI: SCENES, SONG, SONGS */
 #include "tfm_pages.c"                                     /* TFM-UI: FX, SPACE, ARP, CLOCK, MOTION */
+#include "tfm_live.c"                                      /* TFM-UI round 5: JAM's live arranging */

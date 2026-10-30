@@ -537,6 +537,12 @@ static int song_clear(uint32_t n);
 static int scene_clear(uint32_t s);
 static int scene_undo(void);
 static uint32_t scene_undo_slot(void);
+static void jl_push(uint32_t sc);                       /* (tfm_live.c, round 5: JAM's live arranging) */
+static void jl_poll(void);
+static uint32_t jl_leds(uint32_t *br, uint32_t *mid);
+static int jl_on(void);
+static int jl_keep(void);
+static int jl_play_chain(void);
 static uint32_t tilt_mid(void);                         /* (tilt.c: the TILT layer's keys at the mid level) */
 static void tilt_ns_input(uint32_t pressed, uint32_t notes, uint32_t oct);
 static void tilt_ns_draw(void);

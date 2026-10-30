@@ -357,6 +357,7 @@ static int idle_leds(void)
 /* the key LEDs, bit k = key k: NAME's keys, the layer's map, the DRUM grid, else the keys held and the notes
  * the selected track's sequencer, ARP and MIDI IN play, on STEP while stopped the cursor step's notes (#89; and
  * on SLICES the keys of the selected slice; on SONG the key of the cell's slot, 1.2) */
+static uint32_t jl_mid_m;                               /* (round 5: JAM's used scenes, at the mid level) */
 static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys that breathe, layer_leds) */
 {
     uint32_t c;
@@ -368,6 +369,13 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
     if (!ui.layer && !ui.menu && !name_on() && slice_page_on())
         c |= slice_leds();                              /* SLICES: and the keys of the selected slice */
 #endif
+    jl_mid_m = 0;
+    if (jl_on() && !name_on()) {                        /* round 5: JAM's black keys mirror the scene lamps */
+        uint32_t b2 = 0;
+        c |= jl_leds(&b2, &jl_mid_m);
+        if (br)
+            *br |= b2;
+    }
     return c;
 }
 
@@ -423,6 +431,8 @@ static void ui_leds(void)
     beat = g ? grid_beats() & ~c : 0u;                  /* (the grid's empty beat starts: brighter than the glow) */
     if (ui.layer == LAYER_SCENE && !name_on())          /* (TILT-FM: the SCENE layer's stored scenes, tilt.c) */
         beat |= tilt_mid() & ~c & ~br;
+    else if (jl_on() && !name_on())
+        beat |= jl_mid_m & ~c & ~br;
     sc = keys_map ? 0u : scale_leds(&sr);               /* SCALE LEDS: the scale's keys glow, the root's brighter */
     for (k = 0; k < 27u; k++) {
         uint32_t in = (sc >> k) & 1u, rt = (sr >> k) & 1u, idle = !((c >> k) & 1u);
@@ -1746,6 +1756,8 @@ static void ui_input(void)
                 break;
             if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
                 transport_req = 2;
+            else if (jl_play_chain())                   /* (round 5: JAM after a CHAIN: PLAY plays it) */
+                chain_play_ui();
             else if ((!ui.home && cur_page()->graph == GR_SONG) || (tu_on() && tu_song_on()))   /* (TFM-UI: SONG plays the chain) */
                 chain_play_ui();
             else

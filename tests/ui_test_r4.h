@@ -185,12 +185,12 @@ static int test_r4_jam(void)
     R4(r1_px(CAB_X(1) + 45, 79 + CAB_Y) == tu_c(TC_REC));
     song.playing = 0; song.rec = 0; frames(100);
     /* the scene lamps: the one in use lit amber, a queued one outlined and blinking */
-    R4(r4_count(10, 184, 34, 206, TC_AMBER) < 5u);                           /* A is not the scene (the music is in B..) */
+    R4(r4_count(7, 180, 25, 200, TC_AMBER) < 5u);                           /* A is not the scene (the music is in B..) */
     tsc.cue = 3;
     lit = 0;
     for (f = 0; f < 40u; f++) {
         frames(48);
-        lit += r4_count(94 - 1, 183, 94 + 25, 207, RGB(255, 226, 168)) > 10u;
+        lit += r4_count(69 - 1, 177, 69 + 20, 201, RGB(255, 226, 168)) > 10u;
     }
     R4(lit > 3u && lit < 38u);                                               /* it blinks */
     tsc.cue = SCENE_NONE;

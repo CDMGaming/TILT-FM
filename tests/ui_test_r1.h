@@ -58,7 +58,7 @@ static int test_r1_tempo(void)
     {
         uint32_t i, found = 0;
         for (i = 0; i < tu_ft.n; i++)
-            if (str_eq(tu_ft.k[i], "SCL") && str_eq(tu_ft.a[i], "TEMPO"))
+            if (str_eq(tu_ft.k[i], "HOLD F#5") && str_eq(tu_ft.a[i], "CHAIN")   /* (round 5: the footer is the live one) */)
                 found = 1;
         R1(found);
     }

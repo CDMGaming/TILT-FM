@@ -162,9 +162,13 @@ static uint32_t kb_pitch(const track_t *t, uint32_t k, int32_t oct)
     return (uint32_t)clamp(n + 12 * oct + t->p[P_TRANS], 0, 127);
 }
 
+static volatile uint8_t jam_silent;               /* round 5: JAM's black keys launch scenes (tfm_live.c): they play nothing */
 static uint32_t kb_map(const track_t *t, uint32_t k)
 {
-    int32_t n = kb_engine(t, k);
+    int32_t n;
+    if (jam_silent && key_black(k))
+        return KB_SILENT;
+    n = kb_engine(t, k);
     return n >= 0 ? (uint32_t)n : kb_pitch(t, k, song.octave);
 }
 
@@ -1340,14 +1344,25 @@ static __attribute__((noinline)) void scene_flip(uint32_t carry)   /* (once a sc
     scene_carry = carry;
     scene_armed = 2;
 }
-static void scene_tick(uint32_t n)
-{
-    uint32_t p;
-    if (scene_armed != 1u || !song.playing || chain.running || clk_pos == CLK_START || clk_step != 15u)
+static void scene_tick(uint32_t n)                /* (round 5: a cued scene starts when the playing one has finished its loop, its */
+{                                                 /* longest track's: not at the next bar) */
+    uint32_t k, c = 0, best = 0, length;
+    const track_t *t;
+    if (scene_armed != 1u || !song.playing || chain.running || clk_pos == CLK_START)
         return;
-    p = div_samples(2);
-    if (clk_pos + n >= p)
-        scene_flip(clk_pos + n - p);
+    for (k = 0; k < NTRK; k++) {
+        uint32_t l = len48_of(trk[k].p[P_SLEN], trk[k].p[P_SDIV]);
+        if (l > best) {
+            best = l;
+            c = k;
+        }
+    }
+    t = &trk[c];
+    if (t->seq_pos >= 0x7FFFFFFFu || t->seq_idx + 1u != (uint32_t)t->p[P_SLEN])
+        return;
+    length = step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), t->seq_idx);
+    if (t->seq_pos + n >= length)
+        scene_flip(t->seq_pos + n - length);
 }
 
 /* everything that happens between two rendered blocks */
