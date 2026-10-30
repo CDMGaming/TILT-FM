@@ -59,7 +59,7 @@ static void tu_song_sounds(void);
 static uint8_t tq_bar;                                  /* (tfm_seq.c: the bar NOTES and DRUMS show) */
 static void tq_input(uint32_t notes, uint32_t busy);
 static void tq_oct(uint32_t pressed, uint32_t oct);
-static void jl_input(uint32_t pressed, uint32_t oct);   /* (tfm_live.c) */
+static void jl_input(uint32_t keys, uint32_t btns);     /* (tfm_live.c) */
 static struct { uint8_t held, n, sc[24]; } jw;          /* CHAIN (F#5 held): the taps */
 static int jl_held(uint32_t idx);
 static uint8_t prf_rate, prf_cap, prf_mut;              /* (tfm_live.c: PERFORM) */
@@ -967,7 +967,7 @@ static void tu_black_mute(uint32_t notes)               /* MIX: the black keys, 
 static int tu_song_on(void) { return tu.scr == TU_SONG; }
 static int tu_oct_ok(void)                              /* OCT+ is OK and OCT- BACK here (no octave) */
 {
-    return !tu_classic() && !ui.menu && (tu.scr == TU_SONG || tu.scr == TU_SONGS || tu.scr == TU_NOTES || tu.scr == TU_BARS || tu.scr == TU_JAM);
+    return !tu_classic() && !ui.menu && (tu.scr == TU_SONG || tu.scr == TU_SONGS || tu.scr == TU_NOTES || tu.scr == TU_BARS);   /* (round 6: OCT+ / OCT- shift the octave on JAM again) */
 }
 static void tu_deep(void)                               /* SOUND > DEEP: Felucca's own pages for this track */
 {
@@ -993,7 +993,7 @@ static void tu_screen_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint
         return;
     switch (tu.scr) {
     case TU_JAM:
-        jl_input(notes, oct);
+        jl_input(notes, pressed);
         for (k = 0; k < 4u; k++)
             if ((s = panel_enc(EN_K1 + k)) != 0) {
                 jam_turn(k, s);

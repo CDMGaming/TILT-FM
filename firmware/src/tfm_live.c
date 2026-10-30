@@ -18,7 +18,7 @@ static uint32_t jl_n;
 static uint8_t jl_playing, jl_row = 0xFF, jl_prev_idx;
 static chain_config_t jw_undo;                          /* the chain before the last replace (one level) */
 static uint8_t jw_undo_ok, jm_chain;                    /* jm_chain: PLAY plays the chain (a scene key makes it live) */
-static uint8_t jl_fill_prev, jl_rechain;
+static uint8_t jl_fill_prev, jl_rechain, jw_did;      /* jw_did: F#5 held did an undo (its release then plays nothing) */
 
 static int32_t jl_key(uint32_t idx)                     /* the key (0..26) of black key idx 0..10, -1 none */
 {
@@ -110,42 +110,41 @@ static void jl_drop_to_live(void)                       /* a scene key while the
     fm1_irq_on();
     jm_chain = 0;
 }
-static void jl_scene_key(uint32_t s)
+/* round 6: a scene key launches on its RELEASE (it waits for the loop's end anyway); held, another scene key copies the held
+ * scene there (any scene; CF_SCENE_OVR asks when the target has something, Cancel the default) and OCT- clears it (asks) */
+static struct { uint8_t held, used; } jh;               /* held: 1 + the scene key held (0 none) */
+static void jl_launch(uint32_t s)
 {
-    uint32_t cur = scene_cur();
+    if (chain_busy())
+        jl_drop_to_live();
+    jm_chain = 0;
+    tilt_scene_go(s, 1);
+}
+static void jl_scene_key(uint32_t s)                    /* a scene key went down */
+{
     if (jw.held) {                                      /* CHAIN: a tap is a section */
         if (jw.n < sizeof jw.sc)
             jw.sc[jw.n++] = (uint8_t)s;
         ui.force = 1;
         return;
     }
-    if (jl_oct_held(B_OCTUP)) {                         /* OCT+ and a scene key: the playing scene copied there and queued */
-        if (cur >= NSCN || s == cur) {
-            ui_message("GO TO ANOTHER SCENE");
-            return;
-        }
-        if (!transport_busy())
-            scene_copy_ui(cur, s, 0);
-        else if (scene_store_ram(s))
-            return;
-        if (scene_cur() != s)
-            tilt_scene_go(s, 1);
+    if (jh.held && jh.held - 1u != s && jl_held(jh.held - 1u)) {   /* held + another: copy the held one into it */
+        jh.used = 1;
+        scene_copy_ui(jh.held - 1u, s, 0);
         return;
     }
-    if (jl_oct_held(B_OCTDN)) {                         /* OCT- and a scene key: cleared (CLEAR C? CANCEL first) */
-        scene_clear_ui(s, 0);
-        return;
-    }
-    if (chain_busy())
-        jl_drop_to_live();
-    jm_chain = 0;
-    tilt_scene_go(s, 1);
+    jh.held = (uint8_t)(s + 1u);
+    jh.used = 0;
 }
 static void jl_chain_done(void)                         /* F#5 let go */
 {
     uint32_t i;
     chain_config_t c;
     jw.held = 0;
+    if (jw_did) {                                       /* (round 6: an undo while held: nothing more) */
+        jw_did = 0;
+        return;
+    }
     if (!jw.n) {                                        /* no taps: back to the chain, if there is one */
         if (chain_config.count && !chain_busy() && !tu_classic()) {
             jm_chain = 1;
@@ -173,11 +172,11 @@ static void jl_chain_done(void)                         /* F#5 let go */
     ui_message("CHAIN SET");
     ui.force = 1;
 }
-/* JAM's keys (tu_screen_input, every frame): `pressed` the keys that went down now */
-static void jl_input(uint32_t pressed, uint32_t oct)
+/* JAM's keys (tu_screen_input, every frame): `keys` the keys that went down now, `btns` the buttons */
+static void jl_input(uint32_t keys, uint32_t btns)
 {
     uint32_t i;
-    int h5 = jl_held(10), fill = jl_held(9);
+    int h5 = jl_held(10), fill = jl_held(9), dn = (int)((btns >> panel.btn[B_OCTDN]) & 1u);
     jam_silent = (uint8_t)jl_on();
     if (!jl_on())
         return;
@@ -196,23 +195,31 @@ static void jl_input(uint32_t pressed, uint32_t oct)
     }
     for (i = 0; i < NSCN; i++) {
         int32_t k = jl_key(i);
-        if (k >= 0 && ((pressed >> k) & 1u))
+        if (k >= 0 && ((keys >> k) & 1u))
             jl_scene_key(i);
     }
-    if (oct & 1u) {                                     /* OCT-: with F#5 the last tap goes; alone the chain before comes back */
-        if (jw.held) {
-            if (jw.n)
-                jw.n--;
-            ui.force = 1;
-        } else if (jw_undo_ok && !jl_oct_held(B_OCTUP)) {
+    if (dn && jw.held) {                                /* F#5 held + OCT-: the last tap goes; no taps: the chain before comes back */
+        oct_as_mod(1u);                                 /* (the octave stays) */
+        if (jw.n) {
+            jw.n--;
+        } else if (jw_undo_ok && !chain_busy()) {
             chain_config_t c = chain_config;
-            if (!chain_busy()) {
-                chain_config = jw_undo;
-                jw_undo = c;
-                ui_message("CHAIN UNDONE");
-                ui.force = 1;
-            }
+            chain_config = jw_undo;
+            jw_undo = c;
+            jw_did = 1;
+            ui_message("CHAIN UNDONE");
         }
+        ui.force = 1;
+    } else if (dn && jh.held && jl_held(jh.held - 1u)) {   /* a scene key held + OCT-: clear it (asks) */
+        oct_as_mod(1u);
+        jh.used = 1;
+        scene_clear_ui(jh.held - 1u, 0);
+    }
+    if (jh.held && !jl_held(jh.held - 1u)) {           /* the scene key let go: it launches, unless it did something held */
+        uint32_t sc = jh.held - 1u;
+        jh.held = 0;
+        if (!jh.used && !jw.held && !ui.confirm)
+            jl_launch(sc);
     }
 }
 /* every main loop pass (tilt_scene_poll): the log, and a chain asked for from live */
