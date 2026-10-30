@@ -1396,7 +1396,8 @@ async function editorSong() {
   let r = await ask(1, rows);
   ok(r.rc === 0 && JSON.stringify(r.rows) === JSON.stringify(rows), "SONG: rows and repeats round trip");
   r = await ask(2);
-  ok(r.rc === 4 && !r.playing, "SONG: missing source rejected before PLAY");
+  ok(!r.rc && r.playing, "SONG: a slot with nothing saved plays silence (round 4: no rejection before PLAY)");
+  await ask(3);
   await rq(E.req.project(1, 1));
   r = await ask(2);
   ok(!r.rc && r.playing && r.row === 0 && r.remaining === 4, "SONG: PLAY starts from row 1");
@@ -1426,7 +1427,8 @@ async function editorSong() {
   r = await ask(0);
   ok(r.op === 0 && r.rows.map((x) => x.slot).join() === "0,5", "SONG: op 0 on sections lists the first playing lane's slot");
   r = await ask(5, [{ lanes: [0, 1, 4, 3], repeat: 1 }]); r = await ask(6);
-  ok(r.rc === 6 && !r.playing, "SONG: a section on an empty A..D slot is rejected before PLAY (rc 6 = slot D)");
+  ok(!r.rc && r.playing, "SONG: a section on a blank scene plays (round 4: its lane is silent, no rc 6) ");
+  await ask(7);
   r = await ask(5, [{ lanes: [5, 6, 4, 8], repeat: 3 }]);
   r = await ask(6);
   ok(!r.rc && r.playing && r.remaining === 3, "SONG: sections of scenes E..H and a silent lane PLAY (op 6)");
@@ -1441,6 +1443,16 @@ async function editorSong() {
      bad(() => E.req.song(1, [{ slot: 5, repeat: 1 }])) && bad(() => E.req.song(8)) && !bad(() => E.req.song(5, [{ lanes: [0, 4, 8, 3], repeat: 16 }])),
     "SONG: req.song takes A..H and silent for sections (ops 4..7), A..D only for rows (ops 0..3)");
   ok(E.req.song(5, secs)[1].join() === "5,2,0,5,4,8,2,5,6,7,8,1", "SONG: op 5 request bytes: count, then 4 slots and the repeat per section");
+  {   /* round 4: the panel's lanes A..H and "-": the capability comes from INFO (57 01 4), the rows from op 4, an edit goes by op 5 */
+    const info = E.parse[C.INFO](await rq(E.req.info()));
+    ok(info.songLanes === 4, "SONG panel: the editor reads the lanes capability (INFO 57 01 4) from the device");
+    const order = "-ABCDEFGH", want = [4, 0, 1, 2, 3, 5, 6, 7, 8];
+    ok([...order].map((ch) => E.songLane(ch)).join() === want.join(), "SONG panel: the lane menu runs - A B .. H on the wire's 4, 0..3, 5..8");
+    r = await ask(5, [{ lanes: [4, 0, 5, 8], repeat: 2 }, { lanes: [8, 7, 6, 5], repeat: 1 }]);
+    r = await ask(4);
+    ok(!r.rc && r.count === 2 && JSON.stringify(r.rows) === JSON.stringify([{ lanes: [4, 0, 5, 8], repeat: 2 }, { lanes: [8, 7, 6, 5], repeat: 1 }]),
+       "SONG panel: a section's lanes (a silent one, A, E, H and H G F E) written by op 5 are read back by op 4");
+  }
   link.close(); m.stop();
   const old = E.makeMockDevice({ auto: false, v5: true });
   const l = new E.Link((d) => [...old.access.outputs.values()][0].send(d));

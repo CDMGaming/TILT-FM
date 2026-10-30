@@ -306,7 +306,7 @@
     </div>
     <div class="group" id="songchain" hidden style="margin-top:16px">
       <h2 data-t="songTitle"></h2>
-      <p class="dim" data-t="songHelp"></p>
+      <p class="dim" id="songhelp" data-t="songHelp"></p>
       <p class="bar"><button id="songplay"></button><button id="songadd" data-t="songAdd"></button>
         <button id="songremove" data-t="songRemove"></button><span id="songstatus" aria-live="polite"></span></p>
       <div id="songrows"></div>
@@ -425,6 +425,8 @@ const parse = {
       o.motionMax = 64; o.chance = trailer[7] === 1;
       if (trailer[8] === 0x42 && trailer[9] === 1) o.backupCaps = trailer[10] & 3;
     }
+    o.songLanes = 0;                              /* 57 01 4: SONG ops 4..7, a scene A..H or "-" per track in a section (1.2; scenes E..H since round 2) */
+    for (let i = 11; o.uiCaps && i + 2 < trailer.length; i++) if (trailer[i] === 0x57 && trailer[i + 1] === 1 && trailer[i + 2] === 4) { o.songLanes = 4; break; }
     o.fm6 = null;                                 /* FM6 patches (cmds 68..71): the factory and bank slot counts */
     o.syncCaps = 0;                               /* live sync: bit 0 WATCH while on keeps pending pushes, bit 1 no RELOAD */
     o.ratchet = 0;                                /* a step's ratchet (STEP_SET's byte after the chance), 0 = none */
@@ -1841,7 +1843,8 @@ function makeMockDevice(opt = {}) {
         if (!opt.legacy && !opt.v3 && !opt.v5) {
           b(16);
           if (st.uiCaps) { b(0x55); b(1); b(st.uiCaps); b(0x4d); b(1); b(64); b(1); if (!opt.noFm6) { b(0x46); b(1); b(FM6.FACTORY_PK.length); b(0); }
-            if (syncCaps()) { b(0x53); b(1); b(syncCaps()); if (!opt.noFm6) { b(0x50); b(1); b(3); } if (ratchetOn()) { b(0x52); b(1); b(4); } } }   /* (FM6 v2: no bank, preset patches) */
+            if (syncCaps()) { b(0x53); b(1); b(syncCaps()); if (!opt.noFm6) { b(0x50); b(1); b(3); } if (ratchetOn()) { b(0x52); b(1); b(4); } }
+            b(0x57); b(1); b(4); }   /* (FM6 v2: no bank, preset patches; the SONG lanes tag last) */
         }
         break;
       case CMD.GET: case CMD.SET: {
@@ -1967,9 +1970,8 @@ function makeMockDevice(opt = {}) {
           if (st.chainPlaying) rc = 2;
           else if (!st.songRows.length) rc = 1;
           else {
-            const missing = st.songRows.flatMap((r) => r.lanes).find((l) => l < 4 && !st.slots[l]);
-            if (missing !== undefined) rc = 3 + missing;
-            else { st.chainPlaying = true; st.chainRow = 0; st.chainRemaining = st.songRows[0].repeat; }
+            /* (round 4: a blank scene is no error: its lane plays silence, as the device) */
+            st.chainPlaying = true; st.chainRow = 0; st.chainRemaining = st.songRows[0].repeat;
           }
         } else if (sub === 3) st.chainPlaying = false;
         b(a[0]); b(rc); b(st.songRows.length); b(st.chainPlaying ? 1 : 0); b(st.chainRow); b(st.chainRemaining);
@@ -2319,7 +2321,7 @@ const TEXT = {
     mixer: "ミキサー", mixHelp: "本体の MIXER ページと同じ 4 トラック。フェーダーはレベル。パンはどのトラックも選択を変えずに書き込みます（0.8 のファームウェアでは一瞬そのトラックを選びます）。REC は本体での録音待機の表示です。",
     level: "レベル", pan: "パン", mute: "ミュート", rec: "REC", selectTrack: "選択", selectedTrack: "選択中",
     projHelp: "プロジェクトは本体の状態をまとめて保存します: 4 トラックの音色とパターン、曲の並び順、選択中のトラック、グローバル設定。",
-    slot: "スロット", songTitle: "ソング", songHelp: "保存スロットのパターンと繰り返す回数を順に並べます。音色は現在のまま。並び順を残すには、上のプロジェクトを保存してください。切替はトラック1のパターン終端、曲末で停止します。", songAdd: "行を追加", songRemove: "最後の行を削除", songPlay: "先頭から再生", songStop: "停止", songReps: "回", songEmpty: "行を追加してください", songBusy: "停止してから編集してください", songInvalid: "スロットと回数を確認してください", songPlaying: "再生中の行", songSaved: "並び順を変更しました。プロジェクトを保存すると残せます。",
+    slot: "スロット", songTitle: "ソング", songHelpLanes: "各トラックが鳴らすシーン（A〜H、「-」は無音）と繰り返す回数を、セクションごとに並べます。音色は現在のまま。並び順を残すには、上のプロジェクトを保存してください。セクションは最も長いトラックの終端で切り替わり、曲末で停止します。", songHelp: "保存スロットのパターンと繰り返す回数を順に並べます。音色は現在のまま。並び順を残すには、上のプロジェクトを保存してください。切替はトラック1のパターン終端、曲末で停止します。", songAdd: "行を追加", songRemove: "最後の行を削除", songPlay: "先頭から再生", songStop: "停止", songReps: "回", songEmpty: "行を追加してください", songBusy: "停止してから編集してください", songInvalid: "スロットと回数を確認してください", songPlaying: "再生中の行", songSaved: "並び順を変更しました。プロジェクトを保存すると残せます。",
     system: "システム", firmware: "ファームウェア", sync: "同期", tracksN: "トラック", stepsN: "ステップ数", enginesL: "エンジン",
     userBank: "ユーザープリセット", none: "なし",
   },
@@ -2416,7 +2418,7 @@ const TEXT = {
     mixer: "Mixer", mixHelp: "The four tracks of the device's MIXER page. The fader is the level. Pan is written to any track without changing the selection (firmware 0.8: by selecting it for a moment). REC shows a track armed for live recording on the device.",
     level: "Level", pan: "Pan", mute: "Mute", rec: "REC", selectTrack: "Select", selectedTrack: "Selected",
     projHelp: "A project keeps the sounds and patterns of all four tracks, the song chain, the selected track and the global settings.",
-    slot: "Slot", songTitle: "Song", songHelp: "Arrange patterns from saved slots and choose their repeats. The current sounds stay. Save a project above to keep the chain. Rows change at the end of track 1; the song stops at the end.", songAdd: "Add row", songRemove: "Remove last row", songPlay: "Play from start", songStop: "Stop", songReps: "repeats", songEmpty: "Add a row first", songBusy: "Stop before editing", songInvalid: "Check slots and repeats", songPlaying: "Playing row", songSaved: "Chain changed. Save a project to keep it.",
+    slot: "Slot", songTitle: "Song", songHelpLanes: "Arrange sections: for each track the scene it plays (A to H, \"-\" is silent) and the repeats. The current sounds stay. Save a project above to keep the chain. A section changes at the end of its longest track; the song stops at the end.", songHelp: "Arrange patterns from saved slots and choose their repeats. The current sounds stay. Save a project above to keep the chain. Rows change at the end of track 1; the song stops at the end.", songAdd: "Add row", songRemove: "Remove last row", songPlay: "Play from start", songStop: "Stop", songReps: "repeats", songEmpty: "Add a row first", songBusy: "Stop before editing", songInvalid: "Check slots and repeats", songPlaying: "Playing row", songSaved: "Chain changed. Save a project to keep it.",
     system: "System", firmware: "Firmware", sync: "Sync", tracksN: "Tracks", stepsN: "Steps", enginesL: "Engines",
     userBank: "User presets", none: "none",
   },
@@ -2695,7 +2697,7 @@ async function load(d) {
     assertSession(d);
     if (d.info.ntrk) d.sel = parse[CMD.TRACK](await sessionRequest(d, req.track())).sel;   /* v3: the selected track */
     d.dump = await getDump(d);
-    if (d.info.chainRows) d.song = parse[CMD.SONG](await sessionRequest(d, req.song()));
+    if (d.info.chainRows) d.song = parse[CMD.SONG](await sessionRequest(d, req.song(d.info.songLanes ? 4 : 0)));
     buildUI();
     renderPanels();
     await loadSteps(d);
@@ -3023,7 +3025,7 @@ async function project(op, slot) {
     dev.slotUsed[slot] = r.used;
     renderSlots();
     if (!op && r.used) await afterSoundChange();
-    if (dev.info.chainRows) { dev.song = parse[CMD.SONG](await rq(req.song())); renderSong(); }
+    if (dev.info.chainRows) { dev.song = parse[CMD.SONG](await rq(req.song(dev.info.songLanes ? 4 : 0))); renderSong(); }
     sayK(op ? "savedSlot" : r.used ? "loadedSlot" : "emptySlot", String(slot + 1));
   } catch (err) { report(err); } finally { releaseBusy(); }
 }
@@ -3040,34 +3042,51 @@ function renderSong() {
   const rows = $("songrows");
   if (rows.contains(document.activeElement)) return;
   rows.replaceChildren();
+  const lanes = !!dev.info.songLanes;               /* a scene A..H or "-" for each track of a section ("-" first, as the device's knobs) */
+  $("songhelp").textContent = t(lanes ? "songHelpLanes" : "songHelp");
   s.rows.forEach((r, i) => {
     const line = el("div", { class: "bar", style: "margin:8px 0" });
     line.append(el("span", { text: String(i + 1) }));
-    const sel = el("select", { disabled: !!s.playing, "aria-label": `${t("slot")} ${i + 1}` });
-    for (let k = 0; k < 4; k++) sel.append(el("option", { value: k, text: `${t("slot")} ${k + 1}${dev.slotUsed[k] ? "" : ` (${t("empty")})`}` }));
-    sel.value = String(r.slot);
-    sel.addEventListener("change", () => { const next = s.rows.map((x) => ({ ...x })); next[i].slot = +sel.value; op(() => changeSong(1, next)); });
+    const copy = () => s.rows.map((x) => ({ ...x, lanes: x.lanes ? [...x.lanes] : x.lanes }));
+    if (lanes) {
+      for (let k = 0; k < 4; k++) {
+        const lane = el("select", { disabled: !!s.playing, "aria-label": `T${k + 1} ${i + 1}`, title: `T${k + 1}`, style: "width:56px" });
+        for (const ch of SONG_LANE_ORDER) lane.append(el("option", { value: songLane(ch), text: ch }));
+        lane.value = String(r.lanes[k]);
+        lane.addEventListener("change", () => { const next = copy(); next[i].lanes[k] = +lane.value; op(() => changeSong(1, next)); });
+        line.append(lane);
+      }
+    } else {
+      const sel = el("select", { disabled: !!s.playing, "aria-label": `${t("slot")} ${i + 1}` });
+      for (let k = 0; k < 4; k++) sel.append(el("option", { value: k, text: `${t("slot")} ${k + 1}${dev.slotUsed[k] ? "" : ` (${t("empty")})`}` }));
+      sel.value = String(r.slot);
+      sel.addEventListener("change", () => { const next = s.rows.map((x) => ({ ...x })); next[i].slot = +sel.value; op(() => changeSong(1, next)); });
+      line.append(sel);
+    }
     const reps = el("input", { type: "number", min: 1, max: 16, value: r.repeat, disabled: !!s.playing, style: "width:64px", "aria-label": `${t("songReps")} ${i + 1}` });
-    reps.addEventListener("change", () => { const v = +reps.value; if (!Number.isInteger(v) || v < 1 || v > 16) { reps.value = r.repeat; return; } const next = s.rows.map((x) => ({ ...x })); next[i].repeat = v; op(() => changeSong(1, next)); });
-    line.append(sel, reps, el("span", { text: t("songReps") }));
+    reps.addEventListener("change", () => { const v = +reps.value; if (!Number.isInteger(v) || v < 1 || v > 16) { reps.value = r.repeat; return; } const next = copy(); next[i].repeat = v; op(() => changeSong(1, next)); });
+    line.append(reps, el("span", { text: t("songReps") }));
     rows.append(line);
   });
 }
+const SONG_LANE_ORDER = "-ABCDEFGH";
+const songOp = (a) => (dev?.info?.songLanes ? a + 4 : a);          /* the lanes' ops are the rows' + 4 */
 async function changeSong(action, rows = []) {
-  const r = parse[CMD.SONG](await rq(req.song(action, rows)));
+  const r = parse[CMD.SONG](await rq(req.song(songOp(action), rows)));
   if (r.rc) throw new Error(r.rc >= 3 ? `${t("slot")} ${r.rc - 2}: ${t("empty")}` : t(r.rc === 2 ? "songBusy" : "songInvalid"));
   dev.song = r;
   renderSong();
   if (action === 1) sayK("songSaved");
 }
 $("songplay").addEventListener("click", () => op(() => changeSong(dev.song?.playing ? 3 : 2)));
-$("songadd").addEventListener("click", () => op(() => changeSong(1, [...dev.song.rows, { slot: dev.song.rows.at(-1)?.slot || 0, repeat: 1 }])));
+$("songadd").addEventListener("click", () => op(() => changeSong(1, [...dev.song.rows,
+  dev.info.songLanes ? { lanes: [...(dev.song.rows.at(-1)?.lanes || [0, 0, 0, 0])], repeat: 1 } : { slot: dev.song.rows.at(-1)?.slot || 0, repeat: 1 }])));
 $("songremove").addEventListener("click", () => op(() => changeSong(1, dev.song.rows.slice(0, -1))));
 setInterval(async () => {
   if (!dev?.info?.chainRows || busy || document.hidden || !dev.link.idle || tab !== "projects") return;
   const releaseBusy = beginBusy();
   const d = dev;
-  try { const r = parse[CMD.SONG](await rq(req.song())); if (d === dev) { d.song = r; renderSong(); } }
+  try { const r = parse[CMD.SONG](await rq(req.song(songOp(0)))); if (d === dev) { d.song = r; renderSong(); } }
   catch (err) { report(err); } finally { releaseBusy(); }
 }, 1000);
 
