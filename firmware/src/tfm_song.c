@@ -349,7 +349,7 @@ static void tsg_songs_head(void)
     char t[8];
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
-    tu_text(9, 10, &AF_TM, "SONGS", TC_TEXT, TC_BG);
+    tu_text(9, 10, &AF_TM, tsg_new ? "REPLACE WHICH?" : "SONGS", tsg_new ? TC_AMBER : TC_TEXT, TC_BG);
     tu_timer_text(t);
     if (t[0])
         tu_text_c(120, 10, &AF_PS, t, TC_AMBER, TC_BG);
@@ -357,7 +357,7 @@ static void tsg_songs_head(void)
 }
 static void tu_songs_draw(void)
 {
-    uint32_t i, sig = tsg_sel * 7u + (uint32_t)tsg_copy * 29u + tsg_used_sig() + chain_config.count * 31u;
+    uint32_t i, sig = tsg_sel * 7u + (uint32_t)tsg_new * 53u + (uint32_t)tsg_copy * 29u + tsg_used_sig() + chain_config.count * 31u;
     char nm[16];
     for (i = 0; i < NSONG; i++) {
         tsg_song_name(i, nm);
@@ -366,7 +366,10 @@ static void tu_songs_draw(void)
     tu_zone(0, 0, TU_HY, TC_BG, sig, tsg_songs_head);
     tu_zone(2, 22, 100, TC_BG, sig, tsg_songs_rows);
     tu_zone(3, 122, 93, TC_BG, sig, tsg_songs_rows);
-    tu_foot(3, "SELECT", "PICK", "OCT+", "LOAD", "SAVE", "SAVE", 0, 0, 0, 0);
+    if (tsg_new)
+        tu_foot(3, "SELECT", "PICK", "OCT+", "REPLACE", "OCT-", "CANCEL", 0, 0, 0, 0);
+    else
+        tu_foot(3, "SELECT", "PICK", "OCT+", "LOAD", "SAVE", "SAVE", 0, 0, 0, 0);
     ui.force = 0;
 }
 static void tu_songs_load(void)
@@ -439,6 +442,17 @@ static void tu_songs_input(uint32_t oct)
     int32_t s;
     if ((s = panel_enc(EN_SELECT)) != 0)
         tsg_sel = (uint8_t)clamp((int32_t)tsg_sel + (s > 0 ? 1 : -1), 0, (int32_t)NSONG - 1);
+    if (tsg_new) {                                      /* round 3: which song does the new one replace? OCT+ that one, OCT- / HOME: DICE again */
+        if (oct & 2u) {
+            tsg_new = 0;
+            tfm_new_slot = tsg_sel;
+            ns_start();
+        } else if (oct & 1u) {
+            tsg_new = 0;
+            tilt_ns_show();
+        }
+        return;
+    }
     if (oct & 2u) {
         tu_songs_load();
     } else if (oct & 1u) {

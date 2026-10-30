@@ -571,12 +571,7 @@ static void tq_drums_head(void)
         const char *mt = tq_mode(&mc);
         tu_text_r(231, 10, &AF_TM, mt, mc, TC_BG);
     }
-    str_cpy(r, "BAR ", 5);
-    fmt_int(r + 4, (int32_t)tq_bar + 1);
-    str_cpy(r + str_len(r), "/", 2);
-    fmt_int(b, (int32_t)((tq_len(TSEL) + 15u) / 16u));
-    str_cpy(r + str_len(r), b, 4);
-    tu_text_r(142, 12, &AF_TS, r, TC_QUIET, TC_BG);
+    (void)r; (void)b;                                   /* (the bar is the grid's own 16 columns; no room beside the mode) */
 }
 static void tq_drums_draw(void)
 {

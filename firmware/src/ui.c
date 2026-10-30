@@ -522,6 +522,9 @@ static void scene_copy_ui(uint32_t src, uint32_t dst, int sure);
 static void scene_clear_ui(uint32_t s, int sure);
 static int scene_in_song(uint32_t s);
 static int scene_copy(uint32_t src, uint32_t dst);
+static uint8_t tsg_sel, tsg_new;                        /* SONGS (tfm_song.c): the slot picked; round 3: picking the song a new one replaces */
+static int song_store_cur(void);
+static void song_blank_live(void);                      /* round 3: no chain, no name (project.c) */
 static uint32_t song_nscenes(uint32_t n);              /* round 2: the songs (project.c) */
 static int song_stored(uint32_t n);
 static const char *song_name_of(uint32_t n);            /* a stored song's name (NAME_LEN + 4 bytes) */

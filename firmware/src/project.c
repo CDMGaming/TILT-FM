@@ -2024,6 +2024,12 @@ static int song_store_cur(void)
     }
     return 0;
 }
+static void song_blank_live(void)
+{
+    chain_defaults(&chain_config);
+    ui.song_row = 0;
+    memset(proj_name, 0, sizeof proj_name);
+}
 static int song_copy_raw(uint32_t a, uint32_t b)        /* song a's scenes and record over song b's (neither the music's b) */
 {
     uint32_t s;

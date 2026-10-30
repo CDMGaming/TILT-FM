@@ -170,3 +170,93 @@ static int test_r3_rec(void)
     bad += check("TFM-UI round 3: REC off the keys only play (stopped or playing, STEP / NOTES / DRUMS); REC on stopped they write; REC on playing they record live", ok);
     return bad;
 }
+/* 3 + 4: PLAY on DICE makes a NEW SONG (fresh, or KEEP SCENES); the TIMER is 10 minutes by default and K4 on DICE sets this song's */
+static int r3_empty_song(void)                          /* every pattern empty, no automation */
+{
+    uint32_t k;
+    for (k = 0; k < NTRK; k++)
+        if (!seq_is_empty(&trk[k]) || motion_count(&trk[k]))
+            return 0;
+    return 1;
+}
+static void r3_two_scenes(void)                         /* the music is song 1 with scenes A and B (a note each), a chain, a name, stored */
+{
+    sng_cur = 0;
+    memset(proj_slot, 0, sizeof proj_slot);
+    memset(song_rec, 0, sizeof song_rec);
+    chain_defaults(&chain_config);
+    scene_claim();
+    str_cpy(proj_name, "OLD", sizeof proj_name);
+    sc_note(0, 0, 55);
+    tilt_scene_go(1, 0);
+    sc_note(0, 0, 66);
+    tilt_scene_go(0, 0);
+    chain_config.count = 2;
+    chain_config.row[0] = chain_row_of(0, 2);
+    chain_config.row[1] = chain_row_of(1, 1);
+}
+static int test_r3_newsong(void)
+{
+    int bad = 0, ok = 1, n;
+    project_t p;
+    uint32_t cfg_t;
+    ui_power_on();
+    tu_off = 0;
+    memset(&favorites.factory[13][16], 0, 16);          /* SETUP as it comes: FRESH, timer default */
+    r3_two_scenes();
+    tilt_ns_open = 0; tm.on = 0; tilt_timer_min = 0;
+    tilt_ns_show();
+    R3(tilt_timer_min == 10u);                          /* the TIMER is on by default: 10:00 */
+    cfg_t = CFG(CF_TIMER);
+    turn(EN_K4, 1);                                     /* K4 on DICE: this song's timer, not the default */
+    R3(tilt_timer_min == 15u && CFG(CF_TIMER) == cfg_t);
+    turn(EN_K4, -3);
+    R3(tilt_timer_min == 0u && CFG(CF_TIMER) == cfg_t);
+    turn(EN_K4, 2);
+    R3(tilt_timer_min == 10u);
+    press(B_PLAY); frames(32);                          /* PLAY: a NEW SONG, fresh, in the first empty slot */
+    R3(sng_cur == 1u && tilt_ns_open == 0 && r3_empty_song() && !proj_name[0] && chain_config.count == 0);
+    R3(scene_cur() == 0u && project_used(0) && !project_used(1) && !project_used(2) && !project_used(7));
+    R3(song_stored(0) && song_stored(1) && str_eq(song_name_of(0), "OLD") && tm.on);
+    R3(scn_get(0 * NSCN + 0, &p) && p.t[0].step[0].note[0] == 55u && scn_get(0 * NSCN + 1, &p) && p.t[0].step[0].note[0] == 66u);
+    seq_stop(); transport_req = 0; tm.on = 0; events_block(32);
+    /* all three slots used: SONGS asks which to replace; Cancel (OCT-) is DICE again with nothing changed */
+    song_save_as(2, "THREE");
+    R3(song_stored(0) && song_stored(1) && song_stored(2) && sng_cur == 2u);
+    tilt_timer_min = 0;
+    tilt_ns_show();
+    press(B_PLAY); frames(32);
+    R3(tu.scr == TU_SONGS && tsg_new && tilt_ns_open == 0 && sng_cur == 2u);
+    press(B_OCTDN); frames(32);
+    R3(!tsg_new && tilt_ns_open == TILT_NS && sng_cur == 2u && song_stored(0) && song_stored(1));
+    press(B_PLAY); frames(32);
+    R3(tsg_new);
+    stap(B_HOME);                                       /* HOME cancels too */
+    R3(!tsg_new && tilt_ns_open == TILT_NS);
+    press(B_PLAY); frames(32);
+    turn(EN_SELECT, 1);
+    n = tsg_sel;
+    press(B_OCTUP); frames(32);                         /* OCT+: replace the song picked */
+    R3(!tsg_new && sng_cur == (uint32_t)n && r3_empty_song() && project_used(0) && !project_used(1) && chain_config.count == 0);
+    R3(song_stored(0) + song_stored(1) + song_stored(2) == 3);
+    seq_stop(); transport_req = 0; tm.on = 0; events_block(32);
+    /* KEEP SCENES: the sounds re-roll, the patterns, the scenes and the chain stay; the song is the same */
+    r3_two_scenes();
+    CFG(CF_NEW) = 1;
+    tilt_ns_open = 0;
+    tilt_ns_show();
+    press(B_PLAY); frames(32);
+    R3(sng_cur == 0u && tilt_ns_open == 0 && trk[0].step[0].note[0] == 55u && project_used(1) && chain_config.count == 2 &&
+       str_eq(proj_name, "OLD") && !r3_empty_song());
+    seq_stop(); transport_req = 0; tm.on = 0; events_block(32);
+    CFG(CF_NEW) = 0;
+    /* SETUP: TIMER default 10, OFF selectable; the stored byte 0 (older settings) is 10 */
+    CFG(CF_TIMER) = 0;
+    R3(cfg_timer_idx() == 2u && TM_LIST[cfg_timer_idx()] == 10u);
+    CFG(CF_TIMER) = cfg_timer_val(0);
+    R3(TM_LIST[cfg_timer_idx()] == 0u);
+    CFG(CF_TIMER) = 0;
+    bad += check("TFM-UI round 3: PLAY on DICE makes a fresh NEW SONG in an empty slot (the old one stays saved, A the rolled sounds, B-H and the chain empty); "
+                 "all three used: SONGS asks, OCT-/HOME cancel; KEEP SCENES keeps them; the TIMER is 10 min by default, K4 on DICE is this song's", ok);
+    return bad;
+}

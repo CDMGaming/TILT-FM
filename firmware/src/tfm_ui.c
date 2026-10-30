@@ -697,6 +697,11 @@ static void tu_tap(uint32_t b)
 {
     switch (b) {
     case B_HOME:
+        if (tu.scr == TU_SONGS && tsg_new) {            /* (round 3: picking the song a new one replaces: HOME cancels, DICE again) */
+            tsg_new = 0;
+            tilt_ns_show();
+            break;
+        }
         tu_goto(tu.scr == TU_JAM ? TU_MIX : TU_JAM);
         break;
     case B_ENV:                                         /* DICE (a modal screen of tilt.c) */

@@ -162,16 +162,54 @@ static int ns_has_steps(void)
     return 0;
 }
 static void tilt_timer_start(void);
+static int tfm_newsong_keep(void);                      /* SETUP's NEW SONG rule: 1 KEEP SCENES (tfm_dice.c) */
+static uint8_t tfm_new_slot = 0xFF;                     /* the song slot a new song goes into, once picked */
+/* round 3: PLAY on DICE makes a NEW SONG: the song it leaves stays saved, the new one is a fresh one in an empty slot (all
+ * three used: SONGS asks which to replace). 0 go on, 1 not now */
+static int tfm_new_song_begin(void)
+{
+    uint32_t n;
+    if (transport_busy()) {
+        ui_message("STOP TO START A NEW SONG");
+        return 1;
+    }
+    if (song_store_cur())
+        return 1;                                       /* (the song now, saved: it said why not) */
+    if (tfm_new_slot < NSONG) {
+        n = tfm_new_slot;
+    } else {
+        for (n = 0; n < NSONG && (n == sng_cur || song_stored(n)); n++)
+            ;
+        if (n >= NSONG) {                               /* every slot holds a song: which one? (Cancel: DICE again) */
+            tilt_ns_open = 0;
+            tsg_new = 1;
+            tsg_sel = (uint8_t)((sng_cur + 1u) % NSONG);
+            tu_goto(TU_SONGS);
+            ui_message("REPLACE WHICH SONG?");
+            ui.force = 1;
+            return 1;
+        }
+    }
+    tfm_new_slot = 0xFF;
+    if (song_stored(n) && song_clear(n))
+        return 1;
+    sng_cur = (uint8_t)n;                               /* the music is song n now: no chain, no name, scene A to be */
+    song_blank_live();
+    return 0;
+}
 static void ns_start(void)
 {
     uint32_t i;
-    int timed = tilt_timer_min != 0u;
+    int keep = !tu_classic() && tfm_newsong_keep(), fresh = !tu_classic() && !keep;
+    int timed = tilt_timer_min != 0u && tu_classic();   /* (TFM: nothing is cleared: a new song is fresh, or keeps its scenes) */
     char b[24];
     const char *unit;
     if (chain_busy()) {
         ui_message("STOP THE SONG FIRST");
         return;
     }
+    if (fresh && tfm_new_song_begin())
+        return;
     if (timed && ns_has_steps() && !(ns.again && fm1_ms - ns.again_t < NS_AGAIN_MS)) {
         ns.again = 1;                                   /* (a fresh project clears every track: PLAY again) */
         ns.again_t = fm1_ms;
@@ -197,6 +235,12 @@ static void ns_start(void)
     }
     song.g[G_BPM] = ns.s.bpm;
     song.g[G_SWING] = ns.s.swing;
+    if (fresh) {                                        /* scene A: the rolled sounds, empty patterns; B..H empty (the slot was cleared) */
+        scene_blank(0);
+        (void)project_save_as(0, 0);                    /* (stopped: scene A stored with the rolled sounds) */
+        scene_based();
+        (void)song_save(sng_cur);
+    }
     tilt_ns_open = 0;
     go_home();
     ui.force = 1;
@@ -209,7 +253,7 @@ static void ns_start(void)
     ui.msg_t = 120;                                     /* (~2 s: longer than a message, it says what was made) */
     if (!song.playing && !seq_counting() && transport_req != 1u)
         transport_req = 1;
-    if (timed)
+    if (tilt_timer_min != 0u)
         tilt_timer_start();
     if (tilt_start_pending)                             /* (the start screen's NEW SONG: this is the baseline; nothing */
         autosave_rebase();                              /* written until it changes) */

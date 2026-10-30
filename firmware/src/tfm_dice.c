@@ -8,7 +8,13 @@
  *   KEY            0 random, else key + 1          SCALE   0 random (no chromatic), else TILT scale + 1
  *   TEMPO          low, high (0: 90 .. 130)         TIMER   the default minutes' step (0 OFF, 5, 10, 15, 20) */
 #define CFG(i) (favorites.factory[13][16 + (i)])
-enum { CF_RULE = 0, CF_KEY = 4, CF_SCALE = 5, CF_LO = 6, CF_HI = 7, CF_TIMER = 8 };
+enum { CF_RULE = 0, CF_KEY = 4, CF_SCALE = 5, CF_LO = 6, CF_HI = 7, CF_TIMER = 8, CF_NEW = 9 };
+static int tfm_newsong_keep(void) { return CFG(CF_NEW) == 1u; }   /* round 3: 0 FRESH (default), 1 KEEP SCENES */
+static const uint8_t TM_LIST[5] = {0, 5, 10, 15, 20};
+/* round 3: the TIMER default is 10 minutes: the stored byte 0 (every older setting) means 10, 1..4 are 5 15 .. as before
+ * (1: 5, 2: 10, 3: 15, 4: 20) and 5 is OFF */
+static uint32_t cfg_timer_idx(void) { uint32_t v = CFG(CF_TIMER); return v == 0u ? 2u : v == 5u ? 0u : v % 5u; }
+static uint8_t cfg_timer_val(uint32_t idx) { return (uint8_t)(idx == 0u ? 5u : idx); }
 #define RO_N (1u + 6u + TI_N)
 static const char *const TY_NAME[6] = {"DRUMS", "BASS", "CHORDS", "LEAD", "PAD", "FX"};
 static const uint8_t TY_INS[TI_N] = {      /* the types an instrument is (bits: DRUMS BASS CHORDS LEAD PAD FX) */
@@ -152,9 +158,8 @@ static void tu_dice_nudge(void)
 /* the TIMER's default from SETUP, when DICE opens and no TIMER runs (tilt.c tilt_ns_show) */
 static uint8_t tfm_dice_timer(void)
 {
-    static const uint8_t TM_[5] = {0, 5, 10, 15, 20};
-    if (!tm.on && CFG(CF_TIMER) % 5u)
-        tilt_timer_min = TM_[CFG(CF_TIMER) % 5u];
+    if (!tm.on)
+        tilt_timer_min = TM_LIST[cfg_timer_idx()];
     return tilt_timer_min;
 }
 /* ---- widgets ---- */
@@ -327,9 +332,17 @@ static void tu_dice_rows(void)                          /* y 76 .. 190: the four
 static void tu_dice_note(void)
 {
     tu_rect(0, 176, TU_W, 39, TC_BG);
-    static const char *const K[2] = {"PLAY", "ENV"}, *const A[2] = {"START", "SETUP"};
+    static const char *const K[3] = {"PLAY", "ENV", "K4"}, *const A[3] = {"START", "SETUP", "TIMER"};
+    char tb[16] = "TIMER ";
     tu_text(9, 184, &AF_TS, cfg_default() ? "Rules come from SETUP: a band." : "Rules come from SETUP: yours.", TC_QUIET, TC_BG);
-    tu_hint_line(203, TC_BG, TC_QUIET, 2, K, A);
+    if (tilt_timer_min) {
+        fmt_int(tb + 6, tilt_timer_min);
+        str_cpy(tb + str_len(tb), " MIN", 5);
+    } else {
+        str_cpy(tb + 6, "OFF", 4);
+    }
+    tu_text_r(231, 184, &AF_TS, tb, TC_AMBER, TC_BG);
+    tu_hint_line(203, TC_BG, TC_QUIET, 3, K, A);
 }
 static void tu_head_dice(void)
 {
@@ -377,20 +390,19 @@ static void tu_su_row_text(uint32_t r, char *b)
         str_cpy(b + str_len(b), " - ", 4);
         fmt_int(b + str_len(b), (int32_t)hi);
     } else if (r == 7u) {
-        static const uint8_t TM_[5] = {0, 5, 10, 15, 20};
-        if (CFG(CF_TIMER) % 5u) {
-            fmt_int(b, TM_[CFG(CF_TIMER) % 5u]);
+        if (TM_LIST[cfg_timer_idx()]) {
+            fmt_int(b, TM_LIST[cfg_timer_idx()]);
             str_cpy(b + str_len(b), " MIN", 5);
         } else {
             str_cpy(b, "OFF", 4);
         }
     } else {
-        str_cpy(b, "FINISH BAR + FADE", 20);
+        str_cpy(b, tfm_newsong_keep() ? "KEEP SCENES" : "FRESH", 14);
     }
 }
 static void tu_su_rows(void)
 {
-    static const char *const LBL[9] = {"T1", "T2", "T3", "T4", "KEY", "SCALE", "TEMPO", "TIMER", "TIME'S UP"};
+    static const char *const LBL[9] = {"T1", "T2", "T3", "T4", "KEY", "SCALE", "TEMPO", "TIMER", "NEW SONG"};
     uint32_t r;
     for (r = 0; r < 9u; r++) {
         int32_t y = 28 + (int32_t)r * 19;
@@ -437,7 +449,7 @@ static void tu_dice_draw(void)
         tu_zone(0, 0, TU_HY, TC_BG, sig, tu_head_dice);
         tu_zone(2, TU_HY, 54, TC_BG, sig, tu_dice_tiles);
         tu_zone(3, 76, 100, TC_BG, sig, tu_dice_rows);
-        tu_zone(4, 176, 39, TC_BG, 1u + (uint32_t)cfg_default(), tu_dice_note);
+        tu_zone(4, 176, 39, TC_BG, 1u + (uint32_t)cfg_default() + (uint32_t)tilt_timer_min * 7u, tu_dice_note);
         tu_foot(3, "KEYS", "HOLD", "OCT+", "RE-ROLL", "HOME", "BACK", 0, 0, 0, 0);
     }
     ui.force = 0;
@@ -458,12 +470,11 @@ static void tu_su_step(uint32_t row, int32_t s)
         CFG(CF_LO) = TEMPO_R[i][0];
         CFG(CF_HI) = TEMPO_R[i][1];
     } else if (row == 7u) {
-        CFG(CF_TIMER) = (uint8_t)clamp((int32_t)(CFG(CF_TIMER) % 5u) + d, 0, 4);
-        {
-            static const uint8_t TM_[5] = {0, 5, 10, 15, 20};
-            if (!tm.on)
-                tilt_timer_min = TM_[CFG(CF_TIMER) % 5u];
-        }
+        CFG(CF_TIMER) = cfg_timer_val((uint32_t)clamp((int32_t)cfg_timer_idx() + d, 0, 4));
+        if (!tm.on)
+            tilt_timer_min = TM_LIST[cfg_timer_idx()];
+    } else if (row == 8u) {
+        CFG(CF_NEW) = (uint8_t)clamp((int32_t)CFG(CF_NEW) + d, 0, 1);
     }
     if (row < 4u) {                                     /* (a rule changed: that track rolls at once, unless held) */
         if (!((ns.hold >> (3u + row)) & 1u)) {
@@ -581,7 +592,15 @@ static void tu_dice_input(uint32_t pressed, uint32_t notes, uint32_t oct)
             ns.row = (uint8_t)p;
             ui.force = 1;
         }
-    enc_drop();                                         /* (the knobs do nothing here) */
+    if ((s = panel_enc(EN_K4)) != 0 && !tm.on) {       /* K4: this song's timer (OFF 5 10 15 20); the default is SETUP's */
+        uint32_t ix = 0, j;
+        for (j = 0; j < 5u; j++)
+            if (TM_LIST[j] == tilt_timer_min)
+                ix = j;
+        tilt_timer_min = TM_LIST[(uint32_t)clamp((int32_t)ix + s, 0, 4)];
+        ui.force = 1;
+    }
+    enc_drop();                                         /* (the other knobs do nothing here) */
     if (oct & 2u) {
         tu_dice_nudge();
         ui.force = 1;

@@ -10861,7 +10861,7 @@ static int test_tfm_ui_dice(void)
         turn(EN_K1, -1); ok &= CFG(CF_RULE + 0) == r1;
         turn(EN_SELECT, 1); turn(EN_SELECT, 1); turn(EN_SELECT, 1); turn(EN_SELECT, 1); ok &= tu_su_top == 4u;
         turn(EN_K1, 1); ok &= CFG(CF_KEY) == 11u;       /* the window moved: K1 is the KEY row now */
-        turn(EN_K4, 1); ok &= CFG(CF_TIMER) == 1u && tilt_timer_min == 5u;   /* K4: TIMER */
+        turn(EN_K4, 1); ok &= CFG(CF_TIMER) == 3u && tilt_timer_min == 15u;   /* K4: TIMER (round 3: the default is 10, so up is 15) */
     }
     press(B_ENV); ok &= !tu_setup_on;
     bad += check("TFM-UI SETUP: ENV again from DICE; K1-K4 change the four lit rows, SELECT scrolls the window; ENV back", ok);
@@ -11054,6 +11054,7 @@ static int test_tfm_ui_song(void)
     {   /* SCENES: the scene keys, E..H say so, G5 held + scene keys chain */
         uint32_t kE = key_at(0, 8), kG5 = 26u, kA = key_at(0, 4);
         ui.layer = LAYER_SCENE;
+        if (scene_cur() == SCENE_NONE) scene_claim();                          /* (the music is in no scene after the tests before) */
         fm1_in.notes |= 1u << kE; scene_key(kE, SK_SCENE + 4u);                /* E: the fifth scene, past the layer's four */
         fm1_in.notes &= ~(1u << kE); scene_keys_poll();
         ok &= scene_cur() == 4u && str_eq(ui.msg, "SCENE E");
@@ -11330,6 +11331,7 @@ int main(void)
     bad += test_r2_remember();
     bad += test_r3_notes();
     bad += test_r3_rec();
+    bad += test_r3_newsong();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4
