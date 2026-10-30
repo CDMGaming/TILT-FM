@@ -2,7 +2,6 @@ ui_render AMBER renders of every TFM-UI screen after fix round 1 (2x of the 240 
 ui_arp
 ui_clock
 ui_clock2
-ui_dice
 ui_drums
 ui_fx
 ui_jam
@@ -30,6 +29,8 @@ ui_song
 ui_songs
 ui_space
 ui_start
+ui_start_rolled
+ui_start_spin
 ui_step
 ui_time
 _contact-sheet.png: all of them at 1x
