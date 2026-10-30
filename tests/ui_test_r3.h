@@ -55,7 +55,7 @@ static int test_r3_notes(void)
     /* K2..K4 on an empty step do nothing */
     ui.cursor = 6;
     n0 = r3_notes(t, &t0, &v0);
-    turn(EN_K2, 1); turn(EN_K3, 1); turn(EN_K4, 1);
+    turn(EN_K3, 1); turn(EN_K4, 1);                                          /* (round 4: K2 on an empty step inserts the last note) */
     n1 = r3_notes(t, &t1, &v1);
     R3(n1 == n0 && t1 == t0 && v1 == v0);
     /* GRAB: OCT+ tapped on the note at step 3 (index 2) */

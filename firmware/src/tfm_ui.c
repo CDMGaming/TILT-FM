@@ -89,6 +89,7 @@ static int tu_on(void)                                  /* a TFM screen is the U
 }
 static int tu_deep_on(void) { return !tu_classic() && tu.scr == TU_DEEP && !ui.menu; }
 static uint8_t tq_grab;                                 /* NOTES: a note is grabbed (tfm_seq.c) */
+static uint32_t tq_fit_sig;                             /* NOTES: the view the rows were last centred for (opening NOTES: none) */
 static uint8_t tsg_copy = 0xFF;                         /* SONGS: GLO pressed on this slot: the next GLO copies it onto the one picked */
 static void tu_goto(uint32_t scr)
 {
@@ -97,6 +98,7 @@ static void tu_goto(uint32_t scr)
     if (scr != TU_SONGS)
         tsg_copy = 0xFF;
     tq_grab = 0;
+    tq_fit_sig = 0xFFFFFFFFu;
     if (tu.scr != scr)
         tu.prev = tu.scr;
     tu.scr = (uint8_t)scr;

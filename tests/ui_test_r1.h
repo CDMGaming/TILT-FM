@@ -30,7 +30,7 @@ static int test_r1_cursor(void)
                 turn(scr ? EN_SELECT : EN_K1, -1);
             }
             R1(ui.cursor == 0u && (len >= 32u ? seen == 0xFFFFFFFFu : seen == (1u << len) - 1u));
-            if (len > 16u) {                            /* PRESETS: the next bar, the same step in it */
+            if (len > 16u && scr) {                     /* PRESETS (DRUMS; NOTES zooms since round 4): the next bar, the same step in it */
                 ui.cursor = 5; tq_bar = 0; turn(EN_PRESET, 1);
                 R1(tq_bar == 1u && ui.cursor == 21u);
                 turn(EN_PRESET, -1);

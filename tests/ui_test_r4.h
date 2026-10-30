@@ -197,3 +197,111 @@ static int test_r4_jam(void)
     bad += check("round 4 item 3: JAM v2 (selection, mute, REC dot, timer on / off and its dots, the queued scene's lamp)", ok);
     return bad;
 }
+/* 4: NOTES v2 */
+static int r4_in_view(const track_t *t, uint32_t i)      /* every note of step i is on a row of the window (the note's floor in the scale) */
+{
+    uint32_t j;
+    int32_t top = tq_base, bot = tq_up(t, top, 1 - TQ_ROWS);
+    for (j = 0; j < t->step[i].n; j++) {
+        int32_t fl = tq_floor(t, t->step[i].note[j]);
+        if (fl > top || fl < bot)
+            return 0;
+    }
+    return 1;
+}
+static int test_r4_notes(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t i, z, r, kC4 = key_at(0, 4);
+    track_t *t;
+    ui_power_on();
+    tu_off = 0;
+    song.rec = 0;
+    song.playing = 0;
+    tu_goto(TU_JAM);
+    tfm_load(&trk[0], TI_SQUELCH, 0);
+    song.sel = 0;
+    t = &trk[0];
+    t->p[P_SLEN] = 64;
+    t->p[P_ROOT] = 2;                                    /* D, and a minor scale: the rows follow the key */
+    t->p[P_SCALE] = 1;
+    for (i = 0; i < NSTEP; i++) step_clear(&t->step[i]);
+    for (i = 0; i < 16u; i++) t->step[i] = (step_t){{(uint8_t)(62 + (i & 7u))}, 1, ST_NOTE, 0, 90, 0, 0};          /* bar 1: D4 up */
+    for (i = 16; i < 32u; i += 2u) t->step[i] = (step_t){{(uint8_t)(36 + (i - 16u) * 5u)}, 1, ST_NOTE, 0, 90, 0, 0};   /* bar 2: C2 .. C7 */
+    t->step[63] = (step_t){{49}, 1, ST_NOTE, 0, 100, 0, 0};                                                          /* bar 4: one note, out of the key maybe */
+    stap(B_SEQ); stap(B_SEQ);
+    R4(tu.scr == TU_NOTES && tq_zoom == 0u);
+    /* the rows are the scale's notes, whatever the key */
+    frames(64);
+    for (r = 0; r < TQ_ROWS; r++)
+        R4(tl_in_scale(t, tq_up(t, tq_base, -(int32_t)r)));
+    t->p[P_ROOT] = 7; t->p[P_SCALE] = 0; frames(64);
+    tq_fit_sig = 0xFFFFFFFFu; frames(64);
+    for (r = 0; r < TQ_ROWS; r++)
+        R4(tl_in_scale(t, tq_up(t, tq_base, -(int32_t)r)));
+    t->p[P_ROOT] = 2; t->p[P_SCALE] = 1; tq_fit_sig = 0xFFFFFFFFu;
+    /* every step reachable and its note in view, at every zoom; the zoom keeps the cursor */
+    for (z = 0; z < 3u; z++) {
+        uint32_t v0, span;
+        ui.cursor = 0; tq_bar = 0; frames(64);
+        for (i = 0; i < 64u; i++) {
+            R4(ui.cursor == i);
+            if (t->step[i].n)
+                R4(r4_in_view(t, i));
+            tq_view(&v0, &span);
+            R4(ui.cursor >= v0 && ui.cursor < v0 + span);
+            if (!ok)
+                fprintf(stderr, "R4 zoom %u step %u ", (unsigned)z, (unsigned)i);
+            turn(EN_K1, 1);
+            frames(32);
+        }
+        turn(EN_PRESET, 1); frames(32);
+        R4(ui.cursor == 63u);
+    }
+    R4(tq_zoom == 2u);
+    turn(EN_PRESET, 1); R4(tq_zoom == 2u);                                   /* (no further) */
+    ui.cursor = 20; tq_bar = 1;
+    turn(EN_PRESET, -1); frames(32);
+    {
+        uint32_t v0, span;
+        R4(tq_zoom == 1u && ui.cursor == 20u);
+        tq_view(&v0, &span);
+        R4(v0 == 0u && span == 32u);
+        turn(EN_PRESET, -1); frames(32);
+        tq_view(&v0, &span);
+        R4(tq_zoom == 0u && ui.cursor == 20u && v0 == 16u && span == 16u);
+    }
+    /* the strip: 4 bars, the bar shown outlined amber; ▲ for notes out of the rows */
+    frames(64);
+    R4(r4_count(TQ_GX + 52, 26, TQ_GX + 52 + 48, 26, TC_AMBER) > 10u && r4_count(TQ_GX, 26, TQ_GX + 48, 26, TC_AMBER) == 0u);
+    R4(r4_count(210, 50, 230, 56, TC_AMBER) > 2u);                           /* bar 2 spans five octaves: some notes are above the rows */
+    /* K2 on an empty step inserts the last note used there, REC off */
+    ui.cursor = 40; tq_bar = 2; last_note = 69; frames(32);
+    R4(!t->step[40].n && !song.rec);
+    turn(EN_K2, 1);
+    R4(t->step[40].time == ST_NOTE && t->step[40].n == 1u && tl_in_scale(t, t->step[40].note[0]) && t->step[40].note[0] == tq_floor(t, 69));
+    turn(EN_K2, 1);                                                          /* (now a note: K2 moves it) */
+    R4(t->step[40].note[0] > tq_floor(t, 69));
+    /* REC on, stopped, a key held: K1 sets the length of the note being entered; the cursor lands after it */
+    song.rec = 1; tq_bar = 0; ui.cursor = 44; frames(32);
+    fm1_in.notes |= 1u << kC4; host_notes |= 1u << kC4; frame();
+    R4(t->step[44].time == ST_NOTE && t->step[44].n == 1u);
+    turn(EN_K1, 1); turn(EN_K1, 1);
+    R4(t->step[45].time == ST_TIE && t->step[46].time == ST_TIE && ui.cursor == 44u);
+    fm1_in.notes &= ~(1u << kC4); frame(); frame();
+    R4(t->step[47].time != ST_TIE && ui.cursor == 47u);
+    song.rec = 0;
+    /* a GRAB scrolls with the note: K2 takes it up through the rows, the window follows */
+    ui.cursor = 22; tq_bar = 1; frames(48);
+    R4(t->step[22].n == 1u);
+    press(B_OCTUP); frames(32);
+    R4(tq_grab == 1u);
+    for (i = 0; i < 12u; i++) {
+        turn(EN_K2, 1); frames(32);
+        R4(r4_in_view(t, 22));
+    }
+    press(B_OCTUP); frames(32);
+    R4(!tq_grab);
+    bad += check("round 4 item 4: NOTES v2 (strip, folded rows in the key, every step and note in view at every zoom, zoom keeps the cursor, K2 inserts, K1 sets the length while a key is held)", ok);
+    return bad;
+}

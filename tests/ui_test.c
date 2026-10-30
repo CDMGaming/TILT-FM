@@ -11000,10 +11000,10 @@ static int test_tfm_ui_seq(void)
         turn(EN_K1, 1); ok &= ui.cursor == 1u;                                                   /* K1: the next step (round 3: every step) */
         turn(EN_K1, 3); ok &= ui.cursor == 4u;
         stap(B_EDIT); ok &= !trk[0].step[4].n && tu.scr == TU_NOTES;                            /* EDIT: delete it */
-        turn(EN_PRESET, 1); ok &= tq_bar == 1u;                                                  /* PRESETS: the bar */
-        turn(EN_PRESET, -1); ok &= tq_bar == 0u;
+        turn(EN_PRESET, 1); ok &= tq_zoom == 1u;                                                 /* PRESETS: the zoom (round 4) */
+        turn(EN_PRESET, -1); ok &= tq_zoom == 0u;
     }
-    bad += check("TFM-UI NOTES: K1 the step, K2 its pitch in the scale, K3 its length, K4 its velocity, EDIT deletes, PRESETS the bar", ok);
+    bad += check("TFM-UI NOTES: K1 the step, K2 its pitch in the scale, K3 its length, K4 its velocity, EDIT deletes, PRESETS the zoom", ok);
     ok = 1;
     turn(EN_ALGO, 1);                                   /* T2: the drum track: DRUMS */
     ok &= tu.scr == TU_DRUMS;
@@ -11342,6 +11342,7 @@ int main(void)
     bad += test_r4_blank();
     bad += test_r4_recdots();
     bad += test_r4_jam();
+    bad += test_r4_notes();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4
