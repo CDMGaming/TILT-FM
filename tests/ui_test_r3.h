@@ -110,3 +110,63 @@ static int test_r3_notes(void)
                  "OCT+ GRABs, K1 moves it with its ties (not past a note or the ends), K2 its pitch, OCT+ DROPs: nothing lost or doubled", ok);
     return bad;
 }
+/* 2: REC decides what the keys do on STEP, NOTES, DRUMS: off = play only; on + stopped = write at the cursor; on + playing = live */
+static void r3_key(uint32_t k) { fm1_in.notes |= 1u << k; host_notes |= 1u << k; frame(); fm1_in.notes &= ~(1u << k); frame(); }
+static int test_r3_rec(void)
+{
+    int bad = 0, ok = 1, scr;
+    uint32_t i, kC4, n0, t0, v0, n1, t1, v1;
+    ui_power_on();
+    tu_off = 0;
+    tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[1], TI_THUMP, 0);
+    for (scr = 0; scr < 3; scr++) {                     /* STEP, NOTES, DRUMS */
+        track_t *t;
+        song.sel = scr == 2 ? 1 : 0;
+        t = &trk[song.sel];
+        tu_goto(TU_JAM);
+        for (i = 0; i < NSTEP; i++) step_clear(&t->step[i]);
+        t->p[P_SLEN] = 16;
+        stap(B_SEQ);
+        if (scr >= 1) stap(B_SEQ);
+        R3(tu.scr == (scr == 0 ? TU_STEP : scr == 1 ? TU_NOTES : TU_DRUMS) || scr == 2);
+        if (scr == 2) tu_goto(TU_DRUMS);
+        kC4 = key_at(0, 4);
+        ui.cursor = 3;
+        song.rec = 0;
+        n0 = r3_notes(t, &t0, &v0);
+        for (i = 0; i < NSTEP; i++) n0 += t->step[i].hit;
+        r3_key(kC4); r3_key(kC4);                       /* PLAY ONLY, stopped: nothing written, the cursor stays */
+        n1 = r3_notes(t, &t1, &v1);
+        for (i = 0; i < NSTEP; i++) n1 += t->step[i].hit;
+        R3(n1 == n0 && ui.cursor == 3u);
+        transport_req = 1; events_block(32);
+        for (i = 0; i < 40u; i++) events_block(32);
+        r3_key(kC4);                                    /* PLAY ONLY, playing: nothing recorded */
+        for (i = 0; i < 400u; i++) events_block(32);
+        n1 = r3_notes(t, &t1, &v1);
+        for (i = 0; i < NSTEP; i++) n1 += t->step[i].hit;
+        R3(n1 == n0);
+        seq_stop(); transport_req = 0; events_block(32);
+        song.rec = 1u << song.sel;                      /* WRITE STEPS: REC on, stopped */
+        ui.cursor = 3;
+        r3_key(kC4);
+        n1 = r3_notes(t, &t1, &v1);
+        for (i = 0; i < NSTEP; i++) n1 += t->step[i].hit;
+        R3(n1 == n0 + 1u && (scr == 2 || ui.cursor == 4u));
+        for (i = 0; i < NSTEP; i++) step_clear(&t->step[i]);
+        n0 = 0;
+        transport_req = 1; events_block(32);            /* REC LIVE: REC on, playing */
+        for (i = 0; i < 40u; i++) events_block(32);
+        fm1_in.notes |= 1u << kC4; host_notes |= 1u << kC4; frame();
+        for (i = 0; i < 60u; i++) events_block(32);
+        fm1_in.notes &= ~(1u << kC4); frame();
+        for (i = 0; i < 3000u; i++) events_block(32);
+        n1 = r3_notes(t, &t1, &v1);
+        for (i = 0; i < NSTEP; i++) n1 += t->step[i].hit;
+        R3(n1 >= 1u);
+        seq_stop(); transport_req = 0; events_block(32);
+        song.rec = 0;
+    }
+    bad += check("TFM-UI round 3: REC off the keys only play (stopped or playing, STEP / NOTES / DRUMS); REC on stopped they write; REC on playing they record live", ok);
+    return bad;
+}

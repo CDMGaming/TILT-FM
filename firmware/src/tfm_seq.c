@@ -27,14 +27,29 @@ static void tq_len_text(char *b, uint32_t len)          /* "2 BARS", "2 BARS + 3
         fmt_int(b + str_len(b), (int32_t)(len % bar));
     }
 }
+/* round 3: REC decides what the keys do on STEP, NOTES, DRUMS: off = they only play; on and stopped = they write at the
+ * cursor; on and playing = they record live. The header says which, in words (red when REC is on) */
+static int tq_rec_on(void) { return (int)((song.rec >> song.sel) & 1u); }
+static const char *tq_mode(uint16_t *c)
+{
+    if (!tq_rec_on()) {
+        *c = TC_QUIET;
+        return "PLAY ONLY";
+    }
+    *c = TC_REC;
+    return song.playing || transport_req == 1u || seq_counting() ? "REC LIVE" : "WRITE STEPS";
+}
+static uint32_t tq_mode_sig(void) { return (uint32_t)tq_rec_on() * 3u + (song.playing ? 5u : 0u); }
 static void tq_head(const char *what)
 {
-    char l[24], r[16];
+    char l[24];
+    uint16_t c;
+    const char *m = tq_mode(&c);
     str_cpy(l, what, 12);
     str_cpy(l + str_len(l), " \xB7 ", 5);
     str_cpy(l + str_len(l), tu_inst_name(TSEL), 12);
-    tq_len_text(r, tq_len(TSEL));
-    tu_head(song.sel, l, 0, r, 0);
+    tu_head(song.sel, l, 0, "", 0);
+    tu_text_r(231, 10, &AF_TM, m, c, TC_BG);
 }
 /* ================================================================== STEP ==================================== */
 static uint32_t tq_pitch_lo, tq_pitch_hi;
@@ -181,14 +196,19 @@ static void tq_keys(uint32_t notes)
     if (fm1_in.notes & (1u << TQ_REST_KEY))             /* (G5 is the screen's: silent while held; never set otherwise: a layer button would see a combo) */
         kb_layer |= 1u << TQ_REST_KEY;
     song.grid = (uint8_t)keys_mode();
+    if (!tq_rec_on() && song.grid != 3u) {              /* REC off: the keys only play (stopped or playing), never write */
+        song.grid = 0;
+        ui.entry_open = 0;
+        return;
+    }
     lock_keys();
     if (song.grid == 3u)
         song_keys(notes);
     else if (song.grid)
         grid_keys(notes);
     else if (song.seq_mode && cur_page()->graph == GR_ROLL) {
-        if (live_rec_sel() || song.playing)             /* (playing: the keys only play, or record live when armed; */
-            ui.entry_open = 0;                          /* stopped: they write at the cursor, armed or not) */
+        if (live_rec_sel() || song.playing)             /* (REC on, playing: the keys record live; */
+            ui.entry_open = 0;                          /* REC on, stopped: they write at the cursor) */
         else if (!chain_busy())
             seq_entry(notes);
         else if (notes)
@@ -356,15 +376,17 @@ static void tq_notes_head(void)
         tu_text_c(x + 6, 10, &AF_TS, b, i == tq_bar ? TC_BG : used ? TC_TEXT : TC_DIM, i == tq_bar ? TC_AMBER : used ? TC_SURF : TC_BG);
         x += 15;
     }
-    param_format(&TP[P_ROOT], TSEL->p[P_ROOT], r, &u);
-    str_cpy(r + str_len(r), " ", 2);
-    str_cpy(r + str_len(r), tu_scale_full(TSEL->p[P_SCALE]), 10);
-    tu_text_r(231, 10, &AF_TS, r, TC_QUIET, TC_BG);
+    {
+        uint16_t mc;
+        const char *mt = tq_mode(&mc);
+        (void)r; (void)u;
+        tu_text_r(231, 10, &AF_TS, mt, mc, TC_BG);
+    }
 }
 static void tq_notes_draw(void)
 {
     uint32_t sig = ui.cursor * 31u + song.sel * 7u + tq_len(TSEL) * 977u + steps_hash(TSEL) + tq_bar * 7919u + (uint32_t)(uint8_t)tq_base * 131u +
-                   (uint32_t)TSEL->p[P_ROOT] * 17u + (uint32_t)TSEL->p[P_SCALE] * 19u + (uint32_t)tq_grab * 6151u;
+                   (uint32_t)TSEL->p[P_ROOT] * 17u + (uint32_t)TSEL->p[P_SCALE] * 19u + (uint32_t)tq_grab * 6151u + tq_mode_sig() * 40503u;
     if (song.playing)
         sig += TSEL->seq_idx * 131071u;
     tu_zone(0, 0, TU_HY, TC_BG, sig, tq_notes_head);
@@ -544,22 +566,22 @@ static void tq_drums_head(void)
     str_cpy(l, "DRUMS \xB7 ", 12);
     str_cpy(l + str_len(l), tu_inst_name(TSEL), 12);
     tu_text(26, 10, &AF_TM, l, TC_TEXT, TC_BG);
+    {
+        uint16_t mc;
+        const char *mt = tq_mode(&mc);
+        tu_text_r(231, 10, &AF_TM, mt, mc, TC_BG);
+    }
     str_cpy(r, "BAR ", 5);
     fmt_int(r + 4, (int32_t)tq_bar + 1);
-    str_cpy(r + str_len(r), " of ", 5);
+    str_cpy(r + str_len(r), "/", 2);
     fmt_int(b, (int32_t)((tq_len(TSEL) + 15u) / 16u));
     str_cpy(r + str_len(r), b, 4);
-    tu_text_r(231, 10, &AF_TM, r, TC_TEXT, TC_BG);
-    {
-        char t[8];
-        tu_timer_text(t);
-        if (t[0])
-            tu_text_c(150, 10, &AF_PS, t, TC_AMBER, TC_BG);
-    }
+    tu_text_r(142, 12, &AF_TS, r, TC_QUIET, TC_BG);
 }
 static void tq_drums_draw(void)
 {
-    uint32_t sig = ui.cursor * 31u + song.sel * 7u + tq_len(TSEL) * 977u + steps_hash(TSEL) + tq_bar * 7919u + (ui.lane & 7u) * 131u;
+    uint32_t sig = ui.cursor * 31u + song.sel * 7u + tq_len(TSEL) * 977u + steps_hash(TSEL) + tq_bar * 7919u + (ui.lane & 7u) * 131u +
+                   tq_mode_sig() * 40503u;
     if (song.playing)
         sig += TSEL->seq_idx * 131071u;
     tu_zone(0, 0, TU_HY, TC_BG, sig, tq_drums_head);
