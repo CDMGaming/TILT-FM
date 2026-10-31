@@ -713,6 +713,7 @@ static int step_detailed(const step_t *st)
 static void step_clear(step_t *st)
 {
     st->n = 0;
+    st->note[0] = 0;                             /* (a hits-only step reads it as the pitched lane's pitch, TFM round 8) */
     st->time = ST_REST;
     st->flags = 0;
     st->vel = 0;
@@ -780,6 +781,8 @@ static void grid_own(step_t *s, uint32_t l)
 {
     uint32_t k, j = 0;
     step_to_grid(s);
+    if (!s->n)                                   /* (hits alone: note[0] is the pitched lane's pitch, TFM round 8) */
+        return;
     for (k = 0; k < s->n; k++)
         if (drum_lane(s->note[k]) == l)
             s->hit |= (uint8_t)(1u << l);

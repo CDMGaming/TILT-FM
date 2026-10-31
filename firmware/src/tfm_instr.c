@@ -493,6 +493,13 @@ static int32_t tfm_key_gain(const track_t *t, uint32_t note)
     return st ? (int32_t)LEVEL_Q12[112 - clamp(st, 0, 100)] << 3 : 32767;
 }
 static int32_t (*lvl_trim_fn)(const track_t *t) = tfm_lvl_trim;
+/* round 8: the drum instruments' pitched lane: THUMP LAB its kick (an 808 boom), TRASH KIT and HAND DRUMS their tom */
+static uint32_t tfm_drum_plane(const track_t *t)
+{
+    uint32_t i = tfm_ins_of(t);
+    return i == TI_THUMP ? 0u : i == TI_TRASH || i == TI_HAND ? 5u : 0xFFu;
+}
+static uint32_t (*drum_plane_fn)(const track_t *t) = tfm_drum_plane;
 static int32_t (*key_gain_fn)(const track_t *t, uint32_t note) = tfm_key_gain;
 
 /* track t plays instrument i's sound s: its engine (as EDIT's engine keys load it), the factory preset (as PRESETS

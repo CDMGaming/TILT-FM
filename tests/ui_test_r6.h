@@ -888,3 +888,63 @@ static int test_r8_kits(void)
     bad += check("round 8 item 4: drums on the white keys (F3..F4 the eight lanes, G4..G5 the same accented), the black keys silent; CLASSIC keeps the GM map", keys);
     return bad;
 }
+/* item 5: the pitched lane: a drum step's pitch in the scale, from note[0] of a hits-only step (64 + degrees); the hit of that
+ * lane sounds that many scale steps from the lane's own pitch; DRUMS K2 sets it there; a save keeps it */
+static int test_r8_pitched_lane(void)
+{
+    int bad = 0, ok = 1;
+    track_t *t = &trk[0];
+    step_t *st;
+    drum_lane_t *K;
+    int8_t base;
+    ui_power_on();
+    tu_off = 0;
+    song.sel = 0;
+    tfm_load(t, TI_THUMP, 0);
+    t->p[P_ROOT] = 0; t->p[P_SCALE] = 1;                /* (major) */
+    R8(drum_plane_fn(t) == 0u);
+    tfm_load(&trk[1], TI_HAND, 0); R8(drum_plane_fn(&trk[1]) == 5u); tfm_load(&trk[1], TI_SQUELCH, 0); R8(drum_plane_fn(&trk[1]) == 0xFFu);
+    R8(drum_deg_st(t, 2) == 4 && drum_deg_st(t, -1) == -1 && drum_deg_st(t, 7) == 12 && drum_deg_st(t, 0) == 0);
+    st = &t->step[0];
+    step_clear(st);
+    st->time = ST_NOTE; st->hit = 1u; st->vel = 100;
+    panic_req = 15u; { int32_t o[2 * CTL]; uint32_t f; for (f = 0; f < 64u; f++) mix_block(o, CTL); }
+    trk_note_on(t, DRUM_LANE_NOTE[0], 100);             /* unpitched: the kick at its own pitch */
+    K = drum_kit_of(t);
+    R8(K != 0);
+    base = K ? K[0].st : 0;
+    trk_note_off(t, DRUM_LANE_NOTE[0]);
+    st->note[0] = 64 + 2;                               /* two scale steps up */
+    drum_pitch_set(t, st);
+    trk_note_on(t, DRUM_LANE_NOTE[0], 100);
+    R8(K && K[0].st == base + 4);
+    drum_ppl[0] = 0;
+    trk_note_off(t, DRUM_LANE_NOTE[0]);
+    /* DRUMS: on the pitched lane, a hit at the cursor: K2 is PITCH */
+    tu_goto(TU_DRUMS); frames(16);
+    ui.lane = 0; cursor_set(0); frames(16);
+    st->note[0] = 0;
+    turn(EN_K2, 1); frames(16);
+    R8(st->note[0] == 65u && ui.lane == 0u);
+    turn(EN_K2, -1); frames(16);
+    R8(st->note[0] == 0u);
+    ui.lane = 1; frames(16);
+    turn(EN_K2, 1); frames(16);
+    R8(ui.lane == 2u && st->note[0] == 0u);             /* (another lane: K2 picks the lane, as before) */
+    st->note[0] = 64 + 1;                               /* another lane's hit on a pitched step keeps the pitch */
+    grid_hit(t, 0, 2, 1);
+    R8(st->note[0] == 65u && (st->hit & 4u));
+    grid_hit(t, 0, 2, 0);
+    st->note[0] = 0;
+    {   /* a save keeps it (the four note bytes are stored for every step) */
+        static project_t q, r;
+        static project_store_t ps;
+        st->note[0] = 64 - 3;
+        project_capture(&q);
+        proj_pack(&ps, &q);
+        R8(proj_unpack(&r, ps.raw, PROJ_STORE_SIZE) == 1 && r.t[0].step[0].note[0] == 61u && r.t[0].step[0].hit == 1u && r.t[0].step[0].n == 0u);
+    }
+    tu_goto(TU_JAM);
+    bad += check("round 8 item 5: the pitched lane (THUMP LAB's kick, TRASH KIT's and HAND DRUMS' tom) plays a step's pitch in the scale (note[0] of a hits-only step), DRUMS K2 sets it, a save keeps it", ok);
+    return bad;
+}

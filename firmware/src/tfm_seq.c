@@ -867,6 +867,12 @@ static void tq_notes_delete(void)
     ui_message("NOTE DELETED");
 }
 /* ================================================================== DRUMS =================================== */
+/* round 8: the cursor's step on the pitched lane with a hit there (and no notes): K2 is its PITCH */
+static int tq_pitch_here(const track_t *t, const step_t *s)
+{
+    uint32_t pl = drum_plane_fn ? drum_plane_fn(t) : 0xFFu;
+    return pl < NLANE && (ui.lane & 7u) == pl && ((s->hit >> pl) & 1u) && !s->n;
+}
 static void tq_drums_body(void)                         /* y 22 .. 215 */
 {
     track_t *t = TSEL;
@@ -889,6 +895,10 @@ static void tq_drums_body(void)                         /* y 22 .. 215 */
             if (playing)
                 bg = on ? TC_AMBER : tu_mix(bg, TC_AMBER, 30);
             tu_rrect(x, y, 11, 13, 3, bg, TC_BG);
+            if (on && !s->n && s->note[0] && drum_plane_fn && drum_plane_fn(t) == l) {   /* (round 8: the pitch: a mark up or down) */
+                int32_t p = clamp((int32_t)s->note[0] - 64, -7, 7);
+                tu_rect(x + 2, y + 6 - p * 5 / 7, 7, 2, TC_TEXT);
+            }
             if (idx == cur && sel) {
                 tu_rect(x, y, 11, 1, TC_TEXT); tu_rect(x, y + 12, 11, 1, TC_TEXT);
                 tu_rect(x, y, 1, 13, TC_TEXT); tu_rect(x + 10, y, 1, 13, TC_TEXT);
@@ -901,10 +911,14 @@ static void tq_drums_body(void)                         /* y 22 .. 215 */
         for (k = 0; k < 4u; k++) {
             static const char *const LB[4] = {"K1 STEP", "K2 LANE", "K3 VELO", "K4 CHANCE"};
             char v[10];
-            int32_t x = 7 + (int32_t)k * 58;
+            int32_t x = 7 + (int32_t)k * 58, ph = k == 1u && tq_pitch_here(t, s);
             if (k == 0u)
                 fmt_int(v, (int32_t)cur + 1);
-            else if (k == 1u)
+            else if (ph) {                              /* (round 8: K2 PITCH on the pitched lane) */
+                int32_t p = s->note[0] ? clamp((int32_t)s->note[0] - 64, -7, 7) : 0;
+                v[0] = p > 0 ? '+' : 0;
+                fmt_int(v + (p > 0), p);
+            } else if (k == 1u)
                 str_cpy(v, drum_lane_name(t, ui.lane & 7u), 8);
             else if (k == 2u)
                 fmt_int(v, s->vel);
@@ -913,7 +927,7 @@ static void tq_drums_body(void)                         /* y 22 .. 215 */
                 str_cpy(v + str_len(v), "%", 2);
             }
             tu_rrect(x, 153, 55, 24, 5, TC_DEEP, TC_BG);
-            tu_text_c(x + 27, 159, &AF_TS, LB[k], TU_TC[k], TC_DEEP);
+            tu_text_c(x + 27, 159, &AF_TS, ph ? "K2 PITCH" : LB[k], TU_TC[k], TC_DEEP);
             tu_text_c(x + 27, 170, &AF_TL, v, TC_TEXT, TC_DEEP);
         }
     }
@@ -954,6 +968,14 @@ static void tq_drums_knob(uint32_t k, int32_t s)
     if (k == 0u) {
         cursor_set((uint32_t)clamp((int32_t)ui.cursor + d, 0, (int32_t)tq_len(t) - 1));
         tq_bar = (uint8_t)(ui.cursor / 16u);
+    } else if (k == 1u && tq_pitch_here(t, st)) {     /* (round 8: the pitched lane, a hit there: K2 its pitch in the scale) */
+        int32_t p = st->note[0] ? clamp((int32_t)st->note[0] - 64, -7, 7) : 0;
+        if (chain_busy()) {
+            ui_message("STOP TO EDIT");
+            return;
+        }
+        p = clamp(p + d, -7, 7);
+        st->note[0] = (uint8_t)(p ? 64 + p : 0);
     } else if (k == 1u) {
         ui.lane = (uint8_t)((ui.lane + (uint32_t)(d + 8)) & 7u);
     } else if (chain_busy()) {

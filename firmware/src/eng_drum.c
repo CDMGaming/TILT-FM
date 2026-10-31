@@ -68,6 +68,11 @@ ENG_MEM_FITS("DRUM", sizeof(drum_lane_t) * DV_NLANE);
  * so unmuted it sounds as if it never was. Performance state: not saved, not recorded, no undo; a sound load into the
  * track (ui.c load_begin) and a project load (project_restore_runtime) clear it, power-off too */
 static uint8_t drum_mute[NPART];
+/* TFM round 8: a drum instrument's pitched lane (tfm_instr.c tfm_drum_plane) takes a step's pitch: seq.c sets the lane
+ * (+ 1, 0 none) and its semitones for the hits it is about to start, drum_note_on adds them to that lane's hit */
+static uint32_t (*drum_plane_fn)(const track_t *t);
+static uint8_t drum_ppl[NPART];
+static int8_t drum_pst[NPART];
 
 /* 1..3 named as the kit they play: aliases, never shown or offered (EDITOR_PROTOCOL.md: retired values) */
 static const char *const N_DRUM_KIT[] = {"STD", "66", "10", "77", "80", "10", "66", "55", "77", "DEEP", "TIGHT", "PERC"};
@@ -172,7 +177,7 @@ static void step_to_grid(step_t *s)
         else
             s->note[k++] = s->note[i];
     }
-    for (i = k; i < 4u; i++)
+    for (i = k; i < 4u && s->n; i++)            /* (hits alone keep note[0]: the pitched lane's pitch, TFM round 8) */
         s->note[i] = 0;
     s->n = (uint8_t)k;
     if (!k && (s->flags & SF_ACCENT)) {
@@ -227,6 +232,8 @@ static void drum_note_on(track_t *t, voice_t *v)
         L->key.type = 0xFF;
         L->role = (uint8_t)role;
     }
+    if (drum_ppl[(uint32_t)(t - trk) % NPART] == lane + 1u)   /* (TFM round 8: the step's pitch, in the scale) */
+        st += drum_pst[(uint32_t)(t - trk) % NPART];
     L->st = (int8_t)st;
     L->owner = (uint8_t)(i + 1u);                        /* (its last voice, if another, ends: drum_amp) */
     v->s[0] = (int32_t)lane;

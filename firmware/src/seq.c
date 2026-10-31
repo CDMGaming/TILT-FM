@@ -169,6 +169,7 @@ static volatile uint8_t jam_silent;               /* round 5: JAM's black keys l
  * the GM map. Out of line, as grid_key_note: the ISR's key loop calls it on a key change only */
 static volatile uint8_t tfm_dwhite;
 static uint32_t dw_acc;                           /* the keys pressed as accents (key_on: velocity 127) */
+static void drum_pitch_set(track_t *t, const step_t *s);   /* (round 8: the pitched lane, below) */
 static __attribute__((noinline)) uint8_t dw_key_note(uint32_t k)
 {
     uint32_t p;
@@ -514,6 +515,7 @@ static void rec_note(track_t *t, uint32_t note, uint32_t vel)
         uint32_t l = drum_lane(note);
         if (s->time != ST_NOTE || (!s->n && !s->hit)) {
             s->n = s->hit = s->acc = 0;
+            s->note[0] = 0;                         /* (no pitch on the pitched lane, TFM round 8) */
             s->flags = 0;
             s->vel = 0;
             step_set_nudge(s, off);
@@ -1034,9 +1036,12 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
     t->slide_glide = (uint8_t)slide_in;
     if (!slide_in)
         seq_release(t);
+    if (drum_plane_fn && s->hit && !s->n && s->note[0])   /* (TFM round 8: the pitched lane's hit, this step's pitch) */
+        drum_pitch_set(t, s);
     for (i = 0; i < m; i++)
         if (!((sk >> i) & 1u))
             trk_note_on(t, nn[i], vv[i]);
+    drum_ppl[trk_index(t) % NPART] = 0;
     if (slide_in)                                   /* release what is not held over */
         for (i = 0; i < t->seq_n; i++) {
             for (j = 0; j < m && nn[j] != t->seq_notes[i]; j++)
@@ -1050,6 +1055,31 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
             t->seq_notes[t->seq_n++] = nn[i];
     t->seq_off = gate;
     t->seq_hold = hits == 1u && ((s->flags & SF_SLIDE) != 0 || next_tie);   /* next step a TIE: keep the notes to it */
+}
+
+/* TFM round 8: the pitched lane. A step with hits and no notes (n 0) never read note[0]: there it holds the lane's pitch,
+ * 64 + scale degrees from the lane's own pitch (-7..7), 0 none; no format change. The degrees in the track's scale */
+static int32_t drum_deg_st(const track_t *t, int32_t d)
+{
+    uint32_t mask = scale_mask(t) | 1u;
+    int32_t st = 0;
+    while (d > 0) {
+        do st++; while (!((mask >> ((uint32_t)(st + 120) % 12u)) & 1u));
+        d--;
+    }
+    while (d < 0) {
+        do st--; while (!((mask >> ((uint32_t)(st + 120) % 12u)) & 1u));
+        d++;
+    }
+    return st;
+}
+static __attribute__((noinline)) void drum_pitch_set(track_t *t, const step_t *s)
+{
+    uint32_t pl = drum_plane_fn(t), k = trk_index(t) % NPART;
+    if (pl >= NLANE || !((s->hit >> pl) & 1u))
+        return;
+    drum_ppl[k] = (uint8_t)(pl + 1u);
+    drum_pst[k] = (int8_t)drum_deg_st(t, clamp((int32_t)s->note[0] - 64, -7, 7));
 }
 
 /* MENU > CONTROL > STEP PREVIEW (1.2, Discussion #169): the UI asks for a step of a track to sound once (aud_req: step

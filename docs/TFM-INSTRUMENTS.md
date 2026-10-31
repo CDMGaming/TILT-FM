@@ -646,3 +646,10 @@ and the same eight accented (velocity 127) on the next eight (G4 .. G5); the bla
 scenes, on the DRUM grid lane / accent / page as before). CLASSIC and MIDI IN keep the GM map. (The round's text said "F3-C4
 the 8 lanes, D4-G5 the same 8 accented": that is 5 and 11 white keys; the 16 white keys split eight and eight is the only
 reading that gives eight and eight.)
+
+**The pitched lane** (round 8): one lane of each drum instrument takes a pitch per step: THUMP LAB its kick (an 808 boom),
+TRASH KIT and HAND DRUMS their tom. On DRUMS, with the cursor on that lane at a step with a hit there, K2 reads PITCH
+(otherwise LANE, as before) and moves the hit -7..+7 steps in the track's scale; the grid shows a mark up or down. Stored in
+note[0] of a step with hits and no notes (64 + degrees, 0 none), which nothing read before: no format change, a save keeps
+it. Clearing a step now also clears note[0], so a pitch never comes from a step's old note; adding another lane's hit keeps
+the pitch. Playing the lane's pitch from the keys live is left for later.
