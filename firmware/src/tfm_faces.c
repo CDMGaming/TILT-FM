@@ -268,7 +268,10 @@ static const char *tf_lane(const track_t *t, uint32_t l, int32_t w)   /* the lan
     n = str_eq(n, "HATCL") ? "HAT" : str_eq(n, "HATOP") ? "OPEN" : str_eq(n, "BELL") ? "CYM" : n;
     return text_w(&AF_TS, n) <= w ? n : drum_lane_abbr(t, l);
 }
-static const char *tf_keys_hint(void) { return "G4-G5: THE SAME 8, ACCENTED"; }
+static const char *tf_keys_hint(void)                  /* (round 9: G4 .. G5 the pitched lane up the scale, seq.c dw_key_note) */
+{
+    return tfm_ins_of(&trk[song.sel]) == TI_THUMP ? "G4-G5: THE 808 UP THE SCALE" : "G4-G5: THE TOM UP THE SCALE";
+}
 static void tf_presets_line(int32_t x, int32_t y, uint16_t c, uint16_t un)   /* "< 1 of 5 >" */
 {
     track_t *t = &trk[song.sel];

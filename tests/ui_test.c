@@ -11389,6 +11389,7 @@ int main(void)
     bad += test_r9_knob_speed();
     bad += test_r9_dj();
     bad += test_r9_drum_faces();
+    bad += test_r9_drum_keys();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

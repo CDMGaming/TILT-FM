@@ -669,3 +669,10 @@ TILT's plates, STUDIO, BASEMENT, PORCH, CANTINA, TIN SHED (were BONGO PARK, RAIN
 same five sounds in that order). KITBOX keeps TRASH KIT's preset names. **THUMP LAB's face** is SoundThumpV3: eight pads in two
 rows in TILT's lane colours, a panel with THUMP, the sound, the four knobs and the keys' hint. The lanes read TILT's words
 (HAT, OPEN, CYM). TILT's codes: "garage" plays GARAGE and "chop" KITBOX.
+
+**The upper drum keys** (round 9): G4 .. G5 no longer play the eight lanes accented (the cymbal on F4 sat next to an accented
+kick: a jump in level and tone in the middle of the keyboard). They play the instrument's pitched lane up the song's scale,
+eight degrees from the lane's own pitch (G4 the lane as it is, G5 an octave up): THUMP LAB's 808 kick, KITBOX's and GARAGE's
+tom. Live, and recorded with REC as the step's pitch (as DRUMS K2 sets it); a plain lane key records the hit with no pitch.
+Accents stay on the DRUM grid (a black key held) and come from velocity. A drum track with no TFM instrument (no pitched lane)
+keeps round 8's accented eight there. The faces say "G4-G5: THE 808 UP THE SCALE" (THUMP LAB) or "THE TOM" (KITBOX, GARAGE).

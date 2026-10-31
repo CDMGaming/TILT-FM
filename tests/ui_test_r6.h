@@ -787,7 +787,8 @@ static int test_r8_kits(void)
         tfm_load(&trk[0], TI_GARAGE, 0); c = trk[0];
         R8(a.p[P_E0] != b.p[P_E0] && b.p[P_E0] != c.p[P_E0] && a.p[P_E0] != c.p[P_E0]);
     }
-    /* the keys: TFM, a drum track: the white keys from F3: lanes 1..8, then the same accented; the black keys silent */
+    /* the keys: TFM, a drum track: the white keys from F3: lanes 1..8, then (round 9) the pitched lane up the scale; the
+     * black keys silent */
     tfm_load(&trk[0], TI_KITBOX, 0);
     song.sel = 0;
     tu_goto(TU_SOUND); frames(16);
@@ -798,13 +799,14 @@ static int test_r8_kits(void)
         if (key_black(k))
             keys &= n == KB_SILENT;
         else if (key_place(k) < 2u * NLANE)
-            keys &= n == DRUM_LANE_NOTE[key_place(k) % NLANE] && (((dw_acc >> k) & 1u) == (key_place(k) >= NLANE));
+            keys &= key_place(k) < NLANE ? n == DRUM_LANE_NOTE[key_place(k)] && !((dw_acc >> k) & 1u) :
+                    n == DRUM_LANE_NOTE[5] && ((dw_pit >> k) & 1u) && dw_deg[k] == key_place(k) - NLANE && !((dw_acc >> k) & 1u);
     }
     tfm_dwhite = 0;                                     /* (CLASSIC: the GM map over every key, as before) */
     keys &= kb_map(&trk[0], 1) != KB_SILENT && kb_map(&trk[0], 7) == (uint32_t)clamp(29 + 12 * song.octave + 7, 0, 127);
     dw_acc = 0;
     bad += check("round 8 item 4: THUMP LAB (DEEP), KITBOX (10), GARAGE (77): three kits, each with a cymbal, kick, snare or rim, both hats; every preset on its kit", ok);
-    bad += check("round 8 item 4: drums on the white keys (F3..F4 the eight lanes, G4..G5 the same accented), the black keys silent; CLASSIC keeps the GM map", keys);
+    bad += check("round 8 item 4: drums on the white keys (F3..F4 the eight lanes; round 9: G4..G5 the pitched lane), the black keys silent; CLASSIC keeps the GM map", keys);
     return bad;
 }
 /* item 5: the pitched lane: a drum step's pitch in the scale, from note[0] of a hits-only step (64 + degrees); the hit of that
@@ -1093,7 +1095,7 @@ static int test_r9_drum_faces(void)
     R9(drum_plane_fn && TFM_INS[TI_KITBOX].group == IG_DRUMS && TFM_INS[TI_GARAGE].group == IG_DRUMS);
     {   /* the faces: KITBOX's green LCD, GARAGE's board, THUMP LAB's panel at their places on SOUND */
         static const struct { uint8_t ins; int16_t x, y; uint16_t c; } F[3] = {
-            {TI_KITBOX, 120, 30, RGB(5, 10, 5)}, {TI_GARAGE, 140, 118, RGB(146, 107, 62)}, {TI_THUMP, 90, 200, RGB(38, 38, 42)}};
+            {TI_KITBOX, 120, 30, RGB(5, 10, 5)}, {TI_GARAGE, 140, 118, RGB(146, 107, 62)}, {TI_THUMP, 60, 188, RGB(38, 38, 42)}};
         for (i = 0; i < 3u; i++) {
             ui_power_on();
             tu_off = 0;
@@ -1105,5 +1107,77 @@ static int test_r9_drum_faces(void)
         tu_goto(TU_JAM);
     }
     bad += check("round 9 item 3: KITBOX and GARAGE (TILT's names, GARAGE's plates for presets, garage / chop codes), the three drum faces TILT's", ok);
+    return bad;
+}
+
+/* item 4: G4 .. G5 on a drum instrument play its pitched lane up the song's scale (degrees 0 .. 7: THUMP LAB's 808, KITBOX's
+ * and GARAGE's tom), live and recorded as the step's pitch; a plain lane key records no pitch; no accent from the keys */
+static void r9_key(uint32_t k, int down)
+{
+    if (down) { fm1_in.notes |= 1u << k; host_notes |= 1u << k; }
+    else { fm1_in.notes &= ~(1u << k); host_notes &= ~(1u << k); }
+    frame();
+    { int32_t o[2 * CTL]; mix_block(o, CTL); }        /* (the keys are read in the audio block: keyboard_block) */
+}
+static int test_r9_drum_keys(void)
+{
+    static const uint8_t INS[3] = {TI_THUMP, TI_KITBOX, TI_GARAGE};
+    int bad = 0, ok = 1;
+    uint32_t i, d;
+    for (i = 0; i < 3u; i++) {
+        track_t *t = &trk[0];
+        drum_lane_t *K;
+        uint32_t pl;
+        int8_t base;
+        ui_power_on();
+        tu_off = 0;
+        song.sel = 0;
+        tfm_load(t, INS[i], 0);
+        t->p[P_ROOT] = 0; t->p[P_SCALE] = 1;            /* (major) */
+        tu_goto(TU_JAM); frames(16);
+        pl = drum_plane_fn(t);
+        R9(pl < NLANE);
+        r9_key(key_at(0, 0), 1); r9_key(key_at(0, 0), 0);   /* F3: lane 1 (to set the kit up) */
+        K = drum_kit_of(t);
+        R9(K != 0);
+        if (!K) continue;
+        trk_note_on(t, DRUM_LANE_NOTE[pl], 100);        /* the lane at its own pitch */
+        base = K[pl].st;
+        trk_note_off(t, DRUM_LANE_NOTE[pl]);
+        for (d = 0; d < 8u; d++) {                      /* G4 + d: degree d */
+            uint32_t k = key_at(0, NLANE + d);
+            r9_key(k, 1);
+            R9(kb_note[k] == DRUM_LANE_NOTE[pl] && K[pl].st == base + drum_deg_st(t, (int32_t)d) && !((dw_acc >> k) & 1u));
+            r9_key(k, 0);
+        }
+        R9(drum_deg_st(t, 7) == 12 && drum_ppl[0] == 0);   /* (G5: the octave; nothing left set) */
+    }
+    {   /* recorded: REC on, playing, A4 (degree 1) -> a hit on the pitched lane with its pitch; F3 (THUMP's kick: the same lane) none */
+        track_t *t = &trk[0];
+        uint32_t s, found = 0, plain = 0;
+        ui_power_on();
+        tu_off = 0;
+        song.sel = 0;
+        tfm_load(t, TI_THUMP, 0);
+        t->p[P_ROOT] = 0; t->p[P_SCALE] = 1;
+        for (s = 0; s < NSTEP; s++) step_clear(&t->step[s]);
+        tu_goto(TU_JAM); frames(16);
+        song.rec = 1u;
+        seq_start();
+        frames(2);
+        r9_key(key_at(0, NLANE + 1u), 1); r9_key(key_at(0, NLANE + 1u), 0);
+        for (s = 0; s < NSTEP; s++)
+            found |= (t->step[s].hit & 1u) && t->step[s].note[0] == 65u;
+        R9(found);
+        for (s = 0; s < 40u; s++) { int32_t o[2 * CTL]; mix_block(o, CTL); }
+        for (s = 0; s < NSTEP; s++) if (t->step[s].hit & 1u) t->step[s].note[0] = 70;   /* (a stale value: the plain key clears it) */
+        r9_key(key_at(0, 0), 1); r9_key(key_at(0, 0), 0);
+        for (s = 0; s < NSTEP; s++)
+            plain += (t->step[s].hit & 1u) && t->step[s].note[0] == 0u;
+        R9(plain >= 1u);
+        song.rec = 0;
+        press(B_PLAY); events_block(32); frames(4);
+    }
+    bad += check("round 9 item 4: G4..G5 play the pitched lane up the scale (THUMP LAB's 808, KITBOX's and GARAGE's tom; G5 the octave), live and recorded as the step's pitch; no accent from the keys", ok);
     return bad;
 }

@@ -164,21 +164,37 @@ static uint32_t kb_pitch(const track_t *t, uint32_t k, int32_t oct)
 
 static volatile uint8_t jam_silent;               /* round 5: JAM's black keys launch scenes (tfm_live.c): they play nothing */
 /* TFM round 8: a drum track plays on the WHITE keys only, the same on every screen: the first eight (F3 .. F4) its eight
- * lanes, the next eight (G4 .. G5) the same lanes accented (velocity 127); the black keys never play drums (JAM: the
- * scenes; the DRUM grid: lane / accent / page as before). Set by the UI each frame (ui_input.c); CLASSIC and MIDI IN keep
- * the GM map. Out of line, as grid_key_note: the ISR's key loop calls it on a key change only */
+ * lanes; round 9: the next eight (G4 .. G5) its PITCHED LANE (tfm_instr.c tfm_drum_plane: THUMP LAB's 808 kick, KITBOX's
+ * and GARAGE's tom) up the song's scale, degrees 0 .. 7 from the lane's own pitch, live and recorded as the step's pitch
+ * (round 8 item 5). A drum track with no pitched lane (no TFM instrument) has the eight accented there, as round 8 (round 8
+ * had that on every kit: the cymbal on F4 sat next to an accented kick, a jump in level and tone in the middle). Accents
+ * stay on the DRUM grid (a black key held) and with velocity. The black keys never play drums (JAM: the scenes; the DRUM
+ * grid: lane / accent / page as before). Set by the UI each frame (ui_input.c); CLASSIC and MIDI IN keep the GM map. Out
+ * of line, as grid_key_note: the ISR's key loop calls it on a key change only */
 static volatile uint8_t tfm_dwhite;
 static uint32_t dw_acc;                           /* the keys pressed as accents (key_on: velocity 127) */
+static uint32_t dw_pit;                           /* the keys playing the pitched lane (key_on: its degree, dw_deg) */
+static uint8_t dw_deg[27];
+static int8_t dw_live = -1;                       /* key_on: the degree of the pitched key starting now (rec_note), -1 none */
 static void drum_pitch_set(track_t *t, const step_t *s);   /* (round 8: the pitched lane, below) */
-static __attribute__((noinline)) uint8_t dw_key_note(uint32_t k)
+static int32_t drum_deg_st(const track_t *t, int32_t d);
+static __attribute__((noinline)) uint8_t dw_key_note(const track_t *t, uint32_t k)
 {
-    uint32_t p;
+    uint32_t p, pl;
     dw_acc &= ~(1u << k);
+    dw_pit &= ~(1u << k);
     if (key_black(k) || (p = key_place(k)) >= 2u * NLANE)
         return KB_SILENT;
-    if (p >= NLANE)
+    if (p < NLANE)
+        return DRUM_LANE_NOTE[p];
+    pl = drum_plane_fn ? drum_plane_fn(t) : 0xFFu;
+    if (pl >= NLANE) {                              /* (no pitched lane: the lanes accented) */
         dw_acc |= 1u << k;
-    return DRUM_LANE_NOTE[p % NLANE];
+        return DRUM_LANE_NOTE[p % NLANE];
+    }
+    dw_pit |= 1u << k;
+    dw_deg[k] = (uint8_t)(p - NLANE);
+    return DRUM_LANE_NOTE[pl];
 }
 static uint32_t kb_map(const track_t *t, uint32_t k)
 {
@@ -186,7 +202,7 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
     if (jam_silent && ((0x252A52Au >> k) & 1u))
         return KB_SILENT;
     if (tfm_dwhite && drum_track(t))
-        return dw_key_note(k);
+        return dw_key_note(t, k);
     n = kb_engine(t, k);
     return n >= 0 ? (uint32_t)n : kb_pitch(t, k, song.octave);
 }
@@ -523,6 +539,8 @@ static void rec_note(track_t *t, uint32_t note, uint32_t vel)
         s->time = ST_NOTE;
         if (note == DRUM_LANE_NOTE[l]) {            /* a lane's note: its hit */
             s->hit |= (uint8_t)(1u << l);
+            if (!s->n && drum_plane_fn && drum_plane_fn(t) == l)   /* (round 9: the pitched lane: the key's degree, 0 none) */
+                s->note[0] = (uint8_t)(dw_live > 0 ? 64 + dw_live : 0);
             if (vel > 110)
                 s->acc |= (uint8_t)(1u << l);
         } else {                                    /* another GM drum (a low tom, a crash): a note */
@@ -768,14 +786,24 @@ static __attribute__((noinline)) void perf_key_remap(void)
 static void key_on(uint32_t k, track_t *t)
 {
     uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = (dw_acc >> k) & 1u ? 127u : kb_vel;
+    uint32_t pit = (dw_pit >> k) & 1u, part = trk_index(t) % NPART;
     kb_chn[k] = 0;
     in_key = (uint8_t)(k + 1u);                     /* (the arp keeps the key: arp_add) */
+    if (pit) {                                      /* TFM round 9: G4 .. G5 on a drum track: the pitched lane, its degree */
+        dw_live = (int8_t)dw_deg[k];
+        drum_ppl[part] = (uint8_t)(drum_plane_fn(t) + 1u);
+        drum_pst[part] = (int8_t)drum_deg_st(t, dw_deg[k]);
+    }
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
-        if (midi_local_held(t, x))
+        if (!pit && midi_local_held(t, x))          /* (a pitched key hits again: the same lane, another pitch) */
             continue;
         input_on(t, x, vel);
         midi_out_event(0x09u | (0x90u | mc) << 8 | x << 16 | vel << 24);
+    }
+    if (pit) {
+        dw_live = -1;
+        drum_ppl[part] = 0;
     }
     in_key = 0;
     kb_chn[k] = (uint8_t)n;
