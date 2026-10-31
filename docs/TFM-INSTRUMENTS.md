@@ -676,3 +676,13 @@ eight degrees from the lane's own pitch (G4 the lane as it is, G5 an octave up):
 tom. Live, and recorded with REC as the step's pitch (as DRUMS K2 sets it); a plain lane key records the hit with no pitch.
 Accents stay on the DRUM grid (a black key held) and come from velocity. A drum track with no TFM instrument (no pitched lane)
 keeps round 8's accented eight there. The faces say "G4-G5: THE 808 UP THE SCALE" (THUMP LAB) or "THE TOM" (KITBOX, GARAGE).
+
+**Level across the keys** (round 9): measured key by key (every melodic instrument, every named preset, each of F3 .. G5 alone
+for 2 s and its release, BS.1770's K-weighting), neighbours were up to 15.6 LU apart (PLUCK HARP; VOX's formants, SQUELCH's
+resonance, HAZE and TINE up to 6-9). Round 6's level key tracking (TFM_KT) was a corner at its note in whole half-dB steps;
+it is now a soft knee from half an octave below that note to half an octave above, then the same slope. On top, TFM_KEQ:
+each named preset's 27 keys pulled onto their straight line by a cut (quarter dB, measured, cuts only: the line sits at the
+quietest key's distance from it), the nearest key's outside F3 .. G5, none for a sound past the five. Now no two neighbours
+are more than 0.8 LU apart (the test holds them within 1). The trims were refitted to the same loudness targets; PIXEL's
+presets other than BOSS LEVEL (peak-bound) went 1 dB down to stay within 1.5 LU of it. CHORDETTE's and VOX's SPACE got a
+chorus (0 .. 70) to stay over the macro minimum after the change.

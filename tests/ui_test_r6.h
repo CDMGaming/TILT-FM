@@ -1181,3 +1181,113 @@ static int test_r9_drum_keys(void)
     bad += check("round 9 item 4: G4..G5 play the pitched lane up the scale (THUMP LAB's 808, KITBOX's and GARAGE's tom; G5 the octave), live and recorded as the step's pitch; no accent from the keys", ok);
     return bad;
 }
+
+/* item 5: the key tracking of level is a smooth slope (tfm_instr.c tfm_key_gain): every key F3 .. G5 of every melodic
+ * instrument, every named preset, each note alone (K-weighted, BS.1770's filters, the note's 0.6 s and 0.2 s of its
+ * release): adjacent keys within R9_KEY_LU */
+#define R9_KEY_LU 1.0
+#define R9_KN (R6_FS * 24u / 10u)
+static double r9_key_db(uint32_t ins, uint32_t pre, uint32_t note)
+{
+    static int32_t o[2 * CTL];
+    track_t *t = &trk[0];
+    uint32_t n, i, c;
+    double ms = 0;
+    r6bq_t sh[2], hp[2];
+    r6l_setup(ins, pre);
+    panic_req = (1u << NTRK) - 1u; mix_block(o, CTL);
+    for (n = 0; n < 256u && (t->xf_on || t->eng_req != t->engine); n++) mix_block(o, CTL);
+    for (c = 0; c < 2u; c++) r6_kw(&sh[c], &hp[c]);
+    trk_note_on(t, note, 100);
+    for (n = 0; n < R9_KN; n += CTL) {
+        if (n >= R6_FS * 2u && n < R6_FS * 2u + CTL) trk_note_off(t, note);
+        mix_block(o, CTL);
+        for (i = 0; i < CTL; i++)
+            for (c = 0; c < 2u; c++) {
+                double y = r6bq(&hp[c], r6bq(&sh[c], o[2 * i + c] / 32768.0));
+                ms += y * y;
+            }
+    }
+    trk_note_off(t, note);
+    return -0.691 + 10.0 * log10(ms / R9_KN + 1e-20);
+}
+static int test_r9_key_level(void)
+{
+    static double meas[TI_N][5][27], line[TI_N][5][27];
+    int bad = 0, ok = 1, gen = getenv("R9KEQ") != 0;
+    uint32_t i, pre, k;
+    double worst = 0;
+    if (gen) {                                          /* R9KEQ=1: the table from the keys measured without it */
+        tfm_keq_off = 1;
+        for (i = 0; i < TI_N; i++) {
+            if (TFM_INS[i].group == IG_DRUMS)
+                continue;
+            for (pre = 0; pre < 5u; pre++) {
+                double sx = 0, sy = 0, sxx = 0, sxy = 0, a, b, lo = 0;
+                for (k = 0; k < 27u; k++) {
+                    double y = r9_key_db(i, pre, 53u + k);
+                    sx += k; sy += y; sxx += (double)k * k; sxy += k * y;
+                    meas[i][pre][k] = y;
+                }
+                b = (27.0 * sxy - sx * sy) / (27.0 * sxx - sx * sx);
+                a = (sy - b * sx) / 27.0;
+                for (k = 0; k < 27u; k++) {
+                    double d = meas[i][pre][k] - (a + b * k);
+                    if (d < lo) lo = d;
+                }
+                for (k = 0; k < 27u; k++)
+                    line[i][pre][k] = a + b * k + lo;   /* (the line, lowered to the quietest key: cuts only) */
+            }
+        }
+        tfm_keq_off = 0;
+    }
+    for (i = 0; i < TI_N; i++) {
+        if (TFM_INS[i].group == IG_DRUMS)
+            continue;
+        if (gen) printf("KEQ    {");
+        for (pre = 0; pre < 5u; pre++) {
+            double prev = 0, w = 0, cv[27];
+            uint32_t wn = 0, note;
+            for (note = 53; note <= 79u; note++) {          /* F3 .. G5 */
+                double d = r9_key_db(i, pre, note);
+                cv[note - 53u] = d;
+                if (note > 53u && fabs(d - prev) > w) { w = fabs(d - prev); wn = note; }
+                prev = d;
+            }
+            if (gen) {                                  /* the table now + what the keys still miss of the line */
+                printf("{");
+                for (k = 0; k < 27u; k++) {
+                    int32_t c = TFM_KEQ[i][pre][k] + (int32_t)lround(4.0 * (line[i][pre][k] - cv[k]));
+                    printf("%d%s", c > 0 ? 0 : c < -100 ? -100 : c, k < 26u ? ", " : "");
+                }
+                printf("}%s", pre < 4u ? ", " : "");
+            }
+            if (w > worst) worst = w;
+            if (getenv("R9KEYS") && w > R9_KEY_LU) {         /* (R9KEYS=1: the curve) */
+                printf("ui:   CURVE %-10s %-14s", TFM_INS[i].name, TFM_INS[i].snd[pre].name);
+                for (note = 0; note < 27u; note++) printf(" %.1f", cv[note]);
+                printf("\n");
+            }
+            if (w > R9_KEY_LU) {
+                ok = 0;
+                if (!gen)
+                    printf("ui:   KEY LEVEL %-10s %-14s adjacent keys %.2f LU apart at %u\n", TFM_INS[i].name, TFM_INS[i].snd[pre].name, w, wn);
+            }
+        }
+        if (gen) printf("},  /* %s */\n", TFM_INS[i].name);
+    }
+    printf("ui:   the largest step between adjacent keys F3..G5, any melodic instrument and preset: %.2f LU\n", worst);
+    {   /* TFM_KT itself: no corner (its gain never steps more than 0.5 dB between neighbours, none below the knee) */
+        int kt = 1;
+        for (i = 0; i < TI_N; i++) {
+            uint32_t note;
+            for (note = 30; note < 110u; note++) {
+                double g0 = 20.0 * log10(tfm_cut_q15(tfm_kt_q8(i, note)) / 32767.0), g1 = 20.0 * log10(tfm_cut_q15(tfm_kt_q8(i, note + 1u)) / 32767.0);
+                kt &= fabs(g1 - g0) <= 0.5 && (note + 6u > TFM_KT[i][0] || g0 > -0.01);
+            }
+        }
+        R9(kt);
+    }
+    bad += check("round 9 item 5: no step in level between adjacent keys F3..G5 (every melodic instrument, every named preset, within R9_KEY_LU; TFM_KT a smooth knee)", ok);
+    return bad;
+}
