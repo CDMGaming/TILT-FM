@@ -459,6 +459,22 @@ static inline int32_t pf_drive(int32_t x, int32_t g)
     return ((3 * u - ((((u * u) >> 15) * u) >> 15)) >> 1) * 3;
 }
 /* x towards y by w (Q15, 32768 = y) */
+static inline int32_t pf_mix(int32_t x, int32_t y, int32_t w);
+/* the DIRT stage: its share glides (SL_SLOPE a sample) to DIRT's, the drive x1 .. x8 */
+static __attribute__((noinline)) void perf_dirt(int32_t *bl, int32_t *br, uint32_t n)
+{
+    uint32_t i;
+    int32_t g = 16 + pf.dd * 112 / 127, t = pf.dd * 258, w = pf.dw;
+    for (i = 0; i < n; i++) {
+        w += clamp(t - w, -SL_SLOPE, SL_SLOPE);
+        if (w) {
+            bl[i] = pf_mix(bl[i], pf_drive(bl[i], g), w);
+            br[i] = pf_mix(br[i], pf_drive(br[i], g), w);
+        }
+    }
+    pf.dw = w;
+}
+/* x towards y by w (Q15, 32768 = y) */
 static inline int32_t pf_mix(int32_t x, int32_t y, int32_t w)
 {
     return w == 32768 ? y : x + mulq16(y - x, (uint32_t)w << 1);
@@ -772,7 +788,7 @@ static __attribute__((noinline)) void perf_phaser(int32_t *bl, int32_t *br, uint
 static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint32_t n)
 {
     uint32_t i, a = pf.act0, sh, hold;
-    int32_t c = perf_k[1], lt, ht, ct, dg = 16 + pf.dd * 112 / 127, dt = pf.dd * 258;
+    int32_t c = perf_k[1], lt, ht, ct;
     if (c)
         pf.cc = c;
     ct = c ? 32768 : 0;
@@ -821,14 +837,11 @@ static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint3
                 r = pf_mix(r, pf.chr, pf.cw);
             }
         }
-        pf.dw += clamp(dt - pf.dw, -SL_SLOPE, SL_SLOPE);  /* TFM round 9: the DJ's DIRT */
-        if (pf.dw) {
-            l = pf_mix(l, pf_drive(l, dg), pf.dw);
-            r = pf_mix(r, pf_drive(r, dg), pf.dw);
-        }
         bl[i] = l;
         br[i] = r;
     }
+    if (pf.dd || pf.dw)
+        perf_dirt(bl, br, n);                           /* TFM round 9: the DJ's DIRT (after CRUSH, before FLANGER) */
     if ((pf.act & PF_BIT(PF_FLG)) || pf.fw || pf.fn)
         perf_flanger(bl, br, n);
     if ((pf.act & PF_BIT(PF_PHS)) || pf.pw)
