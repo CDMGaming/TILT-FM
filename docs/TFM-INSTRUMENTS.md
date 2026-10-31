@@ -657,3 +657,15 @@ the pitch. Playing the lane's pitch from the keys live is left for later.
 **Knob speed** (round 9): a macro knob (JAM's MORPH, SOUND's macros, the DJ knobs) moves by its speed: a slow turn one place a
 detent (fine control), a steady turn (about one turn a second) four, a flick up to eight. A steady 0 -> 100 is about 34 detents,
 about one and a half turns. Switches keep two detents a step.
+
+## KITBOX and GARAGE (round 9)
+
+Round 8's two new drum instruments take TILT's names and looks (TILT's panels.ts "drums" and "garage"); their kits, voicing,
+macros and pitched lane are as round 8 gave them. **TRASH KIT is KITBOX** (kit 10): a green LCD with the kit and the sound,
+two knobs beside it, the eight lanes as columns (pad, name, the lane's level, its key) and the other two knobs under them
+(tfm-spec/screens/SoundKitbox). **HAND DRUMS is GARAGE** (kit 77, a hand & room kit): a wooden board, eight pads with names and
+keys, the name, its five kit plates (the presets, the playing one dark) and four brass knobs (SoundGarage); its presets are
+TILT's plates, STUDIO, BASEMENT, PORCH, CANTINA, TIN SHED (were BONGO PARK, RAIN DANCE, STREET, TEMPLE BLOCK, CAMPFIRE: the
+same five sounds in that order). KITBOX keeps TRASH KIT's preset names. **THUMP LAB's face** is SoundThumpV3: eight pads in two
+rows in TILT's lane colours, a panel with THUMP, the sound, the four knobs and the keys' hint. The lanes read TILT's words
+(HAT, OPEN, CYM). TILT's codes: "garage" plays GARAGE and "chop" KITBOX.

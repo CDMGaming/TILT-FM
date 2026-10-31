@@ -257,89 +257,148 @@ static void tf_ell(int32_t cx, int32_t cy, int32_t rx, int32_t ry, uint16_t c)  
         tu_rect(cx - w, cy + dy, 2 * w + 1, 1, c);
     }
 }
+/* round 9: the drum faces are TILT's (tfm-spec/screens SoundThumpV3, SoundKitbox, SoundGarage; TILT's panels.ts "drums",
+ * "garage"). The lanes in TILT's colours and short names; a hit lights its pad */
+static const uint16_t TF_LC[8] = {RGB(239, 90, 74), RGB(242, 154, 58), RGB(240, 207, 71), RGB(143, 209, 79),
+                                  RGB(71, 201, 168), RGB(79, 163, 234), RGB(163, 135, 239), RGB(238, 124, 184)};
+static const char *const TF_KEYN[8] = {"F3", "G3", "A3", "B3", "C4", "D4", "E4", "F4"};   /* (round 8: the eight lanes' keys) */
+static const char *tf_lane(const track_t *t, uint32_t l, int32_t w)   /* the lane's name, TILT's words, its short one under w px */
+{
+    const char *n = drum_lane_name(t, l);
+    n = str_eq(n, "HATCL") ? "HAT" : str_eq(n, "HATOP") ? "OPEN" : str_eq(n, "BELL") ? "CYM" : n;
+    return text_w(&AF_TS, n) <= w ? n : drum_lane_abbr(t, l);
+}
+static const char *tf_keys_hint(void) { return "G4-G5: THE SAME 8, ACCENTED"; }
+static void tf_presets_line(int32_t x, int32_t y, uint16_t c, uint16_t un)   /* "< 1 of 5 >" */
+{
+    track_t *t = &trk[song.sel];
+    char v[16];
+    fmt_int(v, (int32_t)tfm_snd_of(t) + 1);
+    str_cpy(v + str_len(v), " of ", 5);
+    fmt_int(v + str_len(v), (int32_t)TFM_INS[tfm_ins_of(t)].nsnd);
+    tu_arrow(x, y, 1, c);
+    x = tu_text(x + 5, y, &AF_TS, v, c, un);
+    tu_arrow(x + 3, y, 0, c);
+}
+/* a knob's dot, name and value left-aligned at x (the kit faces' own inks) */
+static void tf_label_at(uint32_t c, int32_t x, int32_t y, uint32_t m, uint16_t ink, uint16_t vink, uint16_t un, int centre)
+{
+    track_t *t = &trk[song.sel];
+    const tfm_macro_t *mc = &TFM_INS[tfm_ins_of(t)].mac[m & 7u];
+    const aafont_t *f = centre > 1 ? &AF_TS : &AF_TM;   /* (centre 2: the small face, four knobs close together) */
+    char val[12];
+    const char *unit;
+    if (centre)
+        x -= (text_w(f, mc->name) + 7) / 2;
+    tu_disc(x + 2, y, 2, TU_TC[c & 3u]);
+    tu_text(x + 7, y, f, mc->name, ink, un);
+    tfm_macro_text(t, m, val, &unit);
+    if (centre)
+        tu_text_c(x + (text_w(f, mc->name) + 7) / 2, y + 11, &AF_TS, val, vink, un);
+    else
+        tu_text(x + 7, y + 13, &AF_TS, val, vink, un);
+}
+/* THUMP LAB (SoundThumpV3): eight pads in two rows, the name, the sound and the four knobs on a panel under them */
 static void tf_thump(void)
 {
     track_t *t = &trk[song.sel];
-    static const uint16_t PC[8] = {RGB(232, 100, 79), RGB(122, 85, 48), RGB(136, 140, 52), RGB(150, 214, 70),
-                                   RGB(52, 128, 104), RGB(60, 120, 170), RGB(110, 96, 170), RGB(170, 90, 120)};
-    uint32_t l;
-    for (l = 0; l < 8u; l++) {
-        int32_t x = 8 + (int32_t)(l & 3u) * 57, y = 28 + (int32_t)(l >> 2) * 52, lit = fs[song.sel].lane[l] ? 1 : 0;
-        uint16_t pc = lit ? PC[l] : tu_mix(fc.bg, PC[l], 28);
-        tu_rrect(x, y, 54, 47, 6, tu_mix(fc.bg, PC[l], 45), fc.bg);                         /* the pad's frame */
-        tu_rrect(x + 3, y + 3, 48, 29, 4, pc, tu_mix(fc.bg, PC[l], 45));                  /* its rubber: lit on a hit */
-        tu_text_c(x + 27, y + 39, &AF_TS, drum_lane_name(t, l), lit ? PC[l] : tu_mix(fc.bg, PC[l], 80), tu_mix(fc.bg, PC[l], 45));
-    }
-    tu_rrect(8, 132, 224, 80, 7, fc.surf, fc.bg);
-    tu_text(14, 146, &AF_PS, "THUMP", fc.acc, fc.surf);
-    tu_text(14, 159, &AF_PS, "LAB", fc.acc, fc.surf);
-    {
-        char pb[24];
-        tfm_snd_label(t, pb);
-        tu_text_fit(14, 176, &AF_TM, pb, fc.ink, fc.surf, 66);
-    }
-    {
-        uint32_t c;
-        for (c = 0; c < 4u; c++) {
-            uint32_t m = (uint32_t)tu.page * 4u + c;
-            int32_t cx = 101 + 37 * (int32_t)c;
-            tf_knob(cx, 156, 12, RGB(26, 18, 16), TU_TC[c], tfm_macro_get(t, m));
-            tf_label(c, cx, 177, m, 1);
-        }
-    }
-}
-/* round 8: the bottom panel the kits share: the name in two lines, the sound, the page's four knobs */
-static void tf_kit_panel(const char *l1, const char *l2, uint16_t panel, uint16_t disc, uint16_t ink)
-{
-    track_t *t = &trk[song.sel];
-    uint32_t c;
+    uint16_t cell = RGB(42, 42, 46), panel = RGB(38, 38, 42);
+    uint32_t l, c;
     char pb[24];
-    tu_rrect(8, 132, 224, 80, 7, panel, fc.bg);
-    tu_text(14, 146, &AF_PS, l1, ink, panel);
-    tu_text(14, 159, &AF_PS, l2, ink, panel);
+    for (l = 0; l < 8u; l++) {
+        int32_t x = 7 + (int32_t)(l & 3u) * 57, y = 28 + (int32_t)(l >> 2) * 50, lit = fs[song.sel].lane[l] ? 1 : 0;
+        tu_rrect(x, y, 52, 45, 5, cell, tf_under(y));
+        tu_rrect(x + 5, y + 5, 42, 21, 4, lit ? TF_LC[l] : tu_mix(cell, TF_LC[l], 22), cell);   /* the pad: lit on a hit */
+        tu_text_c(x + 26, y + 35, &AF_TM, tf_lane(t, l, 48), TF_LC[l], cell);
+    }
+    tu_rrect(7, 129, 226, 85, 5, panel, tf_under(129));
+    tu_text(13, 140, &AF_PS, "THUMP", TF_LC[0], panel);
     tfm_snd_label(t, pb);
-    tu_text_fit(14, 202, &AF_TM, pb, ink, panel, 210);   /* (the sound under the knobs: the four labels need the width) */
+    tu_text_fit(13, 158, &AF_TM, pb, fc.ink, panel, 64);
+    tf_presets_line(13, 172, TC_PRESETS, panel);
     for (c = 0; c < 4u; c++) {
         uint32_t m = (uint32_t)tu.page * 4u + c;
-        int32_t cx = 90 + 42 * (int32_t)c;
-        tf_knob(cx, 153, 12, disc, TU_TC[c], tfm_macro_get(t, m));
-        tf_label(c, cx, 174, m, 1);
+        int32_t cx = 101 + 37 * (int32_t)c;
+        tf_knob(cx, 148, 11, RGB(17, 17, 17), TF_LC[c * 2u], tfm_macro_get(t, m));
+        tf_label_at(c, cx, 168, m, RGB(232, 232, 234), fc.mute, panel, 2);
     }
+    tu_text(13, 202, &AF_TS, tf_keys_hint(), fc.mute, panel);
 }
-/* TRASH KIT: eight dented tin lids, bolted to a galvanised box; a hit lights its lid mustard */
-static void tf_trash(void)
-{
-    static const int8_t DX[8] = {0, 2, -1, 1, 1, -2, 2, 0}, DY[8] = {1, -1, 2, 0, -2, 1, 0, 2};
-    track_t *t = &trk[song.sel];
-    uint32_t l;
-    for (l = 0; l < 8u; l++) {
-        int32_t x = 10 + (int32_t)(l & 3u) * 56 + DX[l], y = 28 + (int32_t)(l >> 2) * 52 + DY[l], lit = fs[song.sel].lane[l] ? 1 : 0;
-        uint16_t lid = lit ? fc.acc : RGB(150, 152, 142), rim = RGB(70, 72, 66);
-        tu_rrect(x, y, 50, 46, 3, rim, tf_under(y));                                 /* the lid, a little crooked */
-        tu_rrect(x + 3, y + 3, 44, 27, 2, lid, rim);
-        tu_rect(x + 6 + (int32_t)(l * 7u % 30u), y + 8, 9, 2, tu_mix(lid, RGB(40, 40, 36), 30));   /* a dent */
-        tu_disc(x + 4, y + 42, 1, RGB(200, 200, 190));                                /* the bolts */
-        tu_disc(x + 45, y + 42, 1, RGB(200, 200, 190));
-        tu_text_c(x + 25, y + 38, &AF_TS, drum_lane_name(t, l), lit ? fc.acc : RGB(220, 216, 200), rim);
-    }
-    tf_kit_panel("TRASH", "KIT", RGB(176, 178, 168), RGB(40, 40, 36), fc.ink);   /* (a light galvanised plate: the dark ink reads) */
-}
-/* HAND DRUMS: eight skins on a wooden frame; a hit brightens its skin and rings it */
-static void tf_hand(void)
+/* KITBOX (SoundKitbox): a green LCD with the kit and the sound, two knobs beside it, the eight lanes as columns (pad, name,
+ * the lane's level, its key) and the other two knobs under them */
+static void tf_kitbox(void)
 {
     track_t *t = &trk[song.sel];
-    uint32_t l;
-    tu_rrect(6, 26, 228, 104, 8, RGB(92, 58, 30), tf_under(26));                     /* the frame */
+    uint16_t lcd = RGB(5, 10, 5), grn = RGB(125, 255, 138), dim = tu_mix(lcd, grn, 70), col = RGB(31, 31, 34);
+    uint32_t l, c;
+    char pb[24];
+    tu_rrect(7, 28, 136, 44, 4, lcd, tf_under(28));
+    tu_text(14, 36, &AF_TS, "KIT 10 \xB7 KITBOX", dim, lcd);
+    tfm_snd_label(t, pb);
+    tu_text_fit(14, 51, &AF_PS, pb, grn, lcd, 124);
+    tf_presets_line(14, 65, dim, lcd);
+    for (c = 0; c < 2u; c++) {                          /* K1, K2 beside the LCD */
+        uint32_t m = (uint32_t)tu.page * 4u + c;
+        int32_t cx = 167 + 46 * (int32_t)c;
+        tf_knob(cx, 40, 11, RGB(32, 32, 36), RGB(255, 207, 74), tfm_macro_get(t, m));
+        tf_label_at(c, cx, 60, m, RGB(255, 207, 74), tu_mix(tf_under(60), RGB(255, 207, 74), 75), tf_under(60), 1);
+    }
+    for (l = 0; l < 8u; l++) {                          /* the lanes */
+        int32_t x = 7 + (int32_t)l * 28, lit = fs[song.sel].lane[l] ? 1 : 0, lv = clamp(t->p[P_LN0 + l], 0, 127), h = lv * 33 / 127;
+        tu_rrect(x, 80, 26, 92, 4, col, tf_under(80));
+        tu_rrect(x + 2, 82, 22, 22, 4, lit ? TF_LC[l] : tu_mix(col, TF_LC[l], 60), col);
+        tu_text_c(x + 13, 112, &AF_TS, tf_lane(t, l, 25), TF_LC[l], col);
+        tu_rrect(x + 11, 121, 4, 35, 2, tu_mix(col, TC_BG, 60), col);                  /* the level: the lane's LEVEL */
+        if (h > 1)
+            tu_rrect(x + 11, 156 - h, 4, h, 2, TF_LC[l], col);
+        tu_text_c(x + 13, 164, &AF_TS, TF_KEYN[l], RGB(138, 138, 144), col);
+    }
+    for (c = 2u; c < 4u; c++) {                         /* K3, K4 under */
+        uint32_t m = (uint32_t)tu.page * 4u + c;
+        int32_t x0 = c == 2u ? 7 : 122;
+        tu_rrect(x0, 177, 111, 36, 4, col, tf_under(177));
+        tf_knob(x0 + 19, 195, 12, RGB(32, 32, 36), RGB(255, 207, 74), tfm_macro_get(t, m));
+        tf_label_at(c, x0 + 38, 189, m, RGB(255, 207, 74), RGB(138, 138, 144), col, 0);
+    }
+}
+/* GARAGE (SoundGarage): a wooden board, eight pads with their names and keys, the name, its kit plates (the five presets,
+ * the playing one dark) and four brass knobs */
+static void tf_garage(void)
+{
+    track_t *t = &trk[song.sel];
+    const tfm_instr_t *in = &TFM_INS[TI_GARAGE];
+    uint16_t board = RGB(146, 107, 62), ink = RGB(42, 26, 10), ink2 = RGB(58, 37, 16), pad = RGB(214, 181, 132), brass = RGB(207, 170, 92);
+    uint32_t l, c, cur = tfm_snd_of(t);
+    int32_t x;
+    tu_rrect(5, 26, 230, 189, 5, board, tf_under(26));
+    for (x = 9; x < 232; x += 5)                        /* the grain */
+        tu_rect(x, 28, 1, 185, tu_mix(board, ink, 8));
     for (l = 0; l < 8u; l++) {
-        int32_t cx = 34 + (int32_t)(l & 3u) * 57, cy = 52 + (int32_t)(l >> 2) * 50, lit = fs[song.sel].lane[l] ? 1 : 0;
-        uint16_t skin = lit ? RGB(250, 226, 180) : RGB(214, 186, 140);
+        int32_t px = 12 + (int32_t)(l & 3u) * 33, py = 33 + (int32_t)(l >> 2) * 38, lit = fs[song.sel].lane[l] ? 1 : 0;
         if (lit)
-            tu_disc(cx, cy, 21, fc.acc);
-        tu_disc(cx, cy, 19, RGB(60, 36, 16));                                         /* the shell's edge */
-        tu_disc(cx, cy, 16, skin);
-        tu_text_c(cx, cy + 1, &AF_TS, drum_lane_name(t, l), RGB(70, 44, 20), skin);
+            tu_rrect(px - 2, py - 2, 33, 37, 4, RGB(230, 194, 122), board);
+        tu_rrect(px, py, 29, 33, 3, RGB(90, 61, 30), lit ? RGB(230, 194, 122) : board);
+        tu_rrect(px + 1, py + 1, 27, 31, 3, lit ? RGB(242, 214, 168) : pad, RGB(90, 61, 30));
+        tu_text_c(px + 14, py + 11, &AF_TS, tf_lane(t, l, 26), ink, lit ? RGB(242, 214, 168) : pad);
+        tu_text_c(px + 14, py + 23, &AF_TS, TF_KEYN[l], RGB(90, 61, 30), lit ? RGB(242, 214, 168) : pad);
     }
-    tf_kit_panel("HAND", "DRUMS", RGB(226, 196, 146), RGB(60, 36, 16), fc.ink);   /* (a skin panel: the dark ink reads) */
+    tu_text(147, 35, &AF_TL, "GARAGE", ink, board);
+    tu_text(147, 50, &AF_TS, "hand & room kit", ink2, board);
+    for (c = 0; c < in->nsnd && c < 6u; c++) {          /* the plates: the presets */
+        int32_t bx = 143 + (int32_t)(c & 1u) * 46, by = 58 + (int32_t)(c >> 1) * 17, on = c == cur;
+        uint16_t pl = on ? RGB(74, 48, 24) : brass;
+        tu_rrect(bx, by, 45, 15, 3, RGB(107, 82, 34), board);
+        tu_rrect(bx + 1, by + 1, 43, 13, 2, pl, RGB(107, 82, 34));
+        tu_text_fit(bx + 3, by + 8, &AF_TS, in->snd[c].name, on ? RGB(255, 243, 214) : ink2, pl, 40);
+    }
+    tu_rect(12, 113, 216, 1, tu_mix(board, TC_BG, 19));
+    for (c = 0; c < 4u; c++) {
+        uint32_t m = (uint32_t)tu.page * 4u + c;
+        int32_t cx = 34 + 57 * (int32_t)c;
+        tf_knob(cx, 136, 15, RGB(200, 160, 74), ink, tfm_macro_get(t, m));
+        tf_label_at(c, cx, 160, m, ink, ink2, board, 1);
+    }
+    tu_text_c(120, 202, &AF_TS, tf_keys_hint(), ink2, board);
 }
 static void tf_squelch(void)
 {
@@ -636,8 +695,8 @@ static void tf_face(void)                               /* the whole body, y 22 
     case TI_PLUCK: tf_pluck(); break;
     case TI_VOX: tf_vox(); break;
     case TI_WHEEL: tf_wheel(); break;
-    case TI_TRASH: tf_trash(); break;                   /* (round 8) */
-    case TI_HAND: tf_hand(); break;
+    case TI_KITBOX: tf_kitbox(); break;                   /* (round 8) */
+    case TI_GARAGE: tf_garage(); break;
     default:
         /* (round 7: a plain face: DEEP is reached only from MENU > DEEP EDIT) */
         tu_text_fit(14, 52, &AF_PN, "NO INSTRUMENT", fc.acc, fc.bg, 212);

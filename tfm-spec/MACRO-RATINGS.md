@@ -1,6 +1,6 @@
 # MACRO RATINGS (round 8)
 
-Every macro of the fourteen instruments (round 8 added TRASH KIT and HAND DRUMS), for you to rate **by ear**. The next round works only on what you flag here.
+Every macro of the fourteen instruments (round 8 added TRASH KIT and HAND DRUMS; round 9 renamed them KITBOX and GARAGE), for you to rate **by ear**. The next round works only on what you flag here.
 
 How to fill it in: on SOUND, load the instrument's first preset, turn the macro from 0 to 100 while a part plays, and put
 **S** (too subtle), **G** (good) or **M** (too much) in the RATING column; a word in NOTES if it helps ("dead in the
@@ -170,7 +170,7 @@ nothing (they were widened anyway). SWITCH macros step through named values; MOR
 | 7 | TOP | knob | TOP -8..8 | 2.05 -> 2.03 |  |  |
 | 8 | SPACE | knob | REV 0..90 | 0.50 -> 0.55 |  |  |
 
-## TRASH KIT
+## KITBOX (round 8's TRASH KIT)
 
 | # | Macro | Kind | Moves | Change before -> now | RATING (S / G / M) | NOTES |
 |---|---|---|---|---|---|---|
@@ -183,7 +183,7 @@ nothing (they were widened anyway). SWITCH macros step through named values; MOR
 | 7 | HATS | knob | LN3 50..127, LN4 40..127 | - -> 0.49 |  |  |
 | 8 | SPACE | knob | REV 0..80, DLY 0..40 | - -> 3.77 |  |  |
 
-## HAND DRUMS
+## GARAGE (round 8's HAND DRUMS)
 
 | # | Macro | Kind | Moves | Change before -> now | RATING (S / G / M) | NOTES |
 |---|---|---|---|---|---|---|

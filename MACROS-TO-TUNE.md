@@ -182,7 +182,7 @@ Presets: ROBOT, CHOIR BOY, WHISPER, YAMMER, MONK.
 
 Presets: SMOKY, SUNDAY SERVICE, ROCK OUT, BALLPARK, FLUTES.
 
-## TRASH KIT
+## KITBOX
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
@@ -197,7 +197,7 @@ Presets: SMOKY, SUNDAY SERVICE, ROCK OUT, BALLPARK, FLUTES.
 
 Presets: DENTED, TIN ROOF, BUCKET, STATIC, PARKING LOT.
 
-## HAND DRUMS
+## GARAGE
 
 | # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
 |---|---|---|---|---|---|---|---|---|
@@ -210,4 +210,4 @@ Presets: DENTED, TIN ROOF, BUCKET, STATIC, PARKING LOT.
 | 7 | ROOM | REV 0..100; DLY 0..25 >70% | 0/0 | 25/0 | 50/0 | 75/4 | 100/25 |  |
 | 8 | SHAKE | LN3 50..127; LN4 40..127 | 50/40 | 69/62 | 88/84 | 108/105 | 127/127 |  |
 
-Presets: BONGO PARK, RAIN DANCE, STREET, TEMPLE BLOCK, CAMPFIRE.
+Presets: STUDIO, BASEMENT, PORCH, CANTINA, TIN SHED.

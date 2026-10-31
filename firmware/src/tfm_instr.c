@@ -53,7 +53,7 @@ typedef struct {
 #define NOV {{X, 0}}
 #define NT {X, 0, 0, 0}
 enum { TI_THUMP, TI_SQUELCH, TI_WOBBLER, TI_CHORDETTE, TI_RAZOR, TI_HAZE, TI_PIXEL, TI_TINE, TI_GLINT, TI_PLUCK,
-       TI_VOX, TI_WHEEL, TI_TRASH, TI_HAND, TI_N, TI_NONE = 0xFF };   /* (round 8: TRASH KIT, HAND DRUMS: the DRUM engine's own kits) */
+       TI_VOX, TI_WHEEL, TI_KITBOX, TI_GARAGE, TI_N, TI_NONE = 0xFF };   /* (round 8: two of the DRUM engine's own kits; round 9 TILT's names, KITBOX and GARAGE) */
 #define TFM_PRE(i, s) (TFM_PRE0 + 16u * (i) + (s))
 #define E_ANALOG 0u
 #define E_LOFI 3u
@@ -377,8 +377,8 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"ROCK DRIVE", 4, NOV},
         {"CHAPEL", 2, {{P_E0, 12}, {P_REV, 80}, {X, 0}}},
     }},
-    /* TRASH KIT (round 8): kit 10, a small lo-fi kit with a cymbal, through a crusher: a dented box */
-    {"TRASH KIT", "lo-fi kit \xB7 a dented box rattles on hits", IG_DRUMS, E_DRUM, 19, 0, 5, 1, {RGB(18, 17, 12), RGB(36, 33, 22), RGB(214, 190, 60), RGB(150, 140, 110), RGB(240, 232, 200)}, {{P_E0, 5}, {P_E6, 0}, {P_LN0, 72}, {P_LN1, 82}, {P_LN2, 76}, {P_LN3, 127}, {P_LN4, 120}, {P_LN5, 84}, {P_LN6, 84}, {P_LN7, 96}, {P_ITYPE, 5}, {P_IMIX, 40}, {P_IB, 70}, {P_IC, 80}, {P_E2, 40}, {X, 0}}, {
+    /* KITBOX (round 8 TRASH KIT; round 9 TILT's name and face): kit 10, a small lo-fi kit with a cymbal, through a crusher */
+    {"KITBOX", "lo-fi kit \xB7 its pads light on hits", IG_DRUMS, E_DRUM, 20, 0, 5, 1, {RGB(20, 20, 22), RGB(31, 31, 34), RGB(255, 207, 74), RGB(138, 138, 144), RGB(246, 236, 216)}, {{P_E0, 5}, {P_E6, 0}, {P_LN0, 72}, {P_LN1, 82}, {P_LN2, 76}, {P_LN3, 127}, {P_LN4, 120}, {P_LN5, 84}, {P_LN6, 84}, {P_LN7, 96}, {P_ITYPE, 5}, {P_IMIX, 40}, {P_IB, 70}, {P_IC, 80}, {P_E2, 40}, {X, 0}}, {
         {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (TFM_MORPH below) */
         {"CRUSH", 0, {0}, 0, {{P_IMIX, 20, 120, 0}, {P_IB, 110, 20, 0}, {P_LEVEL, 104, 108, 0}, NT}},
         {"RATTLE", 0, {0}, 0, {{P_E4, 10, 120, 0}, {P_LN1, 80, 120, 0}, {P_LN2, 70, 120, 0}, NT}},
@@ -394,8 +394,9 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"STATIC", 5, {{X, 0}}, 1, {0, 100, 85, 15, 60, 85, 70, 0}},
         {"PARKING LOT", 5, {{X, 0}}, 1, {0, 40, 60, 90, 40, 30, 50, 85}},
     }},
-    /* HAND DRUMS (round 8): kit 77, claves on RIM, the cymbal on BELL, the bent tom as a skin: wood and skin */
-    {"HAND DRUMS", "hand percussion \xB7 wood and skin answer the hands", IG_DRUMS, E_DRUM, 20, 0, 5, 1, {RGB(28, 18, 10), RGB(52, 34, 18), RGB(230, 160, 80), RGB(170, 140, 110), RGB(246, 230, 206)}, {{P_E0, 8}, {P_E6, 1}, {P_LN0, 72}, {P_LN1, 86}, {P_LN2, 100}, {P_LN3, 127}, {P_LN4, 120}, {P_LN5, 114}, {P_LN6, 110}, {P_LN7, 92}, {P_ITYPE, 0}, {P_REV, 20}, {P_E2, 50}, {X, 0}}, {
+    /* GARAGE (round 8 HAND DRUMS; round 9 TILT's name, face and plates): kit 77, claves on RIM, the cymbal on BELL, the bent
+     * tom as a skin: a hand & room kit */
+    {"GARAGE", "hand & room kit \xB7 wood and skin", IG_DRUMS, E_DRUM, 19, 0, 5, 1, {RGB(26, 18, 10), RGB(122, 86, 48), RGB(230, 194, 122), RGB(168, 140, 110), RGB(246, 230, 206)}, {{P_E0, 8}, {P_E6, 1}, {P_LN0, 72}, {P_LN1, 86}, {P_LN2, 100}, {P_LN3, 127}, {P_LN4, 120}, {P_LN5, 114}, {P_LN6, 110}, {P_LN7, 92}, {P_ITYPE, 0}, {P_REV, 20}, {P_E2, 50}, {X, 0}}, {
         {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (TFM_MORPH below) */
         {"SKIN", 0, {0}, 0, {{P_E2, 20, 110, 0}, NT, NT, NT}},
         {"SLAP", 0, {0}, 0, {{P_E4, 10, 120, 0}, {P_LN1, 80, 120, 0}, NT, NT}},
@@ -405,11 +406,11 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"ROOM", 0, {0}, 0, {{P_REV, 0, 100, 0}, {P_DLY, 0, 25, TCV_GATE}, NT, NT}},
         {"SHAKE", 0, {0}, 0, {{P_LN3, 50, 127, 0}, {P_LN4, 40, 127, 0}, NT, NT}},
     }, {
-        {"BONGO PARK", 8, {{X, 0}}, 1, {0, 100, 0, 64, 48, 30, 68, 44}},
-        {"RAIN DANCE", 8, {{X, 0}}, 1, {0, 30, 30, 80, 35, 50, 70, 80}},
-        {"STREET", 8, {{X, 0}}, 1, {0, 100, 0, 62, 78, 20, 66, 38}},
-        {"TEMPLE BLOCK", 8, {{X, 0}}, 1, {0, 45, 20, 60, 85, 100, 60, 10}},
-        {"CAMPFIRE", 8, {{X, 0}}, 1, {0, 20, 60, 70, 25, 60, 85, 60}},
+        {"STUDIO", 8, {{X, 0}}, 1, {0, 100, 0, 64, 48, 30, 68, 44}},
+        {"BASEMENT", 8, {{X, 0}}, 1, {0, 30, 30, 80, 35, 50, 70, 80}},
+        {"PORCH", 8, {{X, 0}}, 1, {0, 100, 0, 62, 78, 20, 66, 38}},
+        {"CANTINA", 8, {{X, 0}}, 1, {0, 45, 20, 60, 85, 100, 60, 10}},
+        {"TIN SHED", 8, {{X, 0}}, 1, {0, 20, 60, 70, 25, 60, 85, 60}},
     }},
 };
 #undef X
@@ -430,7 +431,7 @@ static const uint8_t TILT_TO_TFM[22] = {
     TI_VOX,                                             /* vox */
     TI_THUMP,                                           /* boom (fx: booms, hits) */
     TI_TINE,                                            /* piano (Parlor) */
-    TI_TRASH, TI_HAND,                                  /* garage, chop (drums: round 8, the two kits) */
+    TI_GARAGE, TI_KITBOX,                               /* garage, chop (drums: round 8; round 9 garage plays GARAGE) */
     TI_PLUCK,                                           /* guitar (Axe) */
 };
 static uint32_t tfm_kind(uint32_t i) { return i < TI_N ? TFM_INS[i].tilt : 0u; }
@@ -464,8 +465,8 @@ static const int8_t TFM_TRIM[TI_N][6] = {
     {23, -6, 0, 2, -33, 3},              /* PLUCK */
     {-29, -4, 0, 22, 3, -3},             /* VOX */
     {-27, 0, -1, 8, -4, 5},              /* WHEELHOUSE */
-    {11, 5, 3, 0, -1, -7},               /* TRASH KIT */
-    {14, 0, -1, -1, 10, 2},              /* HAND DRUMS */
+    {11, 5, 3, 0, -1, -7},               /* KITBOX */
+    {14, 0, -1, -1, 10, 2},              /* GARAGE */
 };
 static const uint8_t TFM_KT[TI_N][2] = {
     {0, 0}, {48, 5}, {48, 4}, {60, 3}, {72, 1}, {60, 2}, {72, 3}, {60, 0}, {72, 1}, {60, 4}, {60, 6}, {60, 3}, {0, 0}, {0, 0},
@@ -493,11 +494,11 @@ static int32_t tfm_key_gain(const track_t *t, uint32_t note)
     return st ? (int32_t)LEVEL_Q12[112 - clamp(st, 0, 100)] << 3 : 32767;
 }
 static int32_t (*lvl_trim_fn)(const track_t *t) = tfm_lvl_trim;
-/* round 8: the drum instruments' pitched lane: THUMP LAB its kick (an 808 boom), TRASH KIT and HAND DRUMS their tom */
+/* round 8: the drum instruments' pitched lane: THUMP LAB its kick (an 808 boom), KITBOX and GARAGE their tom */
 static uint32_t tfm_drum_plane(const track_t *t)
 {
     uint32_t i = tfm_ins_of(t);
-    return i == TI_THUMP ? 0u : i == TI_TRASH || i == TI_HAND ? 5u : 0xFFu;
+    return i == TI_THUMP ? 0u : i == TI_KITBOX || i == TI_GARAGE ? 5u : 0xFFu;
 }
 static uint32_t (*drum_plane_fn)(const track_t *t) = tfm_drum_plane;
 static int32_t (*key_gain_fn)(const track_t *t, uint32_t note) = tfm_key_gain;
@@ -604,10 +605,10 @@ static const tfm_mt_t TFM_MORPH[TI_N][8] = {
     /* WHEELHOUSE: clean -> driven, the rotor fast, clicking */
     {{P_E6, 120, TMM_ABS}, {P_E7, 2, TMM_SW}, {P_E5, 127, TMM_ABS}, {P_E3, 8, TMM_ABS}, {P_REV, 60, TMM_ABS},
      {P_LEVEL, 0, TMM_REL}, MT_END, MT_END},
-    /* TRASH KIT: a rattle -> a crushed, ringing junk pile */
+    /* KITBOX: a rattle -> a crushed, ringing junk pile */
     {{P_IMIX, 120, TMM_ABS}, {P_IB, 20, TMM_ABS}, {P_E7, 100, TMM_ABS}, {P_E3, 100, TMM_ABS}, {P_REV, 50, TMM_ABS},
      {P_LEVEL, -16, TMM_REL}, MT_END, MT_END},
-    /* HAND DRUMS: dry taps -> long, slapped skins in a hall */
+    /* GARAGE: dry taps -> long, slapped skins in a hall */
     {{P_E3, 110, TMM_ABS}, {P_E2, 100, TMM_ABS}, {P_E4, 110, TMM_ABS}, {P_REV, 100, TMM_ABS}, {P_DLY, 20, TMM_ABS},
      {P_LEVEL, -16, TMM_REL}, MT_END, MT_END},
 };
@@ -867,7 +868,7 @@ static uint32_t tfm_base_pre(const track_t *t)
 }
 /* the list's row: a four-letter tag for the instrument, the sound's name */
 static const char *const TFM_TAG[TI_N] = {"THMP", "SQLC", "WOBL", "CHRD", "RAZR", "HAZE", "PIXL", "TINE",
-                                         "GLNT", "PLCK", "VOX", "WHEL", "TRSH", "HAND"};   /* (4: the list's tag column) */
+                                         "GLNT", "PLCK", "VOX", "WHEL", "KBOX", "GRGE"};   /* (4: the list's tag column) */
 static const char *tfm_ins_tag(const track_t *t) { return TFM_TAG[tfm_ins_of(t) % TI_N]; }
 static void tfm_tag_name(uint32_t k, char *tag, char *nm)
 {

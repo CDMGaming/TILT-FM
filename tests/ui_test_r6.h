@@ -761,7 +761,7 @@ static int test_r8_macros(void)
 static int test_r8_kits(void)
 {
     int bad = 0, ok = 1, keys = 1;
-    static const uint8_t KITS[3] = {TI_THUMP, TI_TRASH, TI_HAND};
+    static const uint8_t KITS[3] = {TI_THUMP, TI_KITBOX, TI_GARAGE};
     uint32_t i, k, l;
     ui_power_on();
     tu_off = 0;
@@ -783,12 +783,12 @@ static int test_r8_kits(void)
     {   /* three different kits */
         track_t a, b, c;
         tfm_load(&trk[0], TI_THUMP, 0); a = trk[0];
-        tfm_load(&trk[0], TI_TRASH, 0); b = trk[0];
-        tfm_load(&trk[0], TI_HAND, 0); c = trk[0];
+        tfm_load(&trk[0], TI_KITBOX, 0); b = trk[0];
+        tfm_load(&trk[0], TI_GARAGE, 0); c = trk[0];
         R8(a.p[P_E0] != b.p[P_E0] && b.p[P_E0] != c.p[P_E0] && a.p[P_E0] != c.p[P_E0]);
     }
     /* the keys: TFM, a drum track: the white keys from F3: lanes 1..8, then the same accented; the black keys silent */
-    tfm_load(&trk[0], TI_TRASH, 0);
+    tfm_load(&trk[0], TI_KITBOX, 0);
     song.sel = 0;
     tu_goto(TU_SOUND); frames(16);
     for (k = 0; k < 27u; k++) {
@@ -803,7 +803,7 @@ static int test_r8_kits(void)
     tfm_dwhite = 0;                                     /* (CLASSIC: the GM map over every key, as before) */
     keys &= kb_map(&trk[0], 1) != KB_SILENT && kb_map(&trk[0], 7) == (uint32_t)clamp(29 + 12 * song.octave + 7, 0, 127);
     dw_acc = 0;
-    bad += check("round 8 item 4: THUMP LAB (DEEP), TRASH KIT (10), HAND DRUMS (77): three kits, each with a cymbal, kick, snare or rim, both hats; every preset on its kit", ok);
+    bad += check("round 8 item 4: THUMP LAB (DEEP), KITBOX (10), GARAGE (77): three kits, each with a cymbal, kick, snare or rim, both hats; every preset on its kit", ok);
     bad += check("round 8 item 4: drums on the white keys (F3..F4 the eight lanes, G4..G5 the same accented), the black keys silent; CLASSIC keeps the GM map", keys);
     return bad;
 }
@@ -822,7 +822,7 @@ static int test_r8_pitched_lane(void)
     tfm_load(t, TI_THUMP, 0);
     t->p[P_ROOT] = 0; t->p[P_SCALE] = 1;                /* (major) */
     R8(drum_plane_fn(t) == 0u);
-    tfm_load(&trk[1], TI_HAND, 0); R8(drum_plane_fn(&trk[1]) == 5u); tfm_load(&trk[1], TI_SQUELCH, 0); R8(drum_plane_fn(&trk[1]) == 0xFFu);
+    tfm_load(&trk[1], TI_GARAGE, 0); R8(drum_plane_fn(&trk[1]) == 5u); tfm_load(&trk[1], TI_SQUELCH, 0); R8(drum_plane_fn(&trk[1]) == 0xFFu);
     R8(drum_deg_st(t, 2) == 4 && drum_deg_st(t, -1) == -1 && drum_deg_st(t, 7) == 12 && drum_deg_st(t, 0) == 0);
     st = &t->step[0];
     step_clear(st);
@@ -864,7 +864,7 @@ static int test_r8_pitched_lane(void)
         R8(proj_unpack(&r, ps.raw, PROJ_STORE_SIZE) == 1 && r.t[0].step[0].note[0] == 61u && r.t[0].step[0].hit == 1u && r.t[0].step[0].n == 0u);
     }
     tu_goto(TU_JAM);
-    bad += check("round 8 item 5: the pitched lane (THUMP LAB's kick, TRASH KIT's and HAND DRUMS' tom) plays a step's pitch in the scale (note[0] of a hits-only step), DRUMS K2 sets it, a save keeps it", ok);
+    bad += check("round 8 item 5: the pitched lane (THUMP LAB's kick, KITBOX's and GARAGE's tom) plays a step's pitch in the scale (note[0] of a hits-only step), DRUMS K2 sets it, a save keeps it", ok);
     return bad;
 }
 
@@ -1076,5 +1076,34 @@ static int test_r9_dj(void)
         R9(f0 > -12.0 && f1 > -12.0 && e > -12.0 && sp > -12.0 && d > -12.0);
     }
     bad += check("round 9 item 2: the DJ on the master (FILTER ECHO SPACE DIRT the song's, not a track's), stays when let go, saved with the song, DJ in JAM's header, OCT- resets (one undo), recorded as motion with REC on while playing, each plainly heard", ok);
+    return bad;
+}
+
+/* item 3: TILT's drums: KITBOX and GARAGE (round 8's TRASH KIT and HAND DRUMS: the same kits, voicing, macros, pitched lane),
+ * GARAGE's presets TILT's plates, TILT's codes garage -> GARAGE and chop -> KITBOX, and each drum face drawn as TILT's */
+static int test_r9_drum_faces(void)
+{
+    static const char *const PL[5] = {"STUDIO", "BASEMENT", "PORCH", "CANTINA", "TIN SHED"};
+    int bad = 0, ok = 1;
+    uint32_t i;
+    R9(str_eq(TFM_INS[TI_KITBOX].name, "KITBOX") && str_eq(TFM_INS[TI_GARAGE].name, "GARAGE"));
+    for (i = 0; i < 5u; i++)
+        R9(str_eq(TFM_INS[TI_GARAGE].snd[i].name, PL[i]));
+    R9(TILT_TO_TFM[19] == TI_GARAGE && TILT_TO_TFM[20] == TI_KITBOX);
+    R9(drum_plane_fn && TFM_INS[TI_KITBOX].group == IG_DRUMS && TFM_INS[TI_GARAGE].group == IG_DRUMS);
+    {   /* the faces: KITBOX's green LCD, GARAGE's board, THUMP LAB's panel at their places on SOUND */
+        static const struct { uint8_t ins; int16_t x, y; uint16_t c; } F[3] = {
+            {TI_KITBOX, 120, 30, RGB(5, 10, 5)}, {TI_GARAGE, 140, 118, RGB(146, 107, 62)}, {TI_THUMP, 90, 200, RGB(38, 38, 42)}};
+        for (i = 0; i < 3u; i++) {
+            ui_power_on();
+            tu_off = 0;
+            song.sel = 0;
+            tfm_load(&trk[0], F[i].ins, 0);
+            tu_goto(TU_SOUND); ui.force = 1; frames(16);
+            R9(tu.scr == TU_SOUND && host_screen[F[i].y * 240 + F[i].x] == swap16(tu_c(F[i].c)));
+        }
+        tu_goto(TU_JAM);
+    }
+    bad += check("round 9 item 3: KITBOX and GARAGE (TILT's names, GARAGE's plates for presets, garage / chop codes), the three drum faces TILT's", ok);
     return bad;
 }
