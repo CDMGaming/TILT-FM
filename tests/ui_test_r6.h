@@ -948,3 +948,26 @@ static int test_r8_pitched_lane(void)
     bad += check("round 8 item 5: the pitched lane (THUMP LAB's kick, TRASH KIT's and HAND DRUMS' tom) plays a step's pitch in the scale (note[0] of a hits-only step), DRUMS K2 sets it, a save keeps it", ok);
     return bad;
 }
+
+/* item 6: JAM's header has no timer (JAM's display shows it); every other screen's header keeps it */
+static int test_r8_jam_timer(void)
+{
+    int bad = 0, ok = 1;
+    char t[8];
+    ui_power_on();
+    tu_off = 0;
+    tilt_timer_min = 10; tm.on = 1; tm.left = 600; tm.end = fm1_ms + 600000u;
+    tu_timer_text(t);
+    R8(t[0] != 0);
+    tu_goto(TU_JAM); frames(16);
+    R8(tu_hd.nt == 1u);
+    tu_goto(TU_MIX); frames(16);
+    R8(tu_hd.nt == 0u);
+    tu_goto(TU_DRUMS); frames(16);
+    R8(tu_hd.nt == 0u);
+    tu_goto(TU_JAM); frames(16);
+    R8(tu_hd.nt == 1u);
+    tm.on = 0; tilt_timer_min = 0;
+    bad += check("round 8 item 6: no timer in JAM's header (its display shows it); MIX and DRUMS keep theirs", ok);
+    return bad;
+}

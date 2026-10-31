@@ -327,7 +327,9 @@ static void tu_timer_text(char *b)
         tm_text(b);
 }
 /* the header: left (what, where), centre (the TIMER), right (the tempo or the page) */
-static struct { const char *l, *l2, *r; int badge; int play; uint32_t sig; } tu_hd;
+static struct { const char *l, *l2, *r; int badge; int play; uint32_t sig; uint8_t nt; } tu_hd;
+/* round 8: JAM's header has no timer (its display shows it); set before tu_head, which takes it and clears it */
+static uint8_t tu_head_nt;
 static void tu_head_draw(void)
 {
     char t[8];
@@ -339,6 +341,8 @@ static void tu_head_draw(void)
     if (tu_hd.l2)
         tu_text(x, 10, &AF_TS, tu_hd.l2, TC_QUIET, TC_BG);
     tu_timer_text(t);
+    if (tu_hd.nt)
+        t[0] = 0;
     if (t[0])
         tu_text_c(120, 10, &AF_PS, t, TC_AMBER, TC_BG);
     if (tu_hd.play >= 0) {
@@ -360,7 +364,11 @@ static void tu_head(int badge, const char *l, const char *l2, const char *r, int
     tu_hd.l2 = l2;
     tu_hd.r = r;
     tu_hd.play = play ? (int)song.playing : -1;
+    tu_hd.nt = tu_head_nt;
+    tu_head_nt = 0;
     tu_timer_text(t);
+    if (tu_hd.nt)
+        t[0] = 0;
     tu_hd.sig = str_hash(1u, l ? l : "") * 31u + str_hash(2u, l2 ? l2 : "") + str_hash(3u, r ? r : "") * 7u +
                 str_hash(4u, t) * 13u + (uint32_t)(badge + 1) * 977u + (uint32_t)(song.g[G_BPM]) * 4099u +
                 (uint32_t)(tu_hd.play + 1) * 65537u + (tm.on ? tm_level() * 131071u : 0u) + tu_rec_sig() * 40503u;
@@ -868,6 +876,7 @@ static void tu_jam_draw(void)
     {   /* the header: the selected track, "T3 \xB7 SQUELCH" */
         static char hl[24];
         str_cpy(hl, prf_on() ? "HOLD ARP \xB7 DJ" : jw.held ? "HOLD F#5 \xB7 CHAIN" : tn, sizeof hl);
+        tu_head_nt = 1;                                 /* (round 8: no timer in JAM's header: the display shows it) */
         tu_head(-1, hl, 0, 0, 1);
     }
     for (i = 0; i < NTRK; i++)                          /* (the meters: tu_meter_poll, in dB) */
