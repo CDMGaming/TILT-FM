@@ -976,3 +976,84 @@ static int test_r8_jam_timer(void)
     bad += check("round 8 item 6: no timer in JAM's header (its display shows it); MIX and DRUMS keep theirs", ok);
     return bad;
 }
+
+/* ===================================================================================== round 9 (tfm-spec/ROUND-9.md) === */
+#define R9(c) do { if (!(c)) { ok = 0; printf("  R9 line %d\n", __LINE__); } } while (0)
+/* item 1: a macro's 0 -> 100 at a steady pace (a detent every 50 ms, ~1 turn a second) in ~34 detents (~1.5 turns of a 20-24
+ * detent knob); a slow turn (a detent every 200 ms) one place a detent; a fast one no more than 8; switches as before */
+static int r9_sweep(track_t *t, uint32_t m, uint32_t k, uint32_t ms_per, int32_t dir, uint32_t most)
+{
+    uint32_t n = 0;
+    while (n < most) {
+        fm1_ms += ms_per;
+        tfm_macro_turn_k(t, m, k, dir);
+        n++;
+        if (dir > 0 ? tfm_macro_get(t, m) >= 127 : tfm_macro_get(t, m) <= 0)
+            break;
+    }
+    return (int)n;
+}
+static int test_r9_knob_speed(void)
+{
+    int bad = 0, ok = 1, n, i, ins;
+    track_t *t = &trk[0];
+    ui_power_on();
+    tu_off = 0;
+    for (ins = 0; ins < TI_N; ins++) {                  /* MORPH (macro 1) of every instrument */
+        tfm_load(t, (uint32_t)ins, 0);
+        fm1_ms += 1000u;
+        tfm_macro_set(t, 0, 0);
+        n = r9_sweep(t, 0, 0, 50u, 1, 400u);
+        R9(tfm_macro_get(t, 0) >= 127 && n >= 28 && n <= 40);
+        if (ins == 0)
+            printf("ui:   a steady turn (50 ms a detent): 0 -> 100 in %d detents\n", n);
+        fm1_ms += 1000u;
+        n = r9_sweep(t, 0, 0, 50u, -1, 400u);
+        R9(tfm_macro_get(t, 0) <= 0 && n >= 28 && n <= 40);
+    }
+    tfm_load(t, TI_SQUELCH, 0);
+    fm1_ms += 1000u;
+    tfm_macro_set(t, 0, 40);
+    for (i = 0; i < 10; i++) {                          /* slow: one place a detent */
+        int32_t b = tfm_macro_get(t, 0);
+        fm1_ms += 200u;
+        tfm_macro_turn_k(t, 0, 0, 1);
+        R9(tfm_macro_get(t, 0) == b + 1);
+    }
+    fm1_ms += 1000u;                                    /* the first two detents of a quick turn: still one each */
+    {
+        int32_t b = tfm_macro_get(t, 0);
+        fm1_ms += 20u; tfm_macro_turn_k(t, 0, 0, 1);
+        fm1_ms += 20u; tfm_macro_turn_k(t, 0, 0, 1);
+        R9(tfm_macro_get(t, 0) == b + 2);
+        fm1_ms += 5u; tfm_macro_turn_k(t, 0, 0, 1);    /* faster: the longer of the two (20 ms) counts, 6 */
+        R9(tfm_macro_get(t, 0) == b + 2 + 6);
+        fm1_ms += 5u; tfm_macro_turn_k(t, 0, 0, 1);    /* a flick: 8 */
+        R9(tfm_macro_get(t, 0) == b + 2 + 6 + 8);
+        fm1_ms += 5u; tfm_macro_turn_k(t, 0, 0, -1);   /* reversed: 1 */
+        R9(tfm_macro_get(t, 0) == b + 2 + 6 + 8 - 1);
+    }
+    fm1_ms += 1000u;                                    /* the other knobs too (SOUND's macros 2..4: K2..K4) */
+    tfm_macro_set(t, 1, 0);
+    n = r9_sweep(t, 1, 1, 50u, 1, 400u);
+    R9(n >= 28 && n <= 40);
+    {   /* a switch keeps its two detents a step, at any speed */
+        uint32_t m, k;
+        for (m = 0; m < 8u; m++)
+            if (TFM_INS[TI_SQUELCH].mac[m].nsw && TFM_INS[TI_SQUELCH].mac[m].nsw != TFM_MSW)
+                break;
+        R9(m < 8u);
+        if (m < 8u) {
+            const tfm_macro_t *mc = &TFM_INS[TI_SQUELCH].mac[m];
+            uint32_t i0;
+            tfm_macro_set(t, m, tfm_sw_pos(mc, 0));
+            i0 = tfm_sw_idx(mc, motion_base_value(t, mc->t[0].id));
+            k = m & 3u;
+            fm1_ms += 1000u;
+            for (i = 0; i < 2; i++) { fm1_ms += 5u; tfm_macro_turn_k(t, m, k, 1); }
+            R9(tfm_sw_idx(mc, motion_base_value(t, mc->t[0].id)) == i0 + 1u);
+        }
+    }
+    bad += check("round 9 item 1: macros sweep 0 -> 100 in ~1.5 turns at a steady pace (28..40 detents, every instrument's MORPH and SOUND's knobs), slow turns one place a detent, a flick 8, switches two detents a step", ok);
+    return bad;
+}

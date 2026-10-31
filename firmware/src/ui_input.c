@@ -507,6 +507,32 @@ static int32_t accel(uint32_t role, int32_t s, int32_t range)
     return s * (int32_t)m;
 }
 
+/* TFM round 9: the sweep of a 0..127 macro (JAM's MORPH, SOUND's macros, the DJ knobs). Felucca's one place a detent took
+ * 127 detents (~6 turns) for 0 -> 100. Here the speed is the ms per detent (the longer of this read's and the previous
+ * one's, as accel): 150 ms or slower (a slow turn, the first two detents of a turn, a reversal) one place a detent, the
+ * fine control; 80..150 ms two; 30..80 ms (a steady turn, ~1 turn a second) four; 15..30 six; faster eight. The FM-1's
+ * knob: a detent is one quadrature cycle (fm1_input.h), and the panel code does not fix a count per turn; an EC11-type
+ * encoder has 20-24, so a steady 0 -> 100 is ~34 detents, 1.4-1.7 turns. Always on (MENU > KNOB ACCEL is Felucca's pages') */
+#define KS_GAP 300u                                     /* (slower than this between reads: a new turn) */
+static struct { uint32_t ms; uint8_t up, pi; } ks[4];
+static int32_t knob_sweep(uint32_t k, int32_t s)
+{
+    uint32_t now = fm1_ms, a, i, w, m = 1u, up = s > 0;
+    k &= 3u;
+    if (!s)
+        return 0;
+    a = (uint32_t)(s < 0 ? -s : s);
+    i = (now - ks[k].ms) / a;
+    if (!ks[k].ms || ks[k].up != up || i >= KS_GAP)
+        i = 255u;                                       /* a new turn, or reversed */
+    w = i > ks[k].pi ? i : ks[k].pi;
+    m = w >= 150u ? 1u : w >= 80u ? 2u : w >= 30u ? 4u : w >= 15u ? 6u : 8u;
+    ks[k].ms = now ? now : 1u;
+    ks[k].up = (uint8_t)up;
+    ks[k].pi = (uint8_t)(i > 255u ? 255u : i);
+    return s * (int32_t)m;
+}
+
 /* MIXER page: KNOB 1 LEVEL, 2 PAN, 3 REV send, 4 MUTE of the selected track (right = ON, left = OFF: the
  * track itself is ALGORITHM's, on every page). Pattern length stays on SEQ. */
 static void tracks_edit(uint32_t slot, int32_t steps)

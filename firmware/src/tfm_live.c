@@ -508,7 +508,7 @@ static void prf_knob(uint32_t k, int32_t s)            /* K1 FILTER, K2 ECHO, K3
     int32_t v;
     dj_take(c);
     dj.back = 0;
-    v = accel(EN_K1 + k, s, 127);
+    v = knob_sweep(k, s);
     if (k == 0u)
         dj.f[c] = (int8_t)clamp((int32_t)dj.f[c] + (v > 0 ? (v + 1) / 2 : v / 2 ? v / 2 : -1), -63, 63);
     else if (k == 1u)

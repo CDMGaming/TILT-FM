@@ -909,7 +909,7 @@ static void tfm_macro_turn_k(track_t *t, uint32_t m, uint32_t k, int32_t steps)
         idx = clamp((int32_t)tfm_sw_idx(mc, motion_base_value(t, mc->t[0].id)) + d, 0, (int32_t)mc->nsw - 1);
         pos = tfm_sw_pos(mc, (uint32_t)idx);
     } else {
-        pos += accel(EN_K1 + (k & 3u), steps, 127);
+        pos += knob_sweep(k, steps);                    /* (round 9: ~1.5 turns 0 -> 100 at a steady pace, slow = 1) */
     }
     tfm_macro_set(t, m, pos);
 }

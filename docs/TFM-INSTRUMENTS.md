@@ -653,3 +653,7 @@ TRASH KIT and HAND DRUMS their tom. On DRUMS, with the cursor on that lane at a 
 note[0] of a step with hits and no notes (64 + degrees, 0 none), which nothing read before: no format change, a save keeps
 it. Clearing a step now also clears note[0], so a pitch never comes from a step's old note; adding another lane's hit keeps
 the pitch. Playing the lane's pitch from the keys live is left for later.
+
+**Knob speed** (round 9): a macro knob (JAM's MORPH, SOUND's macros, the DJ knobs) moves by its speed: a slow turn one place a
+detent (fine control), a steady turn (about one turn a second) four, a flick up to eight. A steady 0 -> 100 is about 34 detents,
+about one and a half turns. Switches keep two detents a step.
