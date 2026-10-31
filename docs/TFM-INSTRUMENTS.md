@@ -600,3 +600,24 @@ To make room, one macro per instrument went (the other seven keep their jobs, on
 WOBBLER SPREAD, CHORDETTE AGE, RAZOR ECHO, HAZE HOLD, PIXEL TONE, TINE REL, GLINT SHIMMER, PLUCK ECHO, VOX SHIFT, WHEELHOUSE
 CLICK (most of them live on inside MORPH). Every named preset keeps its sound: the value its old place gave is now one of the
 preset's own changes. MACROS-TO-TUNE.md lists MORPH's targets per instrument.
+
+**The preset audit made repeatable (round 8).** The round 6 audit and loudness renders carried state from whatever ran before
+them (the delay and chorus heads, HALL, the engines' memory, the master limiter, the voices, UNISON's random phases), so their
+numbers moved with the order of the tests (one pair read 0.56 or 1.06). Every render now starts from the same state
+(`tests/ui_test_r6.h` `r6_fresh`; UNISON's seed moved to file scope in `voice.c` so a test can reset it, the firmware
+unchanged). Measured that way, pairs under 0.60 had been hidden; these presets were moved apart (a search over their
+continuous, non-pitch macros for the smallest change that clears 0.70): RAZOR HERO, PIXEL BOSS LEVEL, TINE LOUNGE and DREAMY,
+VOX WHISPER, WHEELHOUSE SUNDAY SERVICE, FLUTES and BALLPARK. The level trims were refitted.
+
+## Bolder macros (round 8)
+
+Each macro measured from 0 to 100 on the instrument's first preset, in the audit's distance (tfm-spec/MACRO-RATINGS.md has
+the whole table, before and after, with a column for rating them by ear). Under 0.40 (the lowest fifth) they got wider ranges
+or more targets: SQUELCH BITE (+ the track drive), WAVE (a switch over SAW SQR PWM SYNC SUB: mixing two detuned saws hardly
+moved it), SLIDE; WOBBLER SLIDE; CHORDETTE SPACE; RAZOR GLIDE, VIB, WIDTH; HAZE DUST (its INSERT is CRUSH: bits and rate
+now), SHINE (+ spread); PIXEL CRUSH (+ its tone), DECAY (+ sustain); VOX VOWEL (the second vowel moves against it), SPACE;
+WHEELHOUSE DRIVE (+ its INSERT); GLINT SPACE. **Three macros never did anything:** TINE's and GLINT's DECAY and GLINT's
+ATTACK moved the track's ADSR, which FM6 ignores (it plays its own operator envelopes). They are TINE GRIT (the track drive),
+GLINT TREM (the LFO on the level) and GLINT CHORUS now, at 0 in every preset (so the presets sound as before); GLINT BITE
+moved FM feedback, which did nothing on these patches either: it drives the track now. GLIDE, SLIDE and VIB move pitch
+between and around notes: the measuring phrase hears neither, so the test leaves them out by name.

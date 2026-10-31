@@ -11377,6 +11377,7 @@ int main(void)
     bad += test_r7_build();
     bad += test_r8_dj();
     bad += test_r8_morph();
+    bad += test_r8_macros();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

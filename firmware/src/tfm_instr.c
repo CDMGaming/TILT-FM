@@ -64,6 +64,7 @@ enum { TI_THUMP, TI_SQUELCH, TI_WOBBLER, TI_CHORDETTE, TI_RAZOR, TI_HAZE, TI_PIX
 #define E_DRUM 10u
 #define E_FM6 12u
 
+static const char *const SWN_1_6[] = {"SAW", "SQR", "PWM", "SYNC", "SUB"};   /* (round 8: SQUELCH WAVE) */
 static const char *const SWN_2_1[] = {"1/1", "1/2", "1/4", "1/8", "8T", "1/16", "16T", "1/32"};
 static const char *const SWN_2_6[] = {"0", "-1 OCT", "-2 OCT"};
 static const char *const SWN_3_0[] = {"AUTO", "AUTO 7", "MAJ", "MIN", "7", "MAJ7", "MIN7", "SUS4", "POWER"};   /* (round 3: AUTO follows the scale) */
@@ -106,15 +107,15 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"RESO", 0, {0}, 0, {{P_E5, 10, 118, 0}, {P_LEVEL, 108, 102, 0}, NT, NT}},
         {"ENV MOD", 0, {0}, 0, {{P_ED_FLT, 0, 60, 0}, {P_DEC, 30, 55, 0}, {P_LEVEL, 108, 102, 0}, NT}},
         {"DECAY", 0, {0}, 0, {{P_DEC, 20, 100, 0}, {P_REL, 10, 50, 0}, NT, NT}},
-        {"BITE", 0, {0}, 0, {{P_E6, 0, 120, 0}, {P_LEVEL, 108, 99, 0}, NT, NT}},
-        {"WAVE", 0, {0}, 0, {{P_E2, 0, 127, 0}, NT, NT, NT}},
-        {"SLIDE", 0, {0}, 0, {{P_GLIDE, 0, 80, TCV_EXP}, NT, NT, NT}},
+        {"BITE", 0, {0}, 0, {{P_E6, 0, 120, 0}, {P_LEVEL, 108, 99, 0}, {P_DIST, 0, 70, 0}, NT}},
+        {"WAVE", 5, {0, 1, 4, 5, 6}, SWN_1_6, {{P_E0, 0, 0, 0}, NT, NT, NT}},   /* (round 8: the waves, a switch) */
+        {"SLIDE", 0, {0}, 0, {{P_GLIDE, 0, 110, TCV_EXP}, NT, NT, NT}},
     }, {
-        {"RUBBER", 4, {{P_IMIX, 20}, {P_LEVEL, 106}, {X, 0}}, 1, {0, 45, 40, 40, 45, 35, 30, 40}},
-        {"ACID RAIN", 4, {{P_IMIX, 30}, {P_LEVEL, 107}, {X, 0}}, 1, {0, 70, 62, 62, 55, 40, 25, 50}},
-        {"LOW RIDER", 4, {{P_E0, 1}, {P_IMIX, 24}, {P_LEVEL, 106}, {X, 0}}, 1, {0, 30, 50, 30, 60, 55, 70, 30}},
-        {"ZAPPER", 4, {{P_IMIX, 39}, {P_LEVEL, 107}, {X, 0}}, 1, {0, 60, 80, 85, 20, 30, 40, 20}},
-        {"GNARLY", 4, {{P_IMIX, 80}, {P_LEVEL, 108}, {X, 0}}, 1, {0, 55, 88, 55, 40, 85, 25, 45}},
+        {"RUBBER", 4, {{P_IMIX, 20}, {P_LEVEL, 106}, {X, 0}}, 1, {0, 45, 40, 40, 45, 35, 0, 40}},
+        {"ACID RAIN", 4, {{P_IMIX, 30}, {P_LEVEL, 107}, {X, 0}}, 1, {0, 70, 62, 62, 55, 40, 0, 50}},
+        {"LOW RIDER", 4, {{P_E0, 1}, {P_IMIX, 24}, {P_LEVEL, 106}, {X, 0}}, 1, {0, 30, 50, 30, 60, 55, 0, 30}},
+        {"ZAPPER", 4, {{P_IMIX, 39}, {P_LEVEL, 107}, {X, 0}}, 1, {0, 60, 80, 85, 20, 30, 0, 20}},
+        {"GNARLY", 4, {{P_IMIX, 80}, {P_LEVEL, 108}, {X, 0}}, 1, {0, 55, 88, 55, 40, 85, 0, 45}},
         {"CLASSIC", 4, NOV},
         {"RUBBER", 4, {{P_E4, 40}, {P_E5, 45}, {P_ED_FLT, 20}, {P_DEC, 70}, {X, 0}}},
         {"SCREAMER", 4, {{P_E4, 70}, {P_E5, 110}, {P_ED_FLT, 50}, {P_E6, 90}, {P_LEVEL, 92}, {X, 0}}},
@@ -135,7 +136,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"CUT", 0, {0}, 0, {{P_E5, 15, 110, TCV_EXP}, NT, NT, NT}},
         {"DIRT", 0, {0}, 0, {{P_DIST, 0, 90, 0}, {P_LEVEL, 106, 98, 0}, NT, NT}},
         {"DROP", 3, {0, -12, -24}, SWN_2_6, {{P_TRANS, 0, 0, 0}, NT, NT, NT}},
-        {"SLIDE", 0, {0}, 0, {{P_GLIDE, 0, 80, 0}, NT, NT, NT}},
+        {"SLIDE", 0, {0}, 0, {{P_GLIDE, 0, 110, 0}, NT, NT, NT}},
     }, {
         {"HALF STEP", 0, {{P_E3, 12}, {P_SPRD, 30}, {X, 0}}, 1, {0, 60, 40, 30, 55, 20, 0, 10}},
         {"YOY", 0, {{P_E3, 16}, {P_SPRD, 39}, {X, 0}}, 1, {0, 75, 20, 70, 50, 30, 0, 20}},
@@ -159,7 +160,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"WARM", 0, {0}, 0, {{P_E4, 30, 110, 0}, {P_E5, 40, 10, 0}, {P_LEVEL, 110, 100, 0}, NT}},
         {"SWELL", 0, {0}, 0, {{P_ATK, 0, 90, TCV_EXP}, {P_REL, 10, 110, 0}, NT, NT}},
         {"SHIMMER", 0, {0}, 0, {{P_CHOR, 0, 60, 0}, {P_E1, 0, 20, 0}, NT, NT}},
-        {"SPACE", 0, {0}, 0, {{P_REV, 0, 90, 0}, {P_DLY, 0, 40, TCV_GATE}, NT, NT}},
+        {"SPACE", 0, {0}, 0, {{P_REV, 0, 127, 0}, {P_DLY, 0, 70, TCV_GATE}, NT, NT}},
         {"PUMP", 0, {0}, 0, {{P_LD_AMP, 0, 80, 0}, NT, NT, NT}},
     }, {
         {"HOUSE STAB", 1, {{P_IMIX, 7}, {P_IA, 18}, {X, 0}}, 1, {0, 0, 0, 60, 10, 20, 30, 40}},
@@ -183,10 +184,10 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"SCREAM", 0, {0}, 0, {{P_E5, 10, 110, 0}, {P_E6, 0, 70, 0}, {P_LEVEL, 108, 92, 0}, NT}},
         {"SWEEP", 0, {0}, 0, {{P_ED_FLT, -20, 60, 0}, {P_DEC, 20, 70, 0}, NT, NT}},
         {"CUT", 0, {0}, 0, {{P_E4, 30, 120, TCV_EXP}, {P_LEVEL, 122, 100, 0}, NT, NT}},
-        {"GLIDE", 0, {0}, 0, {{P_GLIDE, 0, 80, 0}, NT, NT, NT}},
-        {"WIDTH", 0, {0}, 0, {{P_DETUNE, 0, 80, 0}, {P_SPRD, 0, 127, 0}, NT, NT}},
+        {"GLIDE", 0, {0}, 0, {{P_GLIDE, 0, 110, 0}, NT, NT, NT}},
+        {"WIDTH", 0, {0}, 0, {{P_DETUNE, 0, 127, 0}, {P_SPRD, 0, 127, 0}, NT, NT}},
         {"ATTACK", 0, {0}, 0, {{P_ATK, 0, 80, 0}, NT, NT, NT}},
-        {"VIB", 0, {0}, 0, {{P_LD_PIT, 0, 2, 0}, NT, NT, NT}},
+        {"VIB", 0, {0}, 0, {{P_LD_PIT, 0, 4, 0}, NT, NT, NT}},
     }, {
         {"HERO", 0, {{P_DLY, 27}, {X, 0}}, 1, {0, 53, 47, 76, 56, 28, 24, 40}},
         {"TRANCE GATE", 0, {{P_E0, 1}, {P_DLY, 54}, {X, 0}}, 1, {0, 35, 70, 55, 10, 80, 10, 10}},
@@ -207,11 +208,11 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     {"HAZE", "slow pad \xB7 the lights glow and drift", IG_HARMONY, E_TRIO, 6, 0, 13, 16, {RGB(14, 12, 20), RGB(28, 24, 40), RGB(185, 166, 255), RGB(154, 146, 180), RGB(242, 238, 255)}, {{P_VOICE, 0}, {P_ATK, 60}, {P_REL, 70}, {P_LRATE, 15}, {P_LTRIG, 1}, {P_LD_PIT, 0}, {P_REV, 60}, {P_ITYPE, 5}, {P_IMIX, 0}, {X, 0}}, {
         {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"DRIFT", 0, {0}, 0, {{P_LD_PIT, 0, 2, TCV_GATE}, {P_E3, 5, 30, 0}, NT, NT}},
-        {"DUST", 0, {0}, 0, {{P_IMIX, 0, 100, 0}, NT, NT, NT}},
+        {"DUST", 0, {0}, 0, {{P_IMIX, 0, 127, 0}, {P_IB, 120, 20, 0}, {P_IC, 120, 30, 0}, NT}},
         {"SPACE", 0, {0}, 0, {{P_REV, 10, 127, 0}, {P_LEVEL, 108, 99, 0}, NT, NT}},
         {"BLOOM", 0, {0}, 0, {{P_ATK, 10, 120, TCV_EXP}, {P_REL, 30, 120, 0}, NT, NT}},
         {"TONE", 0, {0}, 0, {{P_E5, 10, 28, TCV_EXP}, NT, NT, NT}},
-        {"SHINE", 0, {0}, 0, {{P_CHOR, 0, 110, 0}, NT, NT, NT}},
+        {"SHINE", 0, {0}, 0, {{P_CHOR, 0, 127, 0}, {P_SPRD, 0, 110, 0}, NT, NT}},
         {"MOVE", 0, {0}, 0, {{P_LD_FLT, 0, 60, 0}, NT, NT, NT}},
     }, {
         {"FOG", 4, {{P_SUS, 93}, {P_REL, 55}, {X, 0}}, 1, {0, 20, 30, 60, 40, 30, 40, 30}},
@@ -234,9 +235,9 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"JUMP", 3, {0, 1, 2}, SWN_6_0, {{P_E6, 0, 0, 0}, NT, NT, NT}},
         {"WAVE", 5, {0, 1, 2, 3, 4}, SWN_6_1, {{P_E1, 0, 0, 0}, NT, NT, NT}},
         {"SWEEP", 0, {0}, 0, {{P_E4, 0, 25, 0}, {P_LEVEL, 104, 110, 0}, NT, NT}},
-        {"CRUSH", 0, {0}, 0, {{P_E3, 0, 120, 0}, NT, NT, NT}},
+        {"CRUSH", 0, {0}, 0, {{P_E3, 0, 127, 0}, {P_E7, 127, 40, 0}, NT, NT}},
         {"VIB", 0, {0}, 0, {{P_E5, 0, 110, 0}, NT, NT, NT}},
-        {"DECAY", 0, {0}, 0, {{P_DEC, 15, 100, 0}, NT, NT, NT}},
+        {"DECAY", 0, {0}, 0, {{P_DEC, 15, 100, 0}, {P_SUS, 20, 110, 0}, NT, NT}},
         {"DUTY", 0, {0}, 0, {{P_E2, 0, 120, 0}, {P_LEVEL, 110, 104, 0}, NT, NT}},
     }, {
         {"1UP", 0, {{P_E7, 94}, {X, 0}}, 1, {0, 0, 0, 0, 30, 20, 25, 70}},
@@ -261,15 +262,15 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"TINE", 0, {0}, 0, {{P_E4, -40, 40, 0}, NT, NT, NT}},
         {"TREM", 0, {0}, 0, {{P_LD_AMP, 0, 90, 0}, NT, NT, NT}},
         {"CHORUS", 0, {0}, 0, {{P_CHOR, 0, 110, 0}, NT, NT, NT}},
-        {"DECAY", 0, {0}, 0, {{P_DEC, 30, 110, 0}, NT, NT, NT}},
+        {"GRIT", 0, {0}, 0, {{P_DIST, 0, 90, 0}, {P_LEVEL, 106, 100, 0}, NT, NT}},
         {"WARMTH", 0, {0}, 0, {{P_IMIX, 0, 80, 0}, {P_LEVEL, 106, 110, 0}, NT, NT}},
         {"SPACE", 0, {0}, 0, {{P_REV, 0, 100, 0}, NT, NT, NT}},
     }, {
-        {"SUITCASE", 0, {{P_REL, 55}, {X, 0}}, 1, {0, 50, 45, 20, 30, 50, 30, 20}},
-        {"LOUNGE", 0, {{P_REL, 64}, {X, 0}}, 1, {0, 30, 40, 59, 0, 33, 0, 0}},
-        {"BARK BARK", 0, {{P_REL, 41}, {X, 0}}, 1, {0, 85, 55, 15, 25, 40, 55, 10}},
-        {"DREAMY", 0, {{P_REL, 77}, {X, 0}}, 1, {0, 25, 60, 55, 92, 65, 0, 70}},
-        {"CHURCH BASEMENT", 0, {{P_REL, 100}, {X, 0}}, 1, {0, 15, 10, 100, 0, 100, 30, 95}},
+        {"SUITCASE", 0, {{P_REL, 55}, {X, 0}}, 1, {0, 50, 45, 20, 30, 0, 30, 20}},
+        {"LOUNGE", 0, {{P_REL, 64}, {X, 0}}, 1, {0, 30, 40, 59, 0, 0, 0, 0}},
+        {"BARK BARK", 0, {{P_REL, 41}, {X, 0}}, 1, {0, 85, 55, 15, 25, 0, 55, 10}},
+        {"DREAMY", 0, {{P_REL, 77}, {X, 0}}, 1, {0, 25, 60, 55, 92, 0, 0, 70}},
+        {"CHURCH BASEMENT", 0, {{P_REL, 100}, {X, 0}}, 1, {0, 15, 10, 100, 0, 0, 30, 95}},
         {"CLASSIC EP", 0, NOV},
         {"BRIGHT EP", 0, {{P_E2, 20}, {X, 0}}},
         {"MELLOW EP", 0, {{P_E2, -24}, {P_REV, 40}, {X, 0}}},
@@ -285,16 +286,16 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"METAL", 0, {0}, 0, {{P_E2, -40, 50, 0}, {P_LEVEL, 106, 100, 0}, NT, NT}},
         {"RATIO", 5, {-4, -2, 0, 2, 4}, 0, {{P_E3, 0, 0, 0}, NT, NT, NT}},
         {"BLOOM", 0, {0}, 0, {{P_E4, -40, 50, 0}, NT, NT, NT}},
-        {"DECAY", 0, {0}, 0, {{P_DEC, 30, 120, 0}, NT, NT, NT}},
-        {"BITE", 0, {0}, 0, {{P_E1, -5, 7, 0}, NT, NT, NT}},
-        {"ATTACK", 0, {0}, 0, {{P_ATK, 0, 80, 0}, NT, NT, NT}},
-        {"SPACE", 0, {0}, 0, {{P_REV, 0, 110, 0}, NT, NT, NT}},
+        {"TREM", 0, {0}, 0, {{P_LD_AMP, 0, 90, 0}, NT, NT, NT}},
+        {"BITE", 0, {0}, 0, {{P_DIST, 0, 80, 0}, {P_LEVEL, 106, 100, 0}, NT, NT}},
+        {"CHORUS", 0, {0}, 0, {{P_CHOR, 0, 110, 0}, NT, NT, NT}},
+        {"SPACE", 0, {0}, 0, {{P_REV, 0, 127, 0}, {P_DLY, 0, 30, 0}, NT, NT}},
     }, {
-        {"MUSIC BOX", 1, {{P_IMIX, 9}, {P_DLY, 4}, {X, 0}}, 1, {0, 50, 30, 50, 15, 30, 0, 25}},         /* (round 4: RATIO at its in-tune place, 30 %) */
-        {"TEMPLE", 1, {{P_IMIX, 35}, {P_DLY, 16}, {X, 0}}, 1, {0, 55, 30, 60, 100, 20, 40, 100}},
-        {"ICE", 1, {{P_IMIX, 81}, {P_DLY, 36}, {X, 0}}, 1, {0, 55, 30, 90, 40, 10, 60, 70}},
-        {"CHIMES", 1, {{P_IMIX, 0}, {P_DLY, 0}, {X, 0}}, 1, {0, 70, 30, 30, 90, 60, 0, 20}},
-        {"ROBOT BELLS", 1, {{P_IMIX, 0}, {P_DLY, 0}, {X, 0}}, 1, {0, 95, 30, 95, 30, 95, 10, 10}},
+        {"MUSIC BOX", 1, {{P_IMIX, 9}, {P_DLY, 4}, {X, 0}}, 1, {0, 50, 30, 50, 0, 30, 0, 25}},         /* (round 4: RATIO at its in-tune place, 30 %) */
+        {"TEMPLE", 1, {{P_IMIX, 35}, {P_DLY, 16}, {X, 0}}, 1, {0, 55, 30, 60, 0, 20, 0, 100}},
+        {"ICE", 1, {{P_IMIX, 81}, {P_DLY, 36}, {X, 0}}, 1, {0, 55, 30, 90, 0, 10, 0, 70}},
+        {"CHIMES", 1, {{P_IMIX, 0}, {P_DLY, 0}, {X, 0}}, 1, {0, 70, 30, 30, 0, 60, 0, 20}},
+        {"ROBOT BELLS", 1, {{P_IMIX, 0}, {P_DLY, 0}, {X, 0}}, 1, {0, 95, 30, 95, 0, 95, 0, 10}},
         {"GLASS BELL", 1, NOV},
         {"MARIMBA", 5, NOV},
         {"FM BRASS", 3, NOV},
@@ -333,13 +334,13 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     /* VOX */
     {"VOX", "talking synth \xB7 the mouth opens with the sound", IG_HARMONY, E_FORMANT, 16, 1, 11, 48, {RGB(20, 10, 14), RGB(40, 20, 28), RGB(255, 111, 111), RGB(184, 144, 152), RGB(255, 238, 240)}, {{P_LRATE, 15}, {P_CHOR, 10}, {P_ITYPE, 7}, {P_IMIX, 0}, {X, 0}}, {
         {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
-        {"VOWEL", 0, {0}, 0, {{P_E0, 0, 127, 0}, NT, NT, NT}},
+        {"VOWEL", 0, {0}, 0, {{P_E0, 0, 127, 0}, {P_E1, 127, 0, 0}, NT, NT}},
         {"TALK", 0, {0}, 0, {{P_E2, 0, 110, 0}, NT, NT, NT}},
         {"BUZZ", 0, {0}, 0, {{P_E4, 10, 127, 0}, {P_LEVEL, 108, 100, 0}, NT, NT}},
         {"BREATH", 0, {0}, 0, {{P_E5, 0, 110, 0}, NT, NT, NT}},
         {"Q", 0, {0}, 0, {{P_E6, 10, 127, 0}, NT, NT, NT}},
         {"CHOIR", 0, {0}, 0, {{P_CHOR, 0, 90, 0}, {P_SPRD, 0, 120, 0}, {P_IMIX, 0, 40, 0}, NT}},
-        {"SPACE", 0, {0}, 0, {{P_REV, 0, 100, 0}, {P_LEVEL, 106, 100, 0}, NT, NT}},
+        {"SPACE", 0, {0}, 0, {{P_REV, 0, 127, 0}, {P_DLY, 0, 30, 0}, {P_LEVEL, 106, 100, 0}, NT}},
     }, {
         {"ROBOT", 0, {{P_E3, 0}, {X, 0}}, 1, {0, 20, 60, 90, 10, 40, 10, 20}},
         {"CHOIR BOY", 0, {{P_E3, 0}, {X, 0}}, 1, {0, 40, 10, 50, 20, 50, 85, 60}},
@@ -357,7 +358,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     {"WHEELHOUSE", "tonewheel organ \xB7 the disc spins with the rotor", IG_HARMONY, E_WHEEL, 13, 1, 11, 20, {RGB(18, 12, 6), RGB(36, 24, 12), RGB(255, 170, 60), RGB(176, 156, 128), RGB(255, 242, 224)}, {{P_E7, 1}, {P_ITYPE, 1}, {P_IMIX, 0}, {X, 0}}, {
         {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"STOPS", 10, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 0, {{P_E0, 0, 0, 0}, NT, NT, NT}},
-        {"DRIVE", 0, {0}, 0, {{P_E6, 0, 120, 0}, {P_LEVEL, 104, 100, 0}, NT, NT}},
+        {"DRIVE", 0, {0}, 0, {{P_E6, 0, 127, 0}, {P_LEVEL, 104, 110, 0}, {P_IMIX, 0, 120, 0}, {P_IA, 20, 127, 0}}},
         {"ROTOR", 3, {0, 1, 2}, SWN_11_2, {{P_E7, 0, 0, 0}, NT, NT, NT}},
         {"SUB", 0, {0}, 0, {{P_E1, -8, 8, 0}, NT, NT, NT}},
         {"BODY", 0, {0}, 0, {{P_E2, -8, 8, 0}, {P_LEVEL, 120, 102, 0}, NT, NT}},
@@ -367,7 +368,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"SMOKY", 0, {{P_E5, 25}, {X, 0}}, 1, {0, 20, 25, 50, 70, 60, 30, 40}},
         {"SUNDAY SERVICE", 0, {{P_E5, 50}, {X, 0}}, 1, {0, 60, 0, 50, 55, 55, 82, 91}},
         {"ROCK OUT", 0, {{P_E5, 76}, {X, 0}}, 1, {0, 70, 85, 100, 60, 70, 80, 20}},
-        {"BALLPARK", 0, {{P_E5, 101}, {X, 0}}, 1, {0, 90, 40, 100, 50, 30, 95, 30}},
+        {"BALLPARK", 0, {{P_E5, 101}, {X, 0}}, 1, {0, 90, 41, 100, 9, 30, 95, 6}},
         {"FLUTES", 0, {{P_E5, 38}, {X, 0}}, 1, {0, 0, 0, 50, 23, 19, 61, 71}},
         {"FULL ORGAN", 0, NOV},
         {"JAZZ PERC", 1, NOV},
@@ -418,17 +419,17 @@ static uint32_t tfm_snd_of(const track_t *t) { return (t->preset - TFM_PRE0) % 1
  * measurements: docs/TFM-INSTRUMENTS.md */
 static const int8_t TFM_TRIM[TI_N][6] = {
     {1, 0, -3, 0, 10, 1},                /* THUMP LAB */
-    {4, 5, -2, -3, 6, 0},                /* SQUELCH */
+    {-2, 9, 0, -2, 11, -1},              /* SQUELCH */
     {8, 0, 0, 5, -2, -3},                /* WOBBLER */
-    {-14, 5, 0, -4, 9, -2},              /* CHORDETTE */
-    {-30, -2, 0, 1, 16, -6},             /* RAZOR */
-    {-33, -3, 0, 2, 4, -5},              /* HAZE */
-    {-14, -5, 1, 9, -3, 0},              /* PIXEL */
+    {-15, 5, 0, -5, 9, -2},              /* CHORDETTE */
+    {-30, -3, 0, 0, 16, -6},             /* RAZOR */
+    {-31, -4, 0, 5, 3, -6},              /* HAZE */
+    {1, -7, 8, 4, -20, 0},               /* PIXEL */
     {-20, 0, 3, 0, -3, 2},               /* TINE */
-    {-2, 1, -2, 2, 0, -1},               /* GLINT */
+    {-5, 3, 0, 4, -2, 0},                /* GLINT */
     {23, -6, 0, 2, -33, 3},              /* PLUCK */
-    {-28, -5, 0, 9, 2, -2},              /* VOX */
-    {-28, -1, 0, 2, -7, 6},              /* WHEELHOUSE */
+    {-29, -4, 0, 22, 3, -3},             /* VOX */
+    {-27, 0, -1, 8, -4, 5},              /* WHEELHOUSE */
 };
 static const uint8_t TFM_KT[TI_N][2] = {
     {0, 0}, {48, 5}, {48, 4}, {60, 3}, {72, 1}, {60, 2}, {72, 3}, {60, 0}, {72, 1}, {60, 4}, {60, 6}, {60, 3},

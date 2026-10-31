@@ -30,6 +30,7 @@ static void r6_fresh(void)
     lim_env = 0; dc_l = dc_r = dce_l = dce_r = 0;     /* (the master limiter and its DC blockers: a loud render before held it down) */
     memset(dj_s1, 0, sizeof dj_s1); memset(dj_s2, 0, sizeof dj_s2); memset((void *)dj_f, 0, sizeof dj_f);
 }
+static int32_t r6_mac = -1, r6_macv;                   /* (round 8 item 3: the macro a render moves, -1 none; its place) */
 static void r6_render(uint32_t ins, uint32_t pre)     /* (round 6 item 10: without the mix trims: item 4 audits the sound itself) */
 {
     static const uint8_t MEL[4] = {60, 64, 67, 72}, KIT[4] = {36, 38, 42, 36};
@@ -48,6 +49,8 @@ static void r6_render(uint32_t ins, uint32_t pre)     /* (round 6 item 10: witho
     r6_fresh();
     song.sel = 0;
     tfm_load(t, ins, pre);
+    if (r6_mac >= 0)                                    /* (round 8: one macro moved, the rest as the preset sets them) */
+        tfm_macro_put(t, (uint32_t)r6_mac, r6_macv, 0);
     t->p[P_ROOT] = 0; t->p[P_SCALE] = 1; t->p[P_QUANT] = QN_WHITE;
     lvl_trim_fn = 0;
     panic_req = (1u << NTRK) - 1u; mix_block(o, CTL);
@@ -793,5 +796,44 @@ static int test_r8_morph(void)
     bad += check("round 8 item 2: MORPH on every instrument keeps its level (3 LU over the turn)", lv);
     bad += check("round 8 item 2: MORPH stays in key at 50 and 100 (YIN, +-35 cents)", key);
     bad += check("round 8 item 2: MORPH back at 0 is the sound exactly as it was; a macro turned while it is out moves its base", back && ok);
+    return bad;
+}
+/* item 3: how far each macro moves the sound, 0 -> 100, in the audit's features (on the first named preset, the rest as it
+ * sets them); a continuous one under R8_MACRO_MIN is widened. R8MACRO=1 prints the table (tfm-spec/MACRO-RATINGS.md) */
+#define R8_MACRO_MIN 0.40                                /* (from the table: the lowest fifth of the 85 continuous macros and MORPHs sat under it) */
+static double r8_macro_dist(uint32_t ins, uint32_t m)
+{
+    double a[R6_NF], b[R6_NF];
+    r6_mac = (int32_t)m; r6_macv = 0;
+    r6_render(ins, 0); r6_features(a);
+    r6_macv = 127;
+    r6_render(ins, 0); r6_features(b);
+    r6_mac = -1;
+    return r6_dist(a, b);
+}
+static int test_r8_macros(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t i, m, n = 0, under = 0;
+    int verbose = getenv("R8MACRO") != 0;
+    for (i = 0; i < TI_N; i++)
+        for (m = 0; m < 8u; m++) {
+            const tfm_macro_t *mc = &TFM_INS[i].mac[m];
+            double d = r8_macro_dist(i, m);
+            int sw = mc->nsw && mc->nsw != TFM_MSW;
+            if (verbose)
+                fprintf(stderr, "MACRODIST %s|%u|%s|%s|%.2f%c", TFM_INS[i].name, m + 1u, mc->name, sw ? "SWITCH" : mc->nsw == TFM_MSW ? "MORPH" : "CONT", d, 10);
+            if (!sw && (!strcmp(mc->name, "GLIDE") || !strcmp(mc->name, "SLIDE") || !strcmp(mc->name, "VIB")))
+                continue;                               /* (they move pitch between notes and around one: the phrase hears neither) */
+            if (!sw) {
+                n++;
+                if (d < R8_MACRO_MIN) {
+                    under++;
+                    fprintf(stderr, "R8 SUBTLE %s %s %.2f ", TFM_INS[i].name, mc->name, d);
+                }
+            }
+        }
+    R8(n > 75u && under == 0u);
+    bad += check("round 8 item 3: every continuous macro (and MORPH) moves the sound at least R8_MACRO_MIN over its turn (the audit's distance, on the first preset)", ok);
     return bad;
 }
