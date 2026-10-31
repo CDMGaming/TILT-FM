@@ -781,19 +781,30 @@ static __attribute__((noinline)) void perf_key_remap(void)
     }
 }
 
+/* TFM round 9: a pitched drum key (dw_key_note) about to start: its degree for rec_note and the part's lane pitch for the
+ * note-on (as the sequencer's step pitch); 0xFF: done, both off. Out of line: key_on sits in the ISR's key loop */
+static __attribute__((noinline)) void dw_pitch(const track_t *t, uint32_t k)
+{
+    uint32_t part = trk_index(t) % NPART;
+    if (k == 0xFFu) {
+        dw_live = -1;
+        drum_ppl[part] = 0;
+        return;
+    }
+    dw_live = (int8_t)dw_deg[k];
+    drum_ppl[part] = (uint8_t)(drum_plane_fn(t) + 1u);
+    drum_pst[part] = (int8_t)drum_deg_st(t, dw_deg[k]);
+}
 /* key k plays kb_note[k] on track t: its chord (chord.c; the note alone with CHRD OFF). A note another key
  * holds already sounds: it is not started again (nor sent to MIDI OUT); the key keeps its notes */
 static void key_on(uint32_t k, track_t *t)
 {
     uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = (dw_acc >> k) & 1u ? 127u : kb_vel;
-    uint32_t pit = (dw_pit >> k) & 1u, part = trk_index(t) % NPART;
+    uint32_t pit = (dw_pit >> k) & 1u;
     kb_chn[k] = 0;
     in_key = (uint8_t)(k + 1u);                     /* (the arp keeps the key: arp_add) */
-    if (pit) {                                      /* TFM round 9: G4 .. G5 on a drum track: the pitched lane, its degree */
-        dw_live = (int8_t)dw_deg[k];
-        drum_ppl[part] = (uint8_t)(drum_plane_fn(t) + 1u);
-        drum_pst[part] = (int8_t)drum_deg_st(t, dw_deg[k]);
-    }
+    if (pit)                                        /* TFM round 9: G4 .. G5 on a drum track: the pitched lane, its degree */
+        dw_pitch(t, k);
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
         if (!pit && midi_local_held(t, x))          /* (a pitched key hits again: the same lane, another pitch) */
@@ -801,10 +812,8 @@ static void key_on(uint32_t k, track_t *t)
         input_on(t, x, vel);
         midi_out_event(0x09u | (0x90u | mc) << 8 | x << 16 | vel << 24);
     }
-    if (pit) {
-        dw_live = -1;
-        drum_ppl[part] = 0;
-    }
+    if (pit)
+        dw_pitch(t, 0xFFu);
     in_key = 0;
     kb_chn[k] = (uint8_t)n;
     last_note = kb_note[k];                         /* (step entry, the SAMPLE zone: the key's note) */
