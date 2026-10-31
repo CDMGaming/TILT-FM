@@ -628,6 +628,8 @@ static const tu_mat_t TU_MAT[TI_N] = {
     {RGB(74, 50, 30), RGB(42, 29, 18), RGB(232, 214, 176), 1},          /* PLUCK: wood */
     {RGB(58, 68, 82), RGB(28, 34, 43), RGB(231, 236, 242), 0},          /* VOX: slate */
     {RGB(42, 28, 18), RGB(26, 17, 11), RGB(239, 230, 207), 0},          /* WHEELHOUSE: dark walnut */
+    {RGB(118, 120, 112), RGB(78, 80, 74), RGB(22, 22, 20), 2},          /* TRASH KIT: dented galvanised steel (round 8) */
+    {RGB(196, 158, 108), RGB(118, 78, 42), RGB(44, 26, 12), 1},         /* HAND DRUMS: skin over wood (round 8) */
 };
 static const tu_mat_t TU_MAT_NONE = {RGB(26, 22, 16), RGB(18, 14, 8), RGB(246, 236, 216), 0};
 static uint16_t tu_mat_at(const tu_mat_t *m, uint32_t y, uint32_t h)    /* the body's colour y rows down */

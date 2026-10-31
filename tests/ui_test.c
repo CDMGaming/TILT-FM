@@ -10495,17 +10495,17 @@ static int test_tfm_dice(void)
 {
     static const struct { const char *code; uint8_t key, scale, swing; int16_t bpm; uint8_t ins[4]; } TC[] = {
         /* DAY 2026-10-27: G mixolydian 135, lead 20 / patch 1 / garage 9 (3 slots: T4 filled from the code) */
-        {"09BN-Y003-0CA0-Y08K-14", 7, 4, 0, 135, {TI_RAZOR, TI_WOBBLER, TI_THUMP, 0xFF}},
+        {"09BN-Y003-0CA0-Y08K-14", 7, 4, 0, 135, {TI_RAZOR, TI_WOBBLER, TI_TRASH, 0xFF}},   /* (round 8: garage is TRASH KIT) */
         /* DAY 2026-10-28: G minor pentatonic 73, drums 1 / vox 3 / pluck 11 */
         {"09VJ-2003-000H-00RC-1C", 7, 6, 0, 73, {TI_THUMP, TI_VOX, TI_PLUCK, 0xFF}},
         /* DAY 2026-11-01: F# blues 175, drums / chip / fm / wave */
         {"0AB8-E004-00A0-E6R8-2W4G-0", 6, 12, 0, 175, {TI_THUMP, TI_PIXEL, TI_GLINT, TI_HAZE}},
         /* DAY 2027-01-01: F minor 122 swing 25, garage / chip / fm / anthem (/ patch: past four) */
-        {"08AN-4685-2C90-E3G8-1471-E3RC", 5, 2, 25, 122, {TI_THUMP, TI_PIXEL, TI_GLINT, TI_RAZOR}},
+        {"08AN-4685-2C90-E3G8-1471-E3RC", 5, 2, 25, 122, {TI_TRASH, TI_PIXEL, TI_GLINT, TI_RAZOR}},   /* (round 8: garage is TRASH KIT) */
         /* ROLL 1: B blues 119, analog / wobble / vox */
         {"0ADM-Y003-0G5G-A0RG-14", 11, 12, 0, 119, {TI_THUMP, TI_WOBBLER, TI_VOX, 0xFF}},
         /* ROLL 3735928559: E dorian 157, chop / acid / organ / poly */
-        {"08J7-A004-2G4G-250D-1G11-E", 4, 3, 0, 157, {TI_THUMP, TI_SQUELCH, TI_WHEEL, TI_CHORDETTE}},
+        {"08J7-A004-2G4G-250D-1G11-E", 4, 3, 0, 157, {TI_HAND, TI_SQUELCH, TI_WHEEL, TI_CHORDETTE}},   /* (round 8: chop is HAND DRUMS) */
     };
     static const uint32_t RNG12345[6] = {4207900869u, 1317490944u, 2079646450u, 3513001552u, 2187978186u, 1492380277u};
     int bad = 0, ok = 1, m;
@@ -10857,10 +10857,16 @@ static int test_tfm_ui_dice(void)
     CFG(CF_KEY) = 10;                                   /* the key fixed: A */
     CFG(CF_LO) = 100; CFG(CF_HI) = 100;                 /* the tempo fixed: 100 */
     ns.hold = 0;
-    for (n = 0; n < 12u; n++) {
-        press(B_OCTUP);                                 /* OCT+: re-roll */
-        r6_spin_end();
-        ok &= sv.mode == SV_ROLLED && ns.s.ins[0] == TI_SQUELCH && ns.s.ins[1] == TI_THUMP && ns.s.key == 9u && ns.s.bpm == 100u;
+    {
+        uint32_t seen = 0;                              /* (round 8: TYPE DRUMS rolls any of the three kits) */
+        for (n = 0; n < 40u; n++) {
+            press(B_OCTUP);                             /* OCT+: re-roll */
+            r6_spin_end();
+            ok &= sv.mode == SV_ROLLED && ns.s.ins[0] == TI_SQUELCH && TFM_INS[ns.s.ins[1] % TI_N].group == IG_DRUMS &&
+                  ns.s.key == 9u && ns.s.bpm == 100u;
+            seen |= ns.s.ins[1] == TI_THUMP ? 1u : ns.s.ins[1] == TI_TRASH ? 2u : ns.s.ins[1] == TI_HAND ? 4u : 0u;
+        }
+        ok &= seen == 7u;
     }
     {   /* a held player stays: T3 on A3 */
         uint8_t ins3 = ns.s.ins[2], pre3 = ns.s.pre[2];
@@ -11378,6 +11384,7 @@ int main(void)
     bad += test_r8_dj();
     bad += test_r8_morph();
     bad += test_r8_macros();
+    bad += test_r8_kits();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

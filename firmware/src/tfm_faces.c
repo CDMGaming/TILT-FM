@@ -288,6 +288,59 @@ static void tf_thump(void)
         }
     }
 }
+/* round 8: the bottom panel the kits share: the name in two lines, the sound, the page's four knobs */
+static void tf_kit_panel(const char *l1, const char *l2, uint16_t panel, uint16_t disc, uint16_t ink)
+{
+    track_t *t = &trk[song.sel];
+    uint32_t c;
+    char pb[24];
+    tu_rrect(8, 132, 224, 80, 7, panel, fc.bg);
+    tu_text(14, 146, &AF_PS, l1, ink, panel);
+    tu_text(14, 159, &AF_PS, l2, ink, panel);
+    tfm_snd_label(t, pb);
+    tu_text_fit(14, 202, &AF_TM, pb, ink, panel, 210);   /* (the sound under the knobs: the four labels need the width) */
+    for (c = 0; c < 4u; c++) {
+        uint32_t m = (uint32_t)tu.page * 4u + c;
+        int32_t cx = 90 + 42 * (int32_t)c;
+        tf_knob(cx, 153, 12, disc, TU_TC[c], tfm_macro_get(t, m));
+        tf_label(c, cx, 174, m, 1);
+    }
+}
+/* TRASH KIT: eight dented tin lids, bolted to a galvanised box; a hit lights its lid mustard */
+static void tf_trash(void)
+{
+    static const int8_t DX[8] = {0, 2, -1, 1, 1, -2, 2, 0}, DY[8] = {1, -1, 2, 0, -2, 1, 0, 2};
+    track_t *t = &trk[song.sel];
+    uint32_t l;
+    for (l = 0; l < 8u; l++) {
+        int32_t x = 10 + (int32_t)(l & 3u) * 56 + DX[l], y = 28 + (int32_t)(l >> 2) * 52 + DY[l], lit = fs[song.sel].lane[l] ? 1 : 0;
+        uint16_t lid = lit ? fc.acc : RGB(150, 152, 142), rim = RGB(70, 72, 66);
+        tu_rrect(x, y, 50, 46, 3, rim, tf_under(y));                                 /* the lid, a little crooked */
+        tu_rrect(x + 3, y + 3, 44, 27, 2, lid, rim);
+        tu_rect(x + 6 + (int32_t)(l * 7u % 30u), y + 8, 9, 2, tu_mix(lid, RGB(40, 40, 36), 30));   /* a dent */
+        tu_disc(x + 4, y + 42, 1, RGB(200, 200, 190));                                /* the bolts */
+        tu_disc(x + 45, y + 42, 1, RGB(200, 200, 190));
+        tu_text_c(x + 25, y + 38, &AF_TS, drum_lane_name(t, l), lit ? fc.acc : RGB(220, 216, 200), rim);
+    }
+    tf_kit_panel("TRASH", "KIT", RGB(176, 178, 168), RGB(40, 40, 36), fc.ink);   /* (a light galvanised plate: the dark ink reads) */
+}
+/* HAND DRUMS: eight skins on a wooden frame; a hit brightens its skin and rings it */
+static void tf_hand(void)
+{
+    track_t *t = &trk[song.sel];
+    uint32_t l;
+    tu_rrect(6, 26, 228, 104, 8, RGB(92, 58, 30), tf_under(26));                     /* the frame */
+    for (l = 0; l < 8u; l++) {
+        int32_t cx = 34 + (int32_t)(l & 3u) * 57, cy = 52 + (int32_t)(l >> 2) * 50, lit = fs[song.sel].lane[l] ? 1 : 0;
+        uint16_t skin = lit ? RGB(250, 226, 180) : RGB(214, 186, 140);
+        if (lit)
+            tu_disc(cx, cy, 21, fc.acc);
+        tu_disc(cx, cy, 19, RGB(60, 36, 16));                                         /* the shell's edge */
+        tu_disc(cx, cy, 16, skin);
+        tu_text_c(cx, cy + 1, &AF_TS, drum_lane_name(t, l), RGB(70, 44, 20), skin);
+    }
+    tf_kit_panel("HAND", "DRUMS", RGB(226, 196, 146), RGB(60, 36, 16), fc.ink);   /* (a skin panel: the dark ink reads) */
+}
 static void tf_squelch(void)
 {
     track_t *t = &trk[song.sel];
@@ -583,6 +636,8 @@ static void tf_face(void)                               /* the whole body, y 22 
     case TI_PLUCK: tf_pluck(); break;
     case TI_VOX: tf_vox(); break;
     case TI_WHEEL: tf_wheel(); break;
+    case TI_TRASH: tf_trash(); break;                   /* (round 8) */
+    case TI_HAND: tf_hand(); break;
     default:
         /* (round 7: a plain face: DEEP is reached only from MENU > DEEP EDIT) */
         tu_text_fit(14, 52, &AF_PN, "NO INSTRUMENT", fc.acc, fc.bg, 212);
@@ -689,8 +744,8 @@ static void tu_picker_body(void)
     uint32_t i, cur = tfm_ins_of(TSEL);
     tu_rect(0, 22, TU_W, 193, TC_BG);
     for (i = 0; i < TI_N; i++)
-        tu_picker_tile(8 + (int32_t)(i % 3u) * 75, 32 + (int32_t)(i / 3u) * 32, i, i == cur);
-    tu_text_c(120, 166, &AF_TS, "a white key picks the instrument for this track", TC_QUIET, TC_BG);
+        tu_picker_tile(8 + (int32_t)(i % 3u) * 75, 27 + (int32_t)(i / 3u) * 30, i, i == cur);   /* (round 8: fourteen, five rows) */
+    tu_text_c(120, 182, &AF_TS, "a white key picks the instrument for this track", TC_QUIET, TC_BG);
 }
 static void tu_picker_draw(void)
 {

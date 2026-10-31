@@ -23,7 +23,9 @@ ENG = {"THUMP LAB": ["KIT", "TUNE", "TONE", "DECY", "SNAP", "ACC", "KICK", "DRV"
        "GLINT": ["ALG", "FB", "MLVL", "MRAT", "MEG", "VMOD", "DTUN", "SLOT"],
        "PLUCK": ["MODEL", "STRC", "BRIT", "DAMP", "POS", "ACC", "BOW", "EXC"],
        "VOX": ["VOWL", "VOWL2", "TALK", "SHIFT", "BUZZ", "BRTH", "Q", "RAND"],
-       "WHEELHOUSE": ["REG", "SUB", "BODY", "TOP", "PERC", "CLICK", "DRV", "ROTR"]}
+       "WHEELHOUSE": ["REG", "SUB", "BODY", "TOP", "PERC", "CLICK", "DRV", "ROTR"],
+       "TRASH KIT": ["KIT", "TUNE", "TONE", "DECY", "SNAP", "ACC", "KICK", "DRV"],
+       "HAND DRUMS": ["KIT", "TUNE", "TONE", "DECY", "SNAP", "ACC", "KICK", "DRV"]}
 
 
 def morph_table():

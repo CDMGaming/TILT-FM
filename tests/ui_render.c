@@ -785,7 +785,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_UI_SND0, S_UI_SND1, S_UI_SND2, S_UI_SND3, S_UI_SND4, S_UI_SND5, S_UI_SND6, S_UI_SND7, S_UI_SND8, S_UI_SND9, S_UI_SND10,
        S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_UI_SCENES, S_UI_SONG, S_UI_SONGS,
        S_UI_FX, S_UI_SPACE, S_UI_ARP, S_UI_CLOCK, S_UI_CLOCK2, S_UI_MOTION, S_SONG_OVR, S_SONG_COPY, S_SONG_CLR, S_SONGS_COPY,
-       S_UI_SND_NONE, S_UI_JAM_NONE, S_COUNT };
+       S_UI_SND_NONE, S_UI_JAM_NONE, S_UI_SND12, S_UI_SND13, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -826,7 +826,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "ui_jam", "ui_jam_chain", "ui_jam_write", "ui_perform", "ui_mix", "ui_start", "ui_start_rolled", "ui_start_spin", "ui_setup", "ui_time",
     "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
     "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_bars", "ui_notes", "ui_drums", "ui_sheet", "ui_scenes", "ui_song", "ui_songs",
-    "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion", "ui_song_overwrite", "ui_song_copy", "ui_song_clear", "ui_songs_copy", "ui_snd_none", "ui_jam_none"};
+    "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion", "ui_song_overwrite", "ui_song_copy", "ui_song_clear", "ui_songs_copy", "ui_snd_none", "ui_jam_none", "ui_snd_trash", "ui_snd_hand"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1447,8 +1447,8 @@ static void setup(int s)
         }
         break;
     case S_UI_SND0: case S_UI_SND1: case S_UI_SND2: case S_UI_SND3: case S_UI_SND4: case S_UI_SND5: case S_UI_SND6:
-    case S_UI_SND7: case S_UI_SND8: case S_UI_SND9: case S_UI_SND10: case S_UI_SND11: case S_UI_SND_P2: case S_UI_PICKER: case S_UI_SND_NONE: {
-        uint32_t ins = s == S_UI_SND_P2 || s == S_UI_SND_NONE ? TI_WOBBLER : s == S_UI_PICKER ? TI_SQUELCH : (uint32_t)(s - S_UI_SND0), kk;
+    case S_UI_SND7: case S_UI_SND8: case S_UI_SND9: case S_UI_SND10: case S_UI_SND11: case S_UI_SND_P2: case S_UI_PICKER: case S_UI_SND_NONE: case S_UI_SND12: case S_UI_SND13: {
+        uint32_t ins = s == S_UI_SND12 ? TI_TRASH : s == S_UI_SND13 ? TI_HAND : s == S_UI_SND_P2 || s == S_UI_SND_NONE ? TI_WOBBLER : s == S_UI_PICKER ? TI_SQUELCH : (uint32_t)(s - S_UI_SND0), kk;
         tu_off = 0; song.playing = 1; go_home();
         tfm_load(&trk[0], ins, 1);
         if (s == S_UI_SND_NONE) trk[0].preset = 4;      /* round 7: no instrument */

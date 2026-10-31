@@ -29,7 +29,9 @@ static const uint8_t TY_INS[TI_N] = {      /* the types an instrument is (bits: 
     8 | 32,   /* GLINT */
     4 | 8,    /* PLUCK */
     32 | 16,  /* VOX */
-    4 | 16};  /* WHEELHOUSE */
+    4 | 16,  /* WHEELHOUSE */
+    1,        /* TRASH KIT (round 8) */
+    1};       /* HAND DRUMS (round 8) */
 static const uint8_t RULE_DEF[NTRK] = {1, 2, 3, 4};   /* a band: DRUMS, BASS, CHORDS, LEAD */
 static uint32_t cfg_opt(uint32_t i) { return CFG(CF_RULE + i) ? (uint32_t)CFG(CF_RULE + i) - 1u : RULE_DEF[i % NTRK]; }
 static void cfg_rule_text(uint32_t opt, char *b)

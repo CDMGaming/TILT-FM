@@ -621,3 +621,28 @@ ATTACK moved the track's ADSR, which FM6 ignores (it plays its own operator enve
 GLINT TREM (the LFO on the level) and GLINT CHORUS now, at 0 in every preset (so the presets sound as before); GLINT BITE
 moved FM feedback, which did nothing on these patches either: it drives the track now. GLIDE, SLIDE and VIB move pitch
 between and around notes: the measuring phrase hears neither, so the test leaves them out by name.
+
+## The three drum instruments (round 8)
+
+All three play the DRUM engine's own model kits (no new engine). Each kit's eight lanes are kick, snare, clap, closed hat,
+open hat, tom (or a conga), rim (or claves) and a cymbal: only the kits 10, 77 and DEEP have a cymbal on the BELL lane, so
+those are the three.
+
+| instrument | kit | character | face |
+|---|---|---|---|
+| THUMP LAB | DEEP (77's swelling kick down 2 semitones, 80's snare and hats, 77's claps and bent tom, 80's rim, 10's long cymbal) | the big modern kit | the pads (as before) |
+| TRASH KIT | 10 (a small kit: a kick swept down from 90 Hz, one shell over white noise, slow claps, square hats and cymbal) through the INSERT's CRUSH | lo-fi, rattling | eight dented tin lids bolted to a galvanised box |
+| HAND DRUMS | 77 (claves on RIM, the cymbal on BELL, its bent tom as a skin; the ROUND kick) | hand percussion | eight skins on a wooden frame |
+
+THUMP LAB's five presets were on five different kits (STD, 80, 77, 66, 10) and now all play DEEP, kept apart by their
+macros. TRASH KIT: MORPH, CRUSH, RATTLE, TIME, TUNE, DIRT, HATS, SPACE; presets DENTED, TIN ROOF, BUCKET, STATIC, PARKING
+LOT. HAND DRUMS: MORPH, SKIN, SLAP, TIME, TUNE, WOOD, ROOM, SHAKE; presets BONGO PARK, RAIN DANCE, STREET, TEMPLE BLOCK,
+CAMPFIRE. In the new kits the closed hat sat 22-26 dB under the kick (THUMP LAB's 11 dB), so their kick and snare lanes are
+lower and the hats up. TILT's codes: "garage" plays TRASH KIT and "chop" HAND DRUMS now (they played THUMP LAB). DICE: the
+DRUMS role (and TYPE DRUMS on SETUP) rolls any of the three.
+
+**Drums on the white keys** (every TFM screen): a drum track plays its eight lanes on the first eight white keys (F3 .. F4)
+and the same eight accented (velocity 127) on the next eight (G4 .. G5); the black keys never play drums (on JAM they are the
+scenes, on the DRUM grid lane / accent / page as before). CLASSIC and MIDI IN keep the GM map. (The round's text said "F3-C4
+the 8 lanes, D4-G5 the same 8 accented": that is 5 and 11 white keys; the 16 white keys split eight and eight is the only
+reading that gives eight and eight.)

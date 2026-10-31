@@ -40,8 +40,8 @@ static const char *const PRESET_CAT[16] = {
  * BASS, leads LEAD, the harmony ones by what they are */
 static uint32_t tfm_cat(uint32_t k)
 {
-    static const uint8_t C[12] = {CAT_DRUM, CAT_BASS, CAT_BASS, CAT_KEYS, CAT_LEAD, CAT_PAD, CAT_LEAD, CAT_KEYS,
-                                  CAT_PLUCK, CAT_PLUCK, CAT_PAD, CAT_KEYS};
+    static const uint8_t C[14] = {CAT_DRUM, CAT_BASS, CAT_BASS, CAT_KEYS, CAT_LEAD, CAT_PAD, CAT_LEAD, CAT_KEYS,
+                                  CAT_PLUCK, CAT_PLUCK, CAT_PAD, CAT_KEYS, CAT_DRUM, CAT_DRUM};   /* (round 8: TRASH KIT, HAND DRUMS) */
     uint32_t i = (k - 0x20u) / 16u;
     return i < sizeof C ? C[i] : CAT_OTHER;
 }

@@ -181,3 +181,33 @@ Presets: ROBOT, CHOIR BOY, WHISPER, YAMMER, MONK.
 | 8 | SPACE | REV 0..90 | 0 | 22 | 45 | 68 | 90 |  |
 
 Presets: SMOKY, SUNDAY SERVICE, ROCK OUT, BALLPARK, FLUTES.
+
+## TRASH KIT
+
+| # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
+|---|---|---|---|---|---|---|---|---|
+| 1 | MORPH (JAM) | from the sound as set to: IMIX -> 120; IB -> 20; DRV -> 100; DECY -> 100; REV -> 50; LEVEL -16 (level, half dB) | as set | | | | the contrast |  |
+| 2 | CRUSH | IMIX 20..120; IB 110..20; LEVEL 104..108 | 20/110/104 | 45/88/105 | 70/65/106 | 95/42/107 | 120/20/108 |  |
+| 3 | RATTLE | SNAP 10..120; LN1 80..120; LN2 70..120 | 10/80/70 | 38/90/82 | 65/100/95 | 92/110/108 | 120/120/120 |  |
+| 4 | TIME | DECY 8..120 EXP; LEVEL 104..96 | 8/104 | 15/102 | 36/100 | 71/98 | 120/96 |  |
+| 5 | TUNE | TUNE 16..112 | 16 | 40 | 64 | 88 | 112 |  |
+| 6 | DIRT | DRV 0..127; DIST 0..60; LEVEL 106..98 | 0/0/106 | 32/15/104 | 64/30/102 | 95/45/100 | 127/60/98 |  |
+| 7 | HATS | LN3 50..127; LN4 40..127 | 50/40 | 69/62 | 88/84 | 108/105 | 127/127 |  |
+| 8 | SPACE | REV 0..80; DLY 0..40 >70% | 0/0 | 20/0 | 40/0 | 60/7 | 80/40 |  |
+
+Presets: DENTED, TIN ROOF, BUCKET, STATIC, PARKING LOT.
+
+## HAND DRUMS
+
+| # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |
+|---|---|---|---|---|---|---|---|---|
+| 1 | MORPH (JAM) | from the sound as set to: DECY -> 110; TONE -> 100; SNAP -> 110; REV -> 100; DLY -> 20; LEVEL -16 (level, half dB) | as set | | | | the contrast |  |
+| 2 | SKIN | TONE 20..110 | 20 | 42 | 65 | 88 | 110 |  |
+| 3 | SLAP | SNAP 10..120; LN1 80..120 | 10/80 | 38/90 | 65/100 | 92/110 | 120/120 |  |
+| 4 | TIME | DECY 10..110 EXP; LEVEL 104..96 | 10/104 | 16/102 | 35/100 | 66/98 | 110/96 |  |
+| 5 | TUNE | TUNE 16..112 | 16 | 40 | 64 | 88 | 112 |  |
+| 6 | WOOD | LN6 60..127; LN5 127..80; LN1 120..70 | 60/127/120 | 77/115/108 | 94/104/95 | 110/92/82 | 127/80/70 |  |
+| 7 | ROOM | REV 0..100; DLY 0..25 >70% | 0/0 | 25/0 | 50/0 | 75/4 | 100/25 |  |
+| 8 | SHAKE | LN3 50..127; LN4 40..127 | 50/40 | 69/62 | 88/84 | 108/105 | 127/127 |  |
+
+Presets: BONGO PARK, RAIN DANCE, STREET, TEMPLE BLOCK, CAMPFIRE.

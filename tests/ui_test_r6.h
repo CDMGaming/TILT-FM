@@ -58,7 +58,7 @@ static void r6_render(uint32_t ins, uint32_t pre)     /* (round 6 item 10: witho
     for (n = 0; n < R6_N; n += CTL) {
         uint32_t i;
         for (k = 0; k < 4u; k++) {
-            uint32_t nt = ins == TI_THUMP ? KIT[k] : MEL[k];
+            uint32_t nt = TFM_INS[ins % TI_N].group == IG_DRUMS ? KIT[k] : MEL[k];   /* (round 8: every kit plays the beat) */
             if (ON[k] >= n && ON[k] < n + CTL) trk_note_on(t, nt, 100);
             if (OFF[k] >= n && OFF[k] < n + CTL) trk_note_off(t, nt);
         }
@@ -256,7 +256,7 @@ static int16_t r6l_buf[2][R6L_N];
 enum { R6R_DRUMS, R6R_BASS, R6R_PAD, R6R_LEAD };
 static uint32_t r6_role(uint32_t ins)
 {
-    if (ins == TI_THUMP)
+    if (TFM_INS[ins % TI_N].group == IG_DRUMS)          /* (round 8: the three kits) */
         return R6R_DRUMS;
     if (TFM_INS[ins].group == IG_BASS)
         return R6R_BASS;
@@ -767,7 +767,7 @@ static int test_r8_morph(void)
         hi = l0 > l1 ? (l0 > l2 ? l0 : l2) : (l1 > l2 ? l1 : l2);
         fprintf(stderr, "MORPH %-10s LUFS 0 %6.1f  50 %6.1f  100 %6.1f  (%.1f LU)%c", TFM_INS[i].name, l0, l1, l2, hi - lo, 10);
         if (hi - lo > 3.0) lv = 0;
-        if (i != TI_THUMP) {                            /* (a kit has no pitch) */
+        if (TFM_INS[i].group != IG_DRUMS) {             /* (a kit has no pitch) */
             double w1 = r3_pitch(i, 0, 0, 50), w2 = r3_pitch(i, 0, 0, 100);
             if ((w1 != 999.0 && w1 > 35.0) || (w2 != 999.0 && w2 > 35.0)) {
                 key = 0;
@@ -835,5 +835,56 @@ static int test_r8_macros(void)
         }
     R8(n > 75u && under == 0u);
     bad += check("round 8 item 3: every continuous macro (and MORPH) moves the sound at least R8_MACRO_MIN over its turn (the audit's distance, on the first preset)", ok);
+    return bad;
+}
+/* item 4: three drum instruments on the DRUM engine's own kits, each with a cymbal, kick, snare or rim, both hats; drums on
+ * the white keys only (F3..F4 the lanes, G4..G5 accented), the black keys never; CLASSIC keeps the GM map */
+static int test_r8_kits(void)
+{
+    int bad = 0, ok = 1, keys = 1;
+    static const uint8_t KITS[3] = {TI_THUMP, TI_TRASH, TI_HAND};
+    uint32_t i, k, l;
+    ui_power_on();
+    tu_off = 0;
+    for (i = 0; i < 3u; i++) {
+        track_t *t = &trk[0];
+        uint32_t cym = 0, kick = 0, snr = 0, hc = 0, ho = 0;
+        tfm_load(t, KITS[i], 0);
+        R8(TFM_INS[KITS[i]].group == IG_DRUMS && drum_track(t) && tfm_ins_of(t) == KITS[i]);
+        for (l = 0; l < NLANE; l++) {
+            const char *n = drum_lane_name(t, l);
+            cym |= str_eq(n, "CYM"); kick |= str_eq(n, "KICK"); snr |= str_eq(n, "SNARE") || str_eq(n, "RIM");
+            hc |= str_eq(n, "HATCL"); ho |= str_eq(n, "HATOP");
+        }
+        R8(cym && kick && snr && hc && ho);
+        for (k = 1; k < 5u; k++)                        /* (every named preset plays its instrument's kit) */
+        { tfm_load(t, KITS[i], k); R8(t->p[P_E0] == TFM_INS[KITS[i]].vo[0].v); }
+    }
+    R8(trk[0].p[P_E0] != 0);
+    {   /* three different kits */
+        track_t a, b, c;
+        tfm_load(&trk[0], TI_THUMP, 0); a = trk[0];
+        tfm_load(&trk[0], TI_TRASH, 0); b = trk[0];
+        tfm_load(&trk[0], TI_HAND, 0); c = trk[0];
+        R8(a.p[P_E0] != b.p[P_E0] && b.p[P_E0] != c.p[P_E0] && a.p[P_E0] != c.p[P_E0]);
+    }
+    /* the keys: TFM, a drum track: the white keys from F3: lanes 1..8, then the same accented; the black keys silent */
+    tfm_load(&trk[0], TI_TRASH, 0);
+    song.sel = 0;
+    tu_goto(TU_SOUND); frames(16);
+    for (k = 0; k < 27u; k++) {
+        uint32_t n;
+        tfm_dwhite = 1;
+        n = kb_map(&trk[0], k);
+        if (key_black(k))
+            keys &= n == KB_SILENT;
+        else if (key_place(k) < 2u * NLANE)
+            keys &= n == DRUM_LANE_NOTE[key_place(k) % NLANE] && (((dw_acc >> k) & 1u) == (key_place(k) >= NLANE));
+    }
+    tfm_dwhite = 0;                                     /* (CLASSIC: the GM map over every key, as before) */
+    keys &= kb_map(&trk[0], 1) != KB_SILENT && kb_map(&trk[0], 7) == (uint32_t)clamp(29 + 12 * song.octave + 7, 0, 127);
+    dw_acc = 0;
+    bad += check("round 8 item 4: THUMP LAB (DEEP), TRASH KIT (10), HAND DRUMS (77): three kits, each with a cymbal, kick, snare or rim, both hats; every preset on its kit", ok);
+    bad += check("round 8 item 4: drums on the white keys (F3..F4 the eight lanes, G4..G5 the same accented), the black keys silent; CLASSIC keeps the GM map", keys);
     return bad;
 }

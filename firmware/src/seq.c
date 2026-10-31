@@ -163,11 +163,29 @@ static uint32_t kb_pitch(const track_t *t, uint32_t k, int32_t oct)
 }
 
 static volatile uint8_t jam_silent;               /* round 5: JAM's black keys launch scenes (tfm_live.c): they play nothing */
+/* TFM round 8: a drum track plays on the WHITE keys only, the same on every screen: the first eight (F3 .. F4) its eight
+ * lanes, the next eight (G4 .. G5) the same lanes accented (velocity 127); the black keys never play drums (JAM: the
+ * scenes; the DRUM grid: lane / accent / page as before). Set by the UI each frame (ui_input.c); CLASSIC and MIDI IN keep
+ * the GM map. Out of line, as grid_key_note: the ISR's key loop calls it on a key change only */
+static volatile uint8_t tfm_dwhite;
+static uint32_t dw_acc;                           /* the keys pressed as accents (key_on: velocity 127) */
+static __attribute__((noinline)) uint8_t dw_key_note(uint32_t k)
+{
+    uint32_t p;
+    dw_acc &= ~(1u << k);
+    if (key_black(k) || (p = key_place(k)) >= 2u * NLANE)
+        return KB_SILENT;
+    if (p >= NLANE)
+        dw_acc |= 1u << k;
+    return DRUM_LANE_NOTE[p % NLANE];
+}
 static uint32_t kb_map(const track_t *t, uint32_t k)
 {
     int32_t n;
     if (jam_silent && ((0x252A52Au >> k) & 1u))
         return KB_SILENT;
+    if (tfm_dwhite && drum_track(t))
+        return dw_key_note(k);
     n = kb_engine(t, k);
     return n >= 0 ? (uint32_t)n : kb_pitch(t, k, song.octave);
 }
@@ -747,7 +765,7 @@ static __attribute__((noinline)) void perf_key_remap(void)
  * holds already sounds: it is not started again (nor sent to MIDI OUT); the key keeps its notes */
 static void key_on(uint32_t k, track_t *t)
 {
-    uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel;
+    uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = (dw_acc >> k) & 1u ? 127u : kb_vel;
     kb_chn[k] = 0;
     in_key = (uint8_t)(k + 1u);                     /* (the arp keeps the key: arp_add) */
     for (i = 0; i < n; i++) {

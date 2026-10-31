@@ -476,7 +476,9 @@ static void ns_draw_row(uint32_t r)
     if (r < NS_T1) {
         cv_text_on(31, y, &AF_S, LBL[r], T_MID, bg);
     } else if (r == NS_CODE) {
-        cv_text_on(31, y, &AF_S, "CODE", T_MID, bg);
+        ns_value(r, b);                                 /* (TFM round 8: a code with the two new kits is longer: then no */
+        if ((held ? 214 : 231) - text_w(&AF_S, b) >= 66)   /* label, the code needs the row) */
+            cv_text_on(31, y, &AF_S, "CODE", T_MID, bg);
     } else {
         b[0] = 'T';
         b[1] = (char)('1' + r - NS_T1);

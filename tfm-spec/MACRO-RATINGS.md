@@ -1,6 +1,6 @@
 # MACRO RATINGS (round 8)
 
-Every macro of the twelve instruments, for you to rate **by ear**. The next round works only on what you flag here.
+Every macro of the fourteen instruments (round 8 added TRASH KIT and HAND DRUMS), for you to rate **by ear**. The next round works only on what you flag here.
 
 How to fill it in: on SOUND, load the instrument's first preset, turn the macro from 0 to 100 while a part plays, and put
 **S** (too subtle), **G** (good) or **M** (too much) in the RATING column; a word in NOTES if it helps ("dead in the
@@ -18,14 +18,14 @@ nothing (they were widened anyway). SWITCH macros step through named values; MOR
 
 | # | Macro | Kind | Moves | Change before -> now | RATING (S / G / M) | NOTES |
 |---|---|---|---|---|---|---|
-| 1 | MORPH | MORPH | DECY, REV, IA, IMIX, DRV, DLY, LN3 (+ level) | 1.69 -> 1.69 |  |  |
-| 2 | PUNCH | knob | LN0 96..127, DRV 0..80, ACC 40..120, LEVEL 108..102 | 0.95 -> 0.95 |  |  |
-| 3 | SMACK | knob | SNAP 10..120, LN1 80..115, LN2 80..115, LEVEL 106..100 | 1.67 -> 1.67 |  |  |
-| 4 | TIME | knob | DECY 8..120, LEVEL 104..94 | 2.03 -> 2.03 |  |  |
-| 5 | ROOM | knob | REV 0..90, DLY 0..25 | 5.25 -> 5.25 |  |  |
-| 6 | TUNE | knob | TUNE 16..112 | 0.95 -> 0.95 |  |  |
-| 7 | DIRT | knob | IA 0..110, IMIX 20..100, LEVEL 106..104 | 1.72 -> 1.72 |  |  |
-| 8 | HATS | knob | LN3 80..127, LN4 80..127 | 0.47 -> 0.47 |  |  |
+| 1 | MORPH | MORPH | DECY, REV, IA, IMIX, DRV, DLY, LN3 (+ level) | 1.69 -> 3.14 |  |  |
+| 2 | PUNCH | knob | LN0 96..127, DRV 0..80, ACC 40..120, LEVEL 108..102 | 0.95 -> 1.50 |  |  |
+| 3 | SMACK | knob | SNAP 10..120, LN1 80..115, LN2 80..115, LEVEL 106..100 | 1.67 -> 2.09 |  |  |
+| 4 | TIME | knob | DECY 8..120, LEVEL 104..94 | 2.03 -> 2.67 |  |  |
+| 5 | ROOM | knob | REV 0..90, DLY 0..25 | 5.25 -> 2.93 |  |  |
+| 6 | TUNE | knob | TUNE 16..112 | 0.95 -> 1.94 |  |  |
+| 7 | DIRT | knob | IA 0..110, IMIX 20..100, LEVEL 106..104 | 1.72 -> 1.67 |  |  |
+| 8 | HATS | knob | LN3 80..127, LN4 80..127 | 0.47 -> 0.65 |  |  |
 
 ## SQUELCH
 
@@ -169,4 +169,30 @@ nothing (they were widened anyway). SWITCH macros step through named values; MOR
 | 6 | BODY | knob | BODY -8..8, LEVEL 120..102 | 0.62 -> 0.68 |  |  |
 | 7 | TOP | knob | TOP -8..8 | 2.05 -> 2.03 |  |  |
 | 8 | SPACE | knob | REV 0..90 | 0.50 -> 0.55 |  |  |
+
+## TRASH KIT
+
+| # | Macro | Kind | Moves | Change before -> now | RATING (S / G / M) | NOTES |
+|---|---|---|---|---|---|---|
+| 1 | MORPH | MORPH | IMIX, IB, DRV, DECY, REV (+ level) | - -> 4.83 |  |  |
+| 2 | CRUSH | knob | IMIX 20..120, IB 110..20, LEVEL 104..108 | - -> 4.50 |  |  |
+| 3 | RATTLE | knob | SNAP 10..120, LN1 80..120, LN2 70..120 | - -> 2.59 |  |  |
+| 4 | TIME | knob | DECY 8..120, LEVEL 104..96 | - -> 3.10 |  |  |
+| 5 | TUNE | knob | TUNE 16..112 | - -> 3.59 |  |  |
+| 6 | DIRT | knob | DRV 0..127, DIST 0..60, LEVEL 106..98 | - -> 1.06 |  |  |
+| 7 | HATS | knob | LN3 50..127, LN4 40..127 | - -> 0.49 |  |  |
+| 8 | SPACE | knob | REV 0..80, DLY 0..40 | - -> 3.77 |  |  |
+
+## HAND DRUMS
+
+| # | Macro | Kind | Moves | Change before -> now | RATING (S / G / M) | NOTES |
+|---|---|---|---|---|---|---|
+| 1 | MORPH | MORPH | DECY, TONE, SNAP, REV, DLY (+ level) | - -> 2.55 |  |  |
+| 2 | SKIN | knob | TONE 20..110 | - -> 1.84 |  |  |
+| 3 | SLAP | knob | SNAP 10..120, LN1 80..120 | - -> 1.07 |  |  |
+| 4 | TIME | knob | DECY 10..110, LEVEL 104..96 | - -> 2.45 |  |  |
+| 5 | TUNE | knob | TUNE 16..112 | - -> 0.81 |  |  |
+| 6 | WOOD | knob | LN6 60..127, LN5 127..80, LN1 120..70 | - -> 1.45 |  |  |
+| 7 | ROOM | knob | REV 0..100, DLY 0..25 | - -> 3.44 |  |  |
+| 8 | SHAKE | knob | LN3 50..127, LN4 40..127 | - -> 3.48 |  |  |
 
