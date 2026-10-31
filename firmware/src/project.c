@@ -301,6 +301,7 @@ static void proj_drums_to_part(project_t *q)
     d->preset = PROJ_DEF_KEEP;
     d->p[P_LEVEL] = (int16_t)clamp(q->g[G_DRLVL], 0, 127);   /* the drum part's level and reverb send */
     d->p[P_REV] = (int16_t)clamp(q->g[G_DRREV], 0, 127);
+    q->g[G_DRLVL] = q->g[G_DRREV] = 0;          /* (TFM round 9: they are the DJ's now, perform.c dj_get) */
     q->parts = NPART;
     q->sum = proj_sum(q);
 }
@@ -354,7 +355,7 @@ static void proj_fm4(project_t *q)
         return;
     for (i = n = 0; i < q->motion.count && i < MOTION_MAX; i++) {
         const motion_event_t *e = &q->motion.event[i];
-        if (((hit >> (e->place >> 6)) & 1u) && (MOTION_ID(e) >= P_E0 || (MOTION_ID(e) >= P_FM1_ATK && MOTION_ID(e) <= P_FM4_LEVEL)))
+        if (((hit >> (e->place >> 6)) & 1u) && ((MOTION_ID(e) >= P_E0 && MOTION_ID(e) < P_COUNT) || (MOTION_ID(e) >= P_FM1_ATK && MOTION_ID(e) <= P_FM4_LEVEL)))
             continue;
         q->motion.event[n++] = *e;
     }
@@ -386,7 +387,7 @@ static void proj_perc(project_t *q)
         return;
     for (i = n = 0; i < q->motion.count && i < MOTION_MAX; i++) {
         const motion_event_t *e = &q->motion.event[i];
-        if (((hit >> (e->place >> 6)) & 1u) && MOTION_ID(e) >= P_E0)
+        if (((hit >> (e->place >> 6)) & 1u) && MOTION_ID(e) >= P_E0 && MOTION_ID(e) < P_COUNT)
             continue;
         q->motion.event[n++] = *e;
     }
@@ -1511,7 +1512,7 @@ static uint32_t chain_prepare(void)
                 motion_store_t *m = &chain_src(i)->motion; uint32_t n = 0;
                 for (uint32_t e = 0; e < m->count; e++) {
                     const motion_event_t *v = &m->event[e]; uint32_t owner = v->place >> 6;
-                    if (MOTION_ID(v) >= P_FM1_ATK && p->t[owner].engine != trk[owner].eng_req
+                    if (MOTION_ID(v) >= P_FM1_ATK && MOTION_ID(v) < P_COUNT && p->t[owner].engine != trk[owner].eng_req
 #ifdef PREF_SONG_SCENE
                         && !(ui_prefs3 & PREF_SONG_SCENE)       /* (SOUNDS SCENE: its own engine plays it) */
 #endif

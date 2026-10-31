@@ -35,10 +35,10 @@ static int motion_param(uint32_t id)
 {
     /* Sound only: transport, routing, voice allocation and discrete engine
      * changes never become automation. FX sends and continuous mix are safe. */
-    return id < P_COUNT && (id <= P_REL || (id >= P_ED_FLT && id <= P_LD_AMP) ||
+    return (id >= MO_DJ && id < MO_DJ + DJ_N) || (id < P_COUNT && (id <= P_REL || (id >= P_ED_FLT && id <= P_LD_AMP) ||
         (id >= P_DIST && id <= P_REV) || id == P_GLIDE || id == P_PAN ||
         id == P_DETUNE || (id >= P_FM1_ATK && id <= P_FM4_LEVEL) || (id >= P_LN0 && id <= P_LN7) ||
-        id == P_SPRD || (id >= P_ITYPE && id <= P_IMIX) || id >= P_E0);   /* (not the chord keys, nor 1.2's LFO SYNC TRIG
+        id == P_SPRD || (id >= P_ITYPE && id <= P_IMIX) || id >= P_E0));   /* (TFM round 9: the DJ's, MO_DJ) */   /* (not the chord keys, nor 1.2's LFO SYNC TRIG
                                         * POL and QUANTIZE, nor 1.5's filter TYPE and ENV SYNC: settings; the DRUM lane
                                         * levels, SPREAD (#148: continuous, as PAN), 1.5's INSERT (TYPE too: a lock
                                         * switches it for a step, fx.c track_insert fades over), E0..E7) */
@@ -108,6 +108,8 @@ static uint32_t motion_mask(uint32_t k, uint32_t m[(P_COUNT + 31u) / 32u])
 static int16_t motion_base_value(const track_t *t, uint32_t id)
 {
     uint32_t k = trk_index(t);
+    if (id >= P_COUNT)
+        return 0;                                       /* (the DJ's: no track value) */
     return (motion_active[k][id / 32u] >> (id % 32u)) & 1u ? motion_base[k][id] : t->p[id];
 }
 static void motion_restore(track_t *t)
@@ -115,6 +117,8 @@ static void motion_restore(track_t *t)
     uint32_t k = trk_index(t), id, f = motion_guard();
     for (id = 0; id < P_COUNT; id++)
         if ((motion_active[k][id / 32u] >> (id % 32u)) & 1u) t->p[id] = motion_base[k][id];
+    for (id = 0; id < DJ_N; id++)                       /* (the DJ's this track played: the song's again) */
+        if (((dj_mb >> id) & 1u) && dj_mown[id] == k) dj_mb &= (uint8_t)~(1u << id);
     memset(motion_active[k], 0, sizeof motion_active[k]);
     memset(motion_locked[k], 0, sizeof motion_locked[k]);
     motion_unguard(f);
@@ -280,6 +284,13 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
         const motion_event_t *e = &m->event[i];
         uint32_t id = MOTION_ID(e);
         if (e->place != (k << 6 | step) || ((e->param & MOTION_LOCK) && !play)) continue;
+        if (id >= P_COUNT) {                            /* TFM round 9: the DJ's (perform.c dj_now) */
+            id = (id - P_COUNT) % DJ_N;
+            dj_mv[id] = (int8_t)clamp(e->value, DJ_DESC[id].min, DJ_DESC[id].max);
+            dj_mown[id] = (uint8_t)k;
+            dj_mb |= (uint8_t)(1u << id);
+            continue;
+        }
         const param_desc_t *d = param_desc_of(eng_idx(t->eng_req), id);
         t->p[id] = (int16_t)param_fit(d, e->value);
         motion_active[k][id / 32u] |= 1u << (id % 32u);

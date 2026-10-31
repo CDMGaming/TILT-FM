@@ -91,6 +91,25 @@ static volatile uint32_t kb_mask;     /* main: the button bits whose hold makes 
 static volatile uint8_t kb_lock;      /* main: a layer locked open (#83, no button held): 1 keys are the layer's, 2 FX's */
 static volatile uint8_t perf_solo;    /* main: tracks soloed in the GLO layer (the others muted as by a black key) */
 static volatile uint8_t perf_kill;    /* main: every effect off (the menu, a dialog, UBOOT) */
+/* TFM round 9: hold ARP's DJ (tfm_live.c) on the master: FILTER (-63..63: the LPF | HPF below, as KNOB 1 with FX), ECHO and
+ * SPACE (0..127: ECHO THROW's and REV THROW's shares, so the delay's feedback too), DIRT (0..127: a drive, perf_block). The
+ * song's values: song.g G_DRLVL (FILTER, ECHO) and G_DRREV (SPACE, DIRT), a byte each (two globals inert since 1.0: no
+ * format change); while the motion of a track plays one (motion.c MO_DJ) it sounds instead (dj_mv, dj_mb, its track
+ * dj_mown) until that track's pass starts again or the transport stops */
+static volatile int8_t dj_mv[DJ_N];
+static volatile uint8_t dj_mb, dj_mown[DJ_N];
+static int32_t dj_get(uint32_t i)                     /* the song's value */
+{
+    uint32_t w = (uint16_t)song.g[i < 2u ? G_DRLVL : G_DRREV], b = (w >> ((i & 1u) * 8u)) & 255u;
+    return i ? (int32_t)b : (int32_t)(int8_t)b;
+}
+static void dj_put(uint32_t i, int32_t v)
+{
+    uint32_t sh = (i & 1u) * 8u, w = (uint16_t)song.g[i < 2u ? G_DRLVL : G_DRREV];
+    w = (w & ~(255u << sh)) | (((uint32_t)v & 255u) << sh);
+    song.g[i < 2u ? G_DRLVL : G_DRREV] = (int16_t)w;
+}
+static int32_t dj_now(uint32_t i) { return (dj_mb >> i) & 1u ? dj_mv[i] : dj_get(i); }   /* as it sounds */
 static volatile int8_t perf_k[4];     /* main: the knob macros, 0 = untouched: FILTER -100..100 (- LPF, + HPF),
                                        * CRUSH 0..100, THROW 0..100, DEPTH cut 0..100 (the buffer effects' level) */
 static volatile uint32_t kb_layer;    /* ISR: the keys held that are the layer's, a bit per key */
@@ -139,6 +158,7 @@ static struct {
     int32_t cw, cc, chl, chr;          /* CRUSH share, amount, held sample */
     uint32_t cn;
     int32_t td;                        /* THROW: the share of the dry mix sent, Q15 */
+    int32_t fm, dd, dw;                /* TFM round 9: the FILTER's position (-100..100: KNOB 1's or the DJ's); DIRT, its share */
     int32_t rw, ew, rw1, ew1;          /* REV / ECHO THROW: their shares (Q15) at this block's start and end */
     uint8_t thr;                       /* .. either at work this block (mix_part: perf_throw) */
     int32_t mg[NTRK];                  /* mute gains, Q15 (32768 = open) */
@@ -300,8 +320,8 @@ static __attribute__((noinline)) int perf_begin(uint32_t n)
 {
     uint32_t held = perf_kill ? 0u : (perf_held | perf_latched | (perf_solo ? (~(uint32_t)perf_solo & 15u) << PF_M1 : 0u)) & perf_avail();
     uint32_t q, k, ph0, bnd;
-    int32_t m;
-    if (!held && !pf.busy && !(perf_k[0] | perf_k[1] | perf_k[2])) {   /* idle: the clock only */
+    int32_t m, df = dj_now(0), de = dj_now(1), ds = dj_now(2), dd = dj_now(3);
+    if (!held && !pf.busy && !(perf_k[0] | perf_k[1] | perf_k[2]) && !(df | de | ds | dd)) {   /* idle: the clock only */
         pf.ph += n;
         pf.sync = 0;
         perf_act = 0;
@@ -326,7 +346,9 @@ static __attribute__((noinline)) int perf_begin(uint32_t n)
     }
     perf_act = pf.act;
     /* the filters: LPF from open down over a bar while its key is held, KNOB 1 left; HPF up, KNOB 1 right */
-    m = perf_k[0];
+    m = perf_k[0] ? perf_k[0] : df * 100 / 63;          /* (KNOB 1 with FX first, else the DJ's FILTER) */
+    pf.fm = m;
+    pf.dd = dd;
     {
         uint32_t bar = 16u * pf.P, t;
         int32_t lt = PF_TOP, ht = 0;
@@ -356,8 +378,9 @@ static __attribute__((noinline)) int perf_begin(uint32_t n)
         int32_t s = THR_SLOPE * (int32_t)n;
         pf.rw = pf.rw1;
         pf.ew = pf.ew1;
-        pf.rw1 += clamp((pf.act & PF_BIT(PF_RTHR) ? 32768 : 0) - pf.rw1, -s, s);
-        pf.ew1 += clamp((pf.act & PF_BIT(PF_ETHR) ? 32768 : 0) - pf.ew1, -s, s);
+        int32_t rt = pf.act & PF_BIT(PF_RTHR) ? 32768 : ds * 258, et = pf.act & PF_BIT(PF_ETHR) ? 32768 : de * 258;   /* (the DJ's */
+        pf.rw1 += clamp(rt - pf.rw1, -s, s);                                                                       /* SPACE, ECHO) */
+        pf.ew1 += clamp(et - pf.ew1, -s, s);
         pf.thr = (pf.rw | pf.rw1 | pf.ew | pf.ew1) != 0;
     }
     pf.mute = 0;
@@ -428,6 +451,13 @@ static __attribute__((noinline)) void perf_throw(const track_t *t, const int32_t
     }
 }
 
+/* TFM round 9: the DJ's DIRT: x (the master, ~Q17) times g (Q4: 1 .. 8) into a cubic soft clip, back at 3/4 (a driven mix is
+ * louder; the limiter after) */
+static inline int32_t pf_drive(int32_t x, int32_t g)
+{
+    int32_t u = clamp(((x >> 2) * g) >> 4, -32767, 32767);
+    return ((3 * u - ((((u * u) >> 15) * u) >> 15)) >> 1) * 3;
+}
 /* x towards y by w (Q15, 32768 = y) */
 static inline int32_t pf_mix(int32_t x, int32_t y, int32_t w)
 {
@@ -742,7 +772,7 @@ static __attribute__((noinline)) void perf_phaser(int32_t *bl, int32_t *br, uint
 static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint32_t n)
 {
     uint32_t i, a = pf.act0, sh, hold;
-    int32_t c = perf_k[1], lt, ht, ct;
+    int32_t c = perf_k[1], lt, ht, ct, dg = 16 + pf.dd * 112 / 127, dt = pf.dd * 258;
     if (c)
         pf.cc = c;
     ct = c ? 32768 : 0;
@@ -759,7 +789,7 @@ static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint3
         }
         if (pf.mode != BM_NONE)
             perf_buf(&l, &r);
-        lt = (a & PF_BIT(PF_LPF)) || perf_k[0] < 0 || pf.lc < PF_TOP ? 32768 : 0;
+        lt = (a & PF_BIT(PF_LPF)) || pf.fm < 0 || pf.lc < PF_TOP ? 32768 : 0;
         pf.la += clamp(lt - pf.la, -SL_SLOPE, SL_SLOPE);
         if (pf.la) {
             int32_t fl = pf_svf(clamp(l >> 2, -32767, 32767), &pf.lz[0], pf.lk, 0) << 2;
@@ -769,7 +799,7 @@ static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint3
         } else {
             pf.lz[0] = pf.lz[1] = pf.lz[2] = pf.lz[3] = 0;
         }
-        ht = (a & PF_BIT(PF_HPF)) || perf_k[0] > 0 || pf.hc > 0 ? 32768 : 0;
+        ht = (a & PF_BIT(PF_HPF)) || pf.fm > 0 || pf.hc > 0 ? 32768 : 0;
         pf.ha += clamp(ht - pf.ha, -SL_SLOPE, SL_SLOPE);
         if (pf.ha) {
             int32_t fl = pf_svf(clamp(l >> 2, -32767, 32767), &pf.hz[0], pf.hk, 1) << 2;
@@ -791,6 +821,11 @@ static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint3
                 r = pf_mix(r, pf.chr, pf.cw);
             }
         }
+        pf.dw += clamp(dt - pf.dw, -SL_SLOPE, SL_SLOPE);  /* TFM round 9: the DJ's DIRT */
+        if (pf.dw) {
+            l = pf_mix(l, pf_drive(l, dg), pf.dw);
+            r = pf_mix(r, pf_drive(r, dg), pf.dw);
+        }
         bl[i] = l;
         br[i] = r;
     }
@@ -799,5 +834,5 @@ static __attribute__((noinline)) void perf_block(int32_t *bl, int32_t *br, uint3
     if ((pf.act & PF_BIT(PF_PHS)) || pf.pw)
         perf_phaser(bl, br, n);
     pf.busy = pf.act || pf.mode != BM_NONE || pf.w || pf.la || pf.ha || pf.cw || pf.td || pf.mute || pf.fw || pf.pw || pf.thr ||
-              pf.fn || perf_k[0] || perf_k[1] || perf_k[2];
+              pf.fn || perf_k[0] || perf_k[1] || perf_k[2] || pf.fm || pf.dw || pf.dd;
 }

@@ -33,7 +33,7 @@ static void r6_fresh(void)
 #endif
     memset(drum_mute, 0, sizeof drum_mute);   /* (the buses: the delay and chorus write heads, the chorus phase, HALL) */
     lim_env = 0; dc_l = dc_r = dce_l = dce_r = 0;     /* (the master limiter and its DC blockers: a loud render before held it down) */
-    memset(dj_s1, 0, sizeof dj_s1); memset(dj_s2, 0, sizeof dj_s2); memset((void *)dj_f, 0, sizeof dj_f);
+    song.g[G_DRLVL] = song.g[G_DRREV] = 0; dj_mb = 0; pf.dw = 0; pf.lc = PF_TOP; pf.hc = 0; pf.la = pf.ha = 0;   /* (round 9: the DJ, the master's) */
 }
 static int32_t r6_mac = -1, r6_macv;                   /* (round 8 item 3: the macro a render moves, -1 none; its place) */
 static void r6_render(uint32_t ins, uint32_t pre)     /* (round 6 item 10: without the mix trims: item 4 audits the sound itself) */
@@ -661,92 +661,6 @@ static int test_r7_build(void)
 }
 /* ------------------------------------------------------------ round 8 --- */
 #define R8(c) do { if (!(c)) { ok = 0; fprintf(stderr, "R8 line %d ", __LINE__); } } while (0)
-/* item 1: hold ARP = DJ: K1 FILTER (LP left, HP right, off in the middle), K2 ECHO (+ feedback past 70 %), K3 SPACE, K4 DIRT
- * (the INSERT, its type kept), ALGORITHM / F#3..C#4 pick the track, let go: back (a glide), OCT+ LATCH, OCT- all back */
-static int test_r8_dj(void)
-{
-    int bad = 0, ok = 1;
-    static int32_t buf[CTL];
-    uint32_t i, n;
-    int16_t dly, rev, imix, ia, fb;
-    double e0, e1;
-    /* the filter itself: Nyquist through the LP far closed, DC through the HP */
-    dj_f[0] = -60; dj_s1[0] = dj_s2[0] = 0;
-    for (n = 0; n < 4u; n++) {
-        for (i = 0; i < CTL; i++) buf[i] = i & 1u ? 20000 : -20000;
-        dj_filter(&trk[0], buf, CTL);
-    }
-    e0 = 0; for (i = 0; i < CTL; i++) e0 += fabs((double)buf[i]);
-    R8(e0 / CTL < 2000.0);                              /* (-20 dB at least) */
-    dj_f[0] = 60; dj_s1[0] = dj_s2[0] = 0;
-    for (n = 0; n < 200u; n++) {
-        for (i = 0; i < CTL; i++) buf[i] = 20000;
-        dj_filter(&trk[0], buf, CTL);
-    }
-    e1 = 0; for (i = 0; i < CTL; i++) e1 += fabs((double)buf[i]);
-    R8(e1 / CTL < 200.0);
-    dj_f[0] = 2;                                        /* (the middle: off, untouched) */
-    for (i = 0; i < CTL; i++) buf[i] = i & 1u ? 1234 : -1234;
-    dj_filter(&trk[0], buf, CTL);
-    R8(buf[0] == -1234 && buf[1] == 1234);
-    dj_f[0] = 0;
-    /* the layer */
-    ui_power_on();
-    tu_off = 0;
-    tu_goto(TU_JAM);
-    tfm_load(&trk[0], TI_SQUELCH, 0);
-    tfm_load(&trk[1], TI_HAZE, 0);
-    trk[1].p[P_ITYPE] = 0;                              /* (no INSERT: DIRT runs SOFT while it moves) */
-    song.sel = 1;
-    frames(32);
-    dly = trk[1].p[P_DLY]; rev = trk[1].p[P_REV]; imix = trk[1].p[P_IMIX]; ia = trk[1].p[P_IA]; fb = song.g[G_DFDBK];
-    r5_perf_open();
-    R8(prf_on() && tu.scr == TU_JAM);
-    turn(EN_K1, -10); frames(16);
-    R8(dj_f[1] < -3);
-    for (n = 0; n < 20u; n++) turn(EN_K2, 10);
-    frames(16);
-    R8(trk[1].p[P_DLY] == TP[P_DLY].max && song.g[G_DFDBK] > fb);
-    turn(EN_K3, 10); frames(16);
-    R8(trk[1].p[P_REV] > rev);
-    turn(EN_K4, 10); frames(16);
-    R8(trk[1].p[P_ITYPE] == 1 && trk[1].p[P_IMIX] > 0 && trk[1].p[P_IA] >= ia);
-    /* ALGORITHM and F#3 pick the track */
-    turn(EN_ALGO, 1); frames(16);
-    R8(song.sel == 2u);
-    r5_key(0);
-    R8(song.sel == 0u);
-    /* let go: a glide back to where it started (exactly) */
-    r5_perf_close();
-    for (n = 0; n < 40u; n++) { fm1_ms += 16u; frame(); }
-    R8(dj_f[1] == 0 && trk[1].p[P_DLY] == dly && trk[1].p[P_REV] == rev && trk[1].p[P_IMIX] == imix && trk[1].p[P_IA] == ia &&
-       trk[1].p[P_ITYPE] == 0 && song.g[G_DFDBK] == fb);
-    /* LATCH: OCT+ tapped while holding, let go: the moves stay; OCT- (no key rolling): all back */
-    song.sel = 0; frames(16);
-    dly = trk[0].p[P_DLY];
-    r5_perf_open();
-    press(B_OCTUP); frames(16);
-    R8(dj_latched());
-    for (n = 0; n < 6u; n++) turn(EN_K2, 10);
-    frames(16);
-    r5_perf_close();
-    for (n = 0; n < 40u; n++) { fm1_ms += 16u; frame(); }
-    R8(trk[0].p[P_DLY] > dly && dj_latched());
-    r5_perf_open();
-    press(B_OCTDN); frames(16);
-    R8(!dj_latched() && trk[0].p[P_DLY] == dly);
-    /* with a white key held (it rolls), OCT- / OCT+ step the roll rate */
-    prf_rate = 2;
-    fm1_in.notes |= 1u << key_at(0, 4); host_notes |= 1u << key_at(0, 4); frame();
-    press(B_OCTUP); frames(16);
-    R8(prf_rate == 3u && !dj_latched());
-    press(B_OCTDN); press(B_OCTDN); frames(16);
-    R8(prf_rate == 1u);
-    fm1_in.notes &= ~(1u << key_at(0, 4)); frame(); frame();
-    r5_perf_close();
-    bad += check("round 8 item 1: hold ARP = DJ (FILTER LP / HP / off, ECHO with feedback, SPACE, DIRT on the INSERT; ALGORITHM and F#3 pick; let go: back exactly; OCT+ LATCH, OCT- all back; OCT-/+ the roll rate while rolling)", ok);
-    return bad;
-}
 /* item 2: MORPH (macro 1, JAM's knob): from the sound as set (0) to its contrast (100); in key; the level within 3 LU over the
  * turn; back at 0 exactly as it was; another macro turned while it is out moves its base */
 static double r8_morph_lu(uint32_t ins, int32_t pos, double *feat)
@@ -1055,5 +969,112 @@ static int test_r9_knob_speed(void)
         }
     }
     bad += check("round 9 item 1: macros sweep 0 -> 100 in ~1.5 turns at a steady pace (28..40 detents, every instrument's MORPH and SOUND's knobs), slow turns one place a detent, a flick 8, switches two detents a step", ok);
+    return bad;
+}
+
+/* item 2: the DJ on the master. The four knobs move the song's values (not a track's), they stay when ARP is let go, the song
+ * keeps them (a scene / the autosave: the globals), JAM's header says DJ; OCT- resets them (one undo); REC on while playing:
+ * motion on the selected track, heard then, the song's value back at the stop; and each one heard on a playing jam */
+static double r9_dj_diff(uint32_t knob, int32_t v)   /* the change knob v makes to a played SQUELCH + HAZE phrase, dB vs the dry */
+{
+    static int16_t dry[2][R6L_N];
+    double e = 0, d = 0;
+    uint32_t i;
+    r6l_setup(TI_SQUELCH, 0);
+    r6l_play(TI_SQUELCH, 0);
+    memcpy(dry, r6l_buf, sizeof dry);
+    r6l_setup(TI_SQUELCH, 0);
+    dj_put(knob, v);
+    r6l_play(TI_SQUELCH, 0);
+    dj_put(knob, 0);
+    for (i = 0; i < R6L_N; i++) {
+        double a = dry[0][i], b = r6l_buf[0][i];
+        e += a * a;
+        d += (a - b) * (a - b);
+    }
+    return 10.0 * log10((d + 1.0) / (e + 1.0));
+}
+static int test_r9_dj(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t n;
+    int16_t dly1, rev1, imix1;
+    ui_power_on();
+    tu_off = 0;
+    tu_goto(TU_JAM);
+    tfm_load(&trk[0], TI_SQUELCH, 0);
+    tfm_load(&trk[1], TI_HAZE, 0);
+    song.sel = 1;
+    frames(32);
+    dly1 = trk[1].p[P_DLY]; rev1 = trk[1].p[P_REV]; imix1 = trk[1].p[P_IMIX];
+    R9(!dj_any() && !tu_hd.l2);
+    r5_perf_open();
+    R9(prf_on());
+    turn(EN_K1, -10); frames(16);
+    R9(dj_now(0) < -3);
+    for (n = 0; n < 10u; n++) turn(EN_K2, 10);
+    frames(16);
+    R9(dj_now(1) == 127);
+    turn(EN_K3, 10); frames(16);
+    R9(dj_now(2) > 0);
+    turn(EN_K4, 10); frames(16);
+    R9(dj_now(3) > 0);
+    R9(trk[1].p[P_DLY] == dly1 && trk[1].p[P_REV] == rev1 && trk[1].p[P_IMIX] == imix1);   /* (no track's own values) */
+    r5_perf_close();
+    for (n = 0; n < 40u; n++) { fm1_ms += 16u; frame(); }
+    R9(dj_now(0) < -3 && dj_now(1) == 127 && dj_now(2) > 0 && dj_now(3) > 0);           /* they stay */
+    R9(tu_hd.l2 && str_eq(tu_hd.l2, "DJ"));
+    {   /* the song keeps them: the globals as a scene / the autosave store them */
+        static project_t q, r;
+        static project_store_t ps;
+        int16_t a = song.g[G_DRLVL], b = song.g[G_DRREV];
+        project_capture(&q);
+        proj_pack(&ps, &q);
+        R9(proj_unpack(&r, ps.raw, PROJ_STORE_SIZE) == 1 && r.g[G_DRLVL] == a && r.g[G_DRREV] == b);
+    }
+    {   /* OCT- with ARP held: all four neutral, one undo */
+        int16_t a = song.g[G_DRLVL], b = song.g[G_DRREV];
+        r5_perf_open();
+        press(B_OCTUP); frames(16);                     /* (OCT+ alone: nothing now, LATCH is gone) */
+        R9(song.g[G_DRLVL] == a && song.g[G_DRREV] == b);
+        press(B_OCTDN); frames(16);
+        R9(!dj_any());
+        r5_perf_close(); frames(16);
+        R9(!tu_hd.l2);
+        undo_swap(); frames(4);
+        R9(song.g[G_DRLVL] == a && song.g[G_DRREV] == b);
+        undo_swap(); frames(4);
+        R9(!dj_any());
+    }
+    {   /* REC on while playing: the turn is recorded on the selected track, heard now; stopped: the song's value (0) */
+        song.rec = 1u << song.sel;
+        seq_start();
+        frames(4);
+        r5_perf_open();
+        turn(EN_K2, 10); frames(4);
+        R9(dj_now(1) > 0 && dj_get(1) == 0);
+        R9(motion_count(TSEL) >= 1u);
+        {
+            uint32_t i, found = 0;
+            for (i = 0; i < motion.count; i++)
+                found |= (motion.event[i].place >> 6) == song.sel && MOTION_ID(&motion.event[i]) == MO_DJ + 1u;
+            R9(found);
+        }
+        r5_perf_close();
+        song.rec = 0;
+        press(B_PLAY); events_block(32); frames(4);
+        R9(!song.playing && dj_now(1) == 0);
+        seq_start();                                    /* playing again: the recorded value comes back at its step */
+        for (n = 0; n < 4000u && !dj_now(1); n++) { int32_t o[2 * CTL]; mix_block(o, CTL); }
+        R9(dj_now(1) > 0);
+        press(B_PLAY); events_block(32); frames(4);
+        motion_clear(TSEL);
+    }
+    {   /* by ear: each knob at its end changes a played phrase plainly (at least -12 dB of change against the dry) */
+        double f0 = r9_dj_diff(0, -63), f1 = r9_dj_diff(0, 63), e = r9_dj_diff(1, 127), sp = r9_dj_diff(2, 127), d = r9_dj_diff(3, 127);
+        printf("ui:   the DJ by ear, the change against the dry phrase: FILTER LP %.1f dB, HP %.1f, ECHO %.1f, SPACE %.1f, DIRT %.1f\n", f0, f1, e, sp, d);
+        R9(f0 > -12.0 && f1 > -12.0 && e > -12.0 && sp > -12.0 && d > -12.0);
+    }
+    bad += check("round 9 item 2: the DJ on the master (FILTER ECHO SPACE DIRT the song's, not a track's), stays when let go, saved with the song, DJ in JAM's header, OCT- resets (one undo), recorded as motion with REC on while playing, each plainly heard", ok);
     return bad;
 }

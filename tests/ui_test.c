@@ -11381,13 +11381,13 @@ int main(void)
     bad += test_r7_instruments();
     bad += test_r7_noinst();
     bad += test_r7_build();
-    bad += test_r8_dj();
     bad += test_r8_morph();
     bad += test_r8_macros();
     bad += test_r8_kits();
     bad += test_r8_pitched_lane();
     bad += test_r8_jam_timer();
     bad += test_r9_knob_speed();
+    bad += test_r9_dj();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

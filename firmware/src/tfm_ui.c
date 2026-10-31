@@ -516,15 +516,11 @@ static void tu_jam_dmd(void)                            /* y 22 .. 79: the score
     if (prf_on()) {                                     /* round 8: DJ: the display violet as PERFORM's was */
         static const char *const RN[5] = {"1/8", "1/8T", "1/16", "1/16T", "1/32"};
         dmd_str(14, 36, 4, "DJ", RGB(170, 130, 255), RGB(34, 26, 56));
-        b[0] = 'T';
-        b[1] = (char)('1' + song.sel % NTRK);
-        str_cpy(b + 2, " \xB7 ", 6);
-        str_cpy(b + str_len(b), tu_inst_name(TSEL), 14);
-        tu_text(96, 36, &AF_TS, b, RGB(190, 160, 255), RGB(10, 7, 4));
+        tu_text(96, 36, &AF_TS, "THE WHOLE MIX", RGB(190, 160, 255), RGB(10, 7, 4));   /* (round 9: the master, kept) */
         str_cpy(b, "ROLL ", 8);
         str_cpy(b + 5, RN[prf_rate % 5u], 8);
         tu_text(96, 52, &AF_TS, b, RGB(150, 130, 210), RGB(10, 7, 4));
-        tu_text(96, 68, &AF_TS, dj_latched() ? "LATCH ON" : "LATCH OFF", dj_latched() ? RGB(255, 170, 60) : RGB(120, 100, 150),
+        tu_text(96, 68, &AF_TS, dj_any() ? "STAYS . OCT- RESET" : "ALL NEUTRAL", dj_any() ? RGB(255, 170, 60) : RGB(120, 100, 150),
                 RGB(10, 7, 4));
         return;
     }
@@ -739,12 +735,12 @@ static void tu_cab_draw(uint32_t c)
     }
     tu_cab_rec(x0 + 45, y0 + 79, c, tu_mat_at(m, 79, CAB_H));
 }
-/* round 8: hold ARP: the selected track's four DJ knobs, big, over the cabinets (its colour at the edge) */
+/* round 8: hold ARP: the four DJ knobs, big, over the cabinets (round 9: the master's, violet at the edge) */
 static void tu_dj_panel(void)
 {
     static const char *const KN[4] = {"FILTER", "ECHO", "SPACE", "DIRT"};
     uint32_t k, c = song.sel % NTRK;
-    uint16_t col = TU_TC[c], bg = RGB(16, 12, 26), vi = RGB(170, 130, 255);
+    uint16_t bg = RGB(16, 12, 26), vi = RGB(170, 130, 255), col = vi;
     tu_cut(3, 82, 234, 93, col);
     tu_cut(5, 84, 230, 89, bg);
     for (k = 0; k < 4u; k++) {
@@ -877,14 +873,14 @@ static void tu_jam_draw(void)
         static char hl[24];
         str_cpy(hl, prf_on() ? "HOLD ARP \xB7 DJ" : jw.held ? "HOLD F#5 \xB7 CHAIN" : tn, sizeof hl);
         tu_head_nt = 1;                                 /* (round 8: no timer in JAM's header: the display shows it) */
-        tu_head(-1, hl, 0, 0, 1);
+        tu_head(-1, hl, !prf_on() && dj_any() ? "DJ" : 0, 0, 1);   /* (round 9: DJ while any of the four is off neutral) */
     }
     for (i = 0; i < NTRK; i++)                          /* (the meters: tu_meter_poll, in dB) */
         tu.lvl[i] = (uint8_t)(tu.mlv[i] / 16u);
     dsig = (tm.on ? tm.left * 31u : 0u) + (uint32_t)tilt_timer_min * 977u + bar * 7u + tot * 131u + (uint32_t)song.g[G_BPM] * 4099u +
            (uint32_t)TSEL->p[P_ROOT] * 17u + (uint32_t)TSEL->p[P_SCALE] * 19u + cur * 6151u + (chain.running ? chain.row + 1u : 0u) * 53u +
            str_hash(5u, nmb) + (uint32_t)song.sel * 2999u + (uint32_t)jw.held * 977u + jw.n * 31u + (tsc.cue < NSCN ? 1u + tsc.cue * 13u + jl_bars_left() * 101u : 0u) +
-           (chain.running ? 1u + chain.row * 17u + chain.remaining * 3u : 0u) + (prf_on() ? 11u + prf_rate * 7u + (uint32_t)dj_latched() * 31u : 0u);
+           (chain.running ? 1u + chain.row * 17u + chain.remaining * 3u : 0u) + (prf_on() ? 11u + prf_rate * 7u + (uint32_t)dj_any() * 31u : 0u);
     tu_zone(1, TU_HY, 57, TC_BG, dsig, tu_jam_dmd);
     for (i = 0; i < NTRK; i++) {
         sig = sig * 131u + (uint32_t)jam_pos(&trk[i]) * 7u + (uint32_t)(trk[i].p[P_MUTE] != 0) * 3u + trk[i].eng_req +
@@ -899,7 +895,7 @@ static void tu_jam_draw(void)
     tu_zone(3, 177, 38, TC_BG, cur * 977u + tu_used_mask() * 5u + (uint32_t)sng_cur * 131u + (tsc.cue < NSCN ? 1u + ((ui.frame >> 3) & 1u) + tsc.cue * 3u : 0u) +
             (chain.running ? 1u + chain.row * 17u : 0u) + (uint32_t)jw.held * 7919u + (uint32_t)jl_held(9) * 4001u + (prf_on() ? 3u + song.sel * 31u : 0u), tu_strip_draw);
     if (prf_on())
-        tu_foot(3, "WHITE", "ROLL", "OCT+", "LATCH", "LET GO", "BACK", 0, 0, 0, 0);
+        tu_foot(3, "WHITE", "ROLL", "OCT-", "RESET", "K1-K4", "THE MIX", 0, 0, 0, 0);
     else if (jw.held)
         tu_foot(3, "BLACK", "ADD SCENE", "OCT-", "UNDO TAP", "LET GO", "DONE", 0, 0, 0, 0);
     else

@@ -553,7 +553,7 @@ static uint8_t prf_rate, prf_cap, prf_mut;
 static void prf_mutate(void);
 static void prf_pick(uint32_t k);
 static int32_t dj_shown(uint32_t k, uint32_t knob);
-static int dj_latched(void);
+static int dj_any(void);
 static void prf_poll(void);
 static int prf_fill_key(void);
 static int prf_on(void);
@@ -1026,7 +1026,7 @@ static int seq_is_empty(const track_t *t)
  * takes the copy too (UNDO_MOT: SAVE held puts the track's motion back, the sound and the steps stay; motion_undo_take).
  * A sound load keeps the track's motion on the parameters every engine has (load_end, motion.c motion_sound_loaded);
  * a pattern load drops it all (the steps it was on are gone) */
-enum { UNDO_SOUND = 1, UNDO_PAT = 2, UNDO_MOT = 4 };
+enum { UNDO_SOUND = 1, UNDO_PAT = 2, UNDO_MOT = 4, UNDO_DJ = 8 };   /* (UNDO_DJ: TFM round 9, the DJ's reset) */
 static struct {
     uint8_t trk;                 /* track + 1, 0 = nothing to undo */
     uint8_t keep;                /* the track is as the last load left it (undo.after): a next load keeps the copy */
@@ -1041,6 +1041,7 @@ static struct {
     uint32_t pat;                /* pat_sig[] of the copy */
     uint32_t from_h;             /* pat_from_h[], pat_from[] of the copy (the header's slot letter) */
     uint8_t from;
+    int16_t dj[2];               /* UNDO_DJ: the song's G_DRLVL, G_DRREV (the DJ's four, perform.c dj_get) */
     uint32_t t_ms;               /* time of the last load (the editor's SETs after it belong to it) */
 } undo __attribute__((section(".pool")));   /* (main loop only: off the audio code's .bss) */
 static uint8_t undo_depth;       /* loads nest (an engine jump loads its first preset): the outer one counts;
@@ -1303,6 +1304,13 @@ static void undo_swap(void)
             t->step[i] = undo.step[i];
             undo.step[i] = s;
         }
+    }
+    if (undo.what & UNDO_DJ) {                    /* the DJ's four (a song's, not the track's) */
+        int16_t a = song.g[G_DRLVL], c = song.g[G_DRREV];
+        song.g[G_DRLVL] = undo.dj[0];
+        song.g[G_DRREV] = undo.dj[1];
+        undo.dj[0] = a;
+        undo.dj[1] = c;
     }
     fm1_irq_on();
     if (undo.what & UNDO_SOUND) {                 /* FM6: the track's patch as it was (edited, a project's, a

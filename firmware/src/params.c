@@ -218,12 +218,21 @@ static const param_desc_t GP[G_COUNT] = {
     /* inert: they set the GM drum part (level, reverb send), which is gone (drums are the DRUM engine
      * on any part). On no page; kept so the ids and G_COUNT, which the project format and the
      * editor protocol depend on, do not move */
-    [G_DRLVL] = PD("-", F_INT, 0, 0, 0),
-    [G_DRREV] = PD("-", F_INT, 0, 0, 0),
+    [G_DRLVL] = PD("-", F_INT, 0, 32767, 0),   /* (TFM round 9: the DJ's FILTER and ECHO, perform.c dj_get) */
+    [G_DRREV] = PD("-", F_INT, 0, 32767, 0),   /* (.. its SPACE and DIRT) */
 };
 
+/* TFM round 9: hold ARP's DJ on the master (tfm_live.c): its four as motion ids after the track's (motion.c, MO_DJ + 0..3:
+ * FILTER, ECHO, SPACE, DIRT), recorded on the selected track's lane; stored in the motion block as any id (< 128) */
+#define MO_DJ P_COUNT
+#define DJ_N 4u
+_Static_assert(MO_DJ + DJ_N <= 128u, "the DJ's motion ids under MOTION_LOCK");
+static const param_desc_t DJ_DESC[DJ_N] = {PD("DJ FILT", F_INT, -63, 63, 0), PD("DJ ECHO", F_INT, 0, 127, 0),
+                                           PD("DJ SPACE", F_INT, 0, 127, 0), PD("DJ DIRT", F_INT, 0, 127, 0)};
 static const param_desc_t *track_desc(const track_t *t, uint32_t id)
 {
+    if (id >= P_COUNT)
+        return &DJ_DESC[(id - P_COUNT) % DJ_N];
     if (id >= P_E0 && id <= P_E7) {                   /* the engine asked for (t->engine follows after a fade) */
         const engine_t *e = ENGINES[eng_idx(t->eng_req)];
         const param_desc_t *d = e->desc ? e->desc(t, id - P_E0) : 0;   /* a mode-dependent label / names */
@@ -240,7 +249,7 @@ static const param_desc_t *track_desc(const track_t *t, uint32_t id)
  * only; range and default are the same): what the editor protocol, user presets and projects use */
 static const param_desc_t *param_desc_of(uint32_t e, uint32_t id)
 {
-    return id >= P_E0 ? &ENGINES[e]->edit[id - P_E0] : &TP[id];
+    return id >= P_COUNT ? &DJ_DESC[(id - P_COUNT) % DJ_N] : id >= P_E0 ? &ENGINES[e]->edit[id - P_E0] : &TP[id];
 }
 
 /* a retired F_ENUM value kept as an alias, so stored values stay valid: SAMPLE SET and GRAIN SRC 1, once
