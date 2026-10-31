@@ -24,9 +24,14 @@ static void r6_fresh(void)
     memset(eng_mem, 0, sizeof eng_mem);                 /* (the parts' engine state: the drum lanes, FM6 notes, strings) */
     memset(eng_mem_owner, 0, sizeof eng_mem_owner);
     memset(&fx, 0, sizeof fx); memset(&hl, 0, sizeof hl);
-    vage = 0; uni_seed = 0x1234567u; memset(mod_w, 0, sizeof mod_w);
+    vage = 0; uni_seed = 0x1234567u; MOD_W_CLEAR();
     memset(fm6_lfo, 0, sizeof fm6_lfo); memset(drw_t, 0, sizeof drw_t); memset(drw_v, 0, sizeof drw_v);   /* (FM6's LFOs, */
-    { uint32_t q; for (q = 0; q < NTRK; q++) { formant_nz[q] = 0x2545F491; phys_nz[q] = 0x6A09E667; } }   /* WHEEL's rotor, the noises) */ memset(drum_mute, 0, sizeof drum_mute);   /* (the buses: the delay and chorus write heads, the chorus phase, HALL) */
+#if FELUCCA_CPU2
+    { uint32_t q; for (q = 0; q < NTRK; q++) { formant_nz[q] = 0x2545F491; phys_nz[q] = 0x6A09E667; } }   /* WHEEL's rotor, the noises) */
+#else
+    formant_nz = 0x2545F491;                            /* (one core: one breath noise; PHYS reseeds from rng()) */
+#endif
+    memset(drum_mute, 0, sizeof drum_mute);   /* (the buses: the delay and chorus write heads, the chorus phase, HALL) */
     lim_env = 0; dc_l = dc_r = dce_l = dce_r = 0;     /* (the master limiter and its DC blockers: a loud render before held it down) */
     memset(dj_s1, 0, sizeof dj_s1); memset(dj_s2, 0, sizeof dj_s2); memset((void *)dj_f, 0, sizeof dj_f);
 }

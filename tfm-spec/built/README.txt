@@ -22,6 +22,8 @@ ui_snd_razor
 ui_snd_squelch
 ui_snd_thump
 ui_snd_tine
+ui_snd_trash
+ui_snd_hand
 ui_snd_vox
 ui_snd_wheel
 ui_snd_wobbler
@@ -29,6 +31,8 @@ ui_song
 ui_songs
 ui_space
 ui_start
+ui_start_rolled
+ui_start_spin
 ui_start_rolled
 ui_start_spin
 ui_start_rolled
