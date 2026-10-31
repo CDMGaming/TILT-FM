@@ -1070,6 +1070,17 @@ static int test_r9_dj(void)
         for (n = 0; n < 4000u && !dj_now(1); n++) { int32_t o[2 * CTL]; mix_block(o, CTL); }
         R9(dj_now(1) > 0);
         press(B_PLAY); events_block(32); frames(4);
+        {   /* a scene with the DJ's motion is stored and loads back (its ids after the track's) */
+            static project_t q, r;
+            static project_store_t ps;
+            uint32_t i, back = 0;
+            project_capture(&q);
+            proj_pack(&ps, &q);
+            R9(proj_unpack(&r, ps.raw, PROJ_STORE_SIZE) == 1);
+            for (i = 0; i < r.motion.count; i++)
+                back |= MOTION_ID(&r.motion.event[i]) == MO_DJ + 1u;
+            R9(back);
+        }
         motion_clear(TSEL);
     }
     {   /* by ear: each knob at its end changes a played phrase plainly (at least -12 dB of change against the dry) */
