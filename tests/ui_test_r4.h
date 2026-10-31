@@ -351,27 +351,27 @@ static int test_r4_faces(void)
     R4(a != b);
     /* WOBBLER: the LED ring = WOB, the lit tile = RATE */
     r4_face(TI_WOBBLER);
-    tfm_macro_put(&trk[0], 0, 10, 0); frames(64);
+    tfm_macro_put(&trk[0], 1, 10, 0); frames(64);
     a = r4_hash(60, 30, 180, 155);
-    tfm_macro_put(&trk[0], 0, 120, 0); frames(64);
+    tfm_macro_put(&trk[0], 1, 120, 0); frames(64);
     b = r4_hash(60, 30, 180, 155);
     R4(a != b);
-    tfm_macro_put(&trk[0], 1, 0, 0); frames(64);
+    tfm_macro_put(&trk[0], 2, 0, 0); frames(64);
     a = r4_hash(36, 166, 210, 183);
-    tfm_macro_put(&trk[0], 1, 127, 0); frames(64);
+    tfm_macro_put(&trk[0], 2, 127, 0); frames(64);
     b = r4_hash(36, 166, 210, 183);
     R4(a != b);
     /* CHORDETTE: the LCD says the chord's real name and notes (D minor 7: Dm7, D F A C) */
     r4_face(TI_CHORDETTE);
     trk[0].p[P_ROOT] = 0;
     for (i = 0; i < 9u; i++) {                                                   /* the CHORD switch: find MIN7 */
-        tfm_macro_put(&trk[0], 0, (int32_t)(i * 128u / 9u), 0);
+        tfm_macro_put(&trk[0], 1, (int32_t)(i * 128u / 9u), 0);
         tf_chord_name(62, name, notes);
         if (str_eq(name, "Dm7"))
             break;
     }
     R4(str_eq(name, "Dm7") && str_eq(notes, "D F A C"));
-    tfm_macro_put(&trk[0], 0, 0, 0);
+    tfm_macro_put(&trk[0], 1, 0, 0);
     tf_chord_name(60, name, notes);
     R4(name[0] == 'C' && notes[0] == 'C');
     /* PIXEL: its screen draws the current WAVE (five different drawings) */
@@ -379,7 +379,7 @@ static int test_r4_faces(void)
     {
         uint32_t h[5];
         for (i = 0; i < 5u; i++) {
-            tfm_macro_put(&trk[0], 1, (int32_t)(i * 128u / 5u + 2u), 0);
+            tfm_macro_put(&trk[0], 2, (int32_t)(i * 128u / 5u + 2u), 0);
             frames(64);
             h[i] = r4_hash(22, 40, 140, 95);
         }
@@ -387,8 +387,8 @@ static int test_r4_faces(void)
     }
     /* TINE: the lever follows TREM (OFF / MONO / STER) */
     r4_face(TI_TINE);
-    tfm_macro_put(&trk[0], 2, 0, 0); frames(64); a = r4_hash(14, 90, 116, 104);
-    tfm_macro_put(&trk[0], 2, 127, 0); frames(64); b = r4_hash(14, 90, 116, 104);
+    tfm_macro_put(&trk[0], 3, 0, 0); frames(64); a = r4_hash(14, 90, 116, 104);
+    tfm_macro_put(&trk[0], 3, 127, 0); frames(64); b = r4_hash(14, 90, 116, 104);
     R4(a != b);
     /* PLUCK: the string vibrates on a note and is still when it has died away */
     r4_face(TI_PLUCK);
@@ -403,15 +403,15 @@ static int test_r4_faces(void)
     b = r4_hash(30, 70, 80, 112);
     R4(a != b);
     R4(r4_hash(32, 47, 42, 57) != 0u);
-    tfm_macro_put(&trk[0], 0, 100, 0); frames(64);
+    tfm_macro_put(&trk[0], 1, 100, 0); frames(64);
     R4(r4_hash(30, 70, 80, 112) != b);
     /* WHEELHOUSE: the drawbars show the STOPS registration, the tile = ROTOR */
     r4_face(TI_WHEEL);
-    tfm_macro_put(&trk[0], 0, 0, 0); frames(64); a = r4_hash(10, 28, 150, 125);
-    tfm_macro_put(&trk[0], 0, 40, 0); frames(64); b = r4_hash(10, 28, 150, 125);
+    tfm_macro_put(&trk[0], 1, 0, 0); frames(64); a = r4_hash(10, 28, 150, 125);
+    tfm_macro_put(&trk[0], 1, 40, 0); frames(64); b = r4_hash(10, 28, 150, 125);
     R4(a != b);
-    tfm_macro_put(&trk[0], 2, 0, 0); frames(64); a = r4_hash(150, 93, 230, 107);
-    tfm_macro_put(&trk[0], 2, 127, 0); frames(64); b = r4_hash(150, 93, 230, 107);
+    tfm_macro_put(&trk[0], 3, 0, 0); frames(64); a = r4_hash(150, 93, 230, 107);
+    tfm_macro_put(&trk[0], 3, 127, 0); frames(64); b = r4_hash(150, 93, 230, 107);
     R4(a != b);
     /* HAZE / GLINT / RAZOR: the controls move with the macros */
     r4_face(TI_HAZE);

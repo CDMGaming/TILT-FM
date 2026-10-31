@@ -5,6 +5,31 @@
 #define R6_N (R6_FS * 2u)
 static int16_t r6_buf[R6_N];
 /* a preset rendered: C4 E4 G4 eighths then C5 held (a kit: kick, snare, hat, kick held), 2 s from a clean start */
+/* round 8: every render from the same start whatever ran before (the voices' noise and LFOs, the matrix's random) */
+static void r6_fresh(void)
+{
+    uint32_t q;
+    seq_stop();                                         /* (no song playing under it: earlier tests may leave one) */
+    song.playing = 0;
+    transport_req = 0;
+    chain.running = chain.armed = 0;
+    for (q = 0; q < NTRK; q++) {
+        memset(trk[q].step, 0, sizeof trk[q].step);     /* (no steps, the other three silent: track 0 alone is heard) */
+        if (q)
+            trk[q].p[P_MUTE] = 1;
+        memset(trk[q].v, 0, sizeof trk[q].v);
+        trk[q].lfo_ph = 0; trk[q].lfo_val = 0; trk[q].lfo_fade = 0; trk[q].lfo_rnd = 0; trk[q].lfo_prev = 0;
+    }
+    mod_seed = 0x2545F491u;
+    memset(eng_mem, 0, sizeof eng_mem);                 /* (the parts' engine state: the drum lanes, FM6 notes, strings) */
+    memset(eng_mem_owner, 0, sizeof eng_mem_owner);
+    memset(&fx, 0, sizeof fx); memset(&hl, 0, sizeof hl);
+    vage = 0; uni_seed = 0x1234567u; memset(mod_w, 0, sizeof mod_w);
+    memset(fm6_lfo, 0, sizeof fm6_lfo); memset(drw_t, 0, sizeof drw_t); memset(drw_v, 0, sizeof drw_v);   /* (FM6's LFOs, */
+    { uint32_t q; for (q = 0; q < NTRK; q++) { formant_nz[q] = 0x2545F491; phys_nz[q] = 0x6A09E667; } }   /* WHEEL's rotor, the noises) */ memset(drum_mute, 0, sizeof drum_mute);   /* (the buses: the delay and chorus write heads, the chorus phase, HALL) */
+    lim_env = 0; dc_l = dc_r = dce_l = dce_r = 0;     /* (the master limiter and its DC blockers: a loud render before held it down) */
+    memset(dj_s1, 0, sizeof dj_s1); memset(dj_s2, 0, sizeof dj_s2); memset((void *)dj_f, 0, sizeof dj_f);
+}
 static void r6_render(uint32_t ins, uint32_t pre)     /* (round 6 item 10: without the mix trims: item 4 audits the sound itself) */
 {
     static const uint8_t MEL[4] = {60, 64, 67, 72}, KIT[4] = {36, 38, 42, 36};
@@ -19,7 +44,8 @@ static void r6_render(uint32_t ins, uint32_t pre)     /* (round 6 item 10: witho
     tu_off = 0;
     song.master_q12 = 4096;
     song.g[G_BPM] = 120;
-    rng_state = 0x12345678u;                            /* (the same render whatever ran before) */
+    rng_state = 0x12345678u;
+    r6_fresh();
     song.sel = 0;
     tfm_load(t, ins, pre);
     t->p[P_ROOT] = 0; t->p[P_SCALE] = 1; t->p[P_QUANT] = QN_WHITE;
@@ -202,7 +228,7 @@ static int test_r6_chord_order(void)
     {
         uint32_t i;
         for (i = 0; i < 9u; i++) {                      /* the CHORD switch: find the major triad */
-            tfm_macro_put(&trk[0], 0, (int32_t)(i * 128u / 9u), 0);
+            tfm_macro_put(&trk[0], 1, (int32_t)(i * 128u / 9u), 0);   /* (CHORD: macro 2 since round 8) */
             trk[0].p[P_VOIC] = VC_CLOSE;
             tf_chord_name(60, name, notes);
             if (str_eq(name, "C"))
@@ -304,6 +330,7 @@ static void r6l_setup(uint32_t ins, uint32_t pre)
     song.master_q12 = 4096;
     song.g[G_BPM] = 120;
     rng_state = 0x12345678u;
+    r6_fresh();
     song.sel = 0;
     tfm_load(t, ins, pre);
     t->p[P_ROOT] = 0; t->p[P_SCALE] = 1; t->p[P_QUANT] = QN_WHITE;
@@ -710,5 +737,61 @@ static int test_r8_dj(void)
     fm1_in.notes &= ~(1u << key_at(0, 4)); frame(); frame();
     r5_perf_close();
     bad += check("round 8 item 1: hold ARP = DJ (FILTER LP / HP / off, ECHO with feedback, SPACE, DIRT on the INSERT; ALGORITHM and F#3 pick; let go: back exactly; OCT+ LATCH, OCT- all back; OCT-/+ the roll rate while rolling)", ok);
+    return bad;
+}
+/* item 2: MORPH (macro 1, JAM's knob): from the sound as set (0) to its contrast (100); in key; the level within 3 LU over the
+ * turn; back at 0 exactly as it was; another macro turned while it is out moves its base */
+static double r8_morph_lu(uint32_t ins, int32_t pos, double *feat)
+{
+    double l, s;
+    r6l_setup(ins, 0);
+    tfm_macro_put(&trk[0], 0, pos, 0);
+    r6l_play(ins, 0);
+    r6_lufs(&l, &s);
+    if (feat) {                                         /* (the audit's features of the same, its own render) */
+        r6_render(ins, 0);
+        (void)feat;
+    }
+    return l;
+}
+static int test_r8_morph(void)
+{
+    int bad = 0, ok = 1, lv = 1, key = 1, back = 1;
+    uint32_t i;
+    for (i = 0; i < TI_N; i++) {
+        double l0 = r8_morph_lu(i, 0, 0), l1 = r8_morph_lu(i, 64, 0), l2 = r8_morph_lu(i, 127, 0), lo, hi;
+        lo = l0 < l1 ? (l0 < l2 ? l0 : l2) : (l1 < l2 ? l1 : l2);
+        hi = l0 > l1 ? (l0 > l2 ? l0 : l2) : (l1 > l2 ? l1 : l2);
+        fprintf(stderr, "MORPH %-10s LUFS 0 %6.1f  50 %6.1f  100 %6.1f  (%.1f LU)%c", TFM_INS[i].name, l0, l1, l2, hi - lo, 10);
+        if (hi - lo > 3.0) lv = 0;
+        if (i != TI_THUMP) {                            /* (a kit has no pitch) */
+            double w1 = r3_pitch(i, 0, 0, 50), w2 = r3_pitch(i, 0, 0, 100);
+            if ((w1 != 999.0 && w1 > 35.0) || (w2 != 999.0 && w2 > 35.0)) {
+                key = 0;
+                fprintf(stderr, "R8 MORPH PITCH %s %.0f %.0f ", TFM_INS[i].name, w1, w2);
+            }
+        }
+    }
+    {   /* back at 0: the sound exactly as it was; a macro turned while out moves the base */
+        track_t *t = &trk[0];
+        int16_t p0[P_COUNT];
+        ui_power_on();
+        tfm_load(t, TI_SQUELCH, 0);
+        memcpy(p0, t->p, sizeof p0);
+        tfm_macro_put(t, 0, 127, 0);
+        back &= t->p[P_E5] != p0[P_E5] && tfm_macro_get(t, 0) == 127;
+        tfm_macro_put(t, 0, 0, 0);
+        back &= !memcmp(p0, t->p, sizeof p0) && tfm_macro_get(t, 0) == 0;
+        tfm_macro_put(t, 0, 64, 0);
+        tfm_macro_put(t, 1, 0, 0);                      /* CUTOFF down while MORPH is out */
+        {
+            int16_t lowcut = (int16_t)tfm_tgt_val(&TFM_INS[TI_SQUELCH].mac[1].t[0], 0);
+            tfm_macro_put(t, 0, 0, 0);
+            back &= t->p[P_E4] == lowcut;               /* (back at 0: the base is where CUTOFF put it) */
+        }
+    }
+    bad += check("round 8 item 2: MORPH on every instrument keeps its level (3 LU over the turn)", lv);
+    bad += check("round 8 item 2: MORPH stays in key at 50 and 100 (YIN, +-35 cents)", key);
+    bad += check("round 8 item 2: MORPH back at 0 is the sound exactly as it was; a macro turned while it is out moves its base", back && ok);
     return bad;
 }

@@ -214,7 +214,7 @@ static int test_r1_jam_sel(void)
 static int test_r1_macros(void)
 {
     int bad = 0, ok = 1;
-    static const char *const JN[TI_N] = {"PUNCH", "CUTOFF", "WOB", "WARM", "CUT", "BLOOM", "TONE", "BARK", "METAL", "BRIGHT", "VOWEL", "DRIVE"};
+    /* (round 8: JAM's knob is MORPH, macro 1, on every instrument) */
     uint32_t i, m, k, nswitch = 0, ncont = 0;
     ui_power_on();
     tu_off = 0;
@@ -222,10 +222,12 @@ static int test_r1_macros(void)
         track_t *t = &trk[0];
         const tfm_instr_t *in = &TFM_INS[i];
         tfm_load(t, i, 0);
-        R1(!in->mac[tfm_jam_m(t)].nsw && str_eq(in->mac[tfm_jam_m(t)].name, JN[i]));    /* JAM's: the named one, no switch */
+        R1(tfm_jam_m(t) == 0u && in->mac[0].nsw == TFM_MSW && str_eq(in->mac[0].name, "MORPH"));   /* JAM's: MORPH */
         for (m = 0; m < 8u; m++) {
             const tfm_macro_t *mc = &in->mac[m];
             int32_t prev[4], pos;
+            if (mc->nsw == TFM_MSW)                                                     /* (MORPH: test_r8_morph) */
+                continue;
             if (mc->nsw) {                                                              /* a switch: one value per two detents */
                 int32_t v0, v1;
                 nswitch++;
@@ -269,16 +271,16 @@ static int test_r1_macros(void)
             R1(tfm_macro_get(t, m) > 100);
         }
     }
-    R1(nswitch > 0u && ncont > 60u);
+    R1(nswitch > 0u && ncont > 55u);                     /* (round 8: 12 MORPHs are tested apart) */
     /* JAM's knob turns it, on a track in the song */
     tfm_load(&trk[0], TI_SQUELCH, 0);
     tfm_macro_put(&trk[0], 0, 30, 0);
     fm1_ms += 1000u; jam_turn(0, 1);
     R1(tfm_macro_get(&trk[0], 0) == 31);
     tfm_load(&trk[1], TI_CHORDETTE, 0);
-    tfm_macro_put(&trk[1], 2, 40, 0);
+    tfm_macro_put(&trk[1], 0, 40, 0);
     fm1_ms += 1000u; jam_turn(1, 1);
-    R1(tfm_macro_get(&trk[1], 2) == 41);
+    R1(tfm_macro_get(&trk[1], 0) == 41);
     bad += check("TFM-UI fix 5: all 12 x 8 macros: a detent moves a continuous one by exactly 1 (0..127, targets monotone), a switch steps per two detents, JAM turns the named macro", ok);
     return bad;
 }

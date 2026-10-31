@@ -4,6 +4,7 @@
 """MACROS-TO-TUNE.md from tools/tfm_ins_spec.py (the instrument sheets of tfm-spec/TFM-INSTRUMENTS.md as data, the
 source of firmware/src/tfm_instr.c's TFM_INS table): every macro, its targets and what each is at 0 / 25 / 50 / 75 /
 100 %, a column to tick when checked by ear.   gen_macros_doc.py OUT.md"""
+import re
 import sys
 from pathlib import Path
 
@@ -23,6 +24,21 @@ ENG = {"THUMP LAB": ["KIT", "TUNE", "TONE", "DECY", "SNAP", "ACC", "KICK", "DRV"
        "PLUCK": ["MODEL", "STRC", "BRIT", "DAMP", "POS", "ACC", "BOW", "EXC"],
        "VOX": ["VOWL", "VOWL2", "TALK", "SHIFT", "BUZZ", "BRTH", "Q", "RAND"],
        "WHEELHOUSE": ["REG", "SUB", "BODY", "TOP", "PERC", "CLICK", "DRV", "ROTR"]}
+
+
+def morph_table():
+    """round 8: MORPH's targets, read from firmware/src/tfm_instr.c's TFM_MORPH (one row per instrument)"""
+    src = (Path(__file__).resolve().parents[1] / "firmware" / "src" / "tfm_instr.c").read_text()
+    body = src[src.index("static const tfm_mt_t TFM_MORPH[TI_N][8] = {"):]
+    body = body[:body.index("\n};")]
+    rows = re.findall(r"\{(\{P_[^\n]*(?:\n[^/{}]*\{P_[^\n]*)*)\}", body)
+    out = []
+    for r in rows:
+        out.append([(m[0], int(m[1]), m[2]) for m in re.findall(r"\{(P_[A-Z0-9_]+), (-?\d+), TMM_(ABS|REL|SW)\}", r)])
+    return out
+
+
+MORPH = morph_table()
 
 
 def pname(ins, pid):
@@ -50,11 +66,15 @@ L = ["# MACROS TO TUNE (TFM instruments)", "",
      "macro adds drive, no LEVEL macro.", ""]
 for ins in INS:
     L += ["## %s" % ins["name"], "", "| # | Macro | Targets | 0 | 25 | 50 | 75 | 100 | OK? |", "|---|---|---|---|---|---|---|---|---|"]
-    JAMM = {"THUMP LAB": 1, "SQUELCH": 1, "WOBBLER": 1, "CHORDETTE": 3, "RAZOR": 3, "HAZE": 4, "PIXEL": 3, "TINE": 1,
-            "GLINT": 1, "PLUCK": 1, "VOX": 1, "WHEELHOUSE": 2}
     for n, (mn, spec) in enumerate(ins["mac"], 1):
-        if JAMM.get(ins["name"]) == n:
-            mn += " (JAM)"
+        if n == 1:
+            mn += " (JAM)"                              # (round 8: MORPH, macro 1, is JAM's knob on every instrument)
+        if isinstance(spec, tuple) and spec[0] == "morph":
+            mt = MORPH[INS.index(ins)]
+            tg = "; ".join("%s %s" % (pname(ins["name"], p), "%+d (level, half dB)" % v if md == "REL" else
+                                       ("-> %d" % v if md == "ABS" else "%d from 50" % v)) for p, v, md in mt)
+            L.append("| %d | %s | from the sound as set to: %s | as set | | | | the contrast |  |" % (n, mn, tg))
+            continue
         if isinstance(spec, tuple):
             _, pid, vals, names = spec
             sw = names or [str(v) for v in vals]

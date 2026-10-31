@@ -59,7 +59,7 @@ static void tu_toy_poll(uint32_t k)
         fs[k].flash--;
     fs[k].acc = 0;
     if (tfm_ins_of(t) == TI_PLUCK) {
-        int32_t damp = tfm_macro_get(t, 1);
+        int32_t damp = tfm_macro_get(t, 2);             /* (DAMP: macro 3 since round 8's MORPH) */
         fs[k].amp = fs[k].on ? 100u : (uint8_t)((uint32_t)fs[k].amp * (uint32_t)(252 - damp * 36 / 127) / 256u);
     }
     if (song.playing) {                                 /* the step now: its accent, a drum's lanes */
@@ -306,7 +306,7 @@ static void tf_squelch(void)
 static void tf_wobbler(void)
 {
     track_t *t = &trk[song.sel];
-    uint32_t j, lit = (uint32_t)tfm_macro_get(t, 0) * JAM_RING_N / 128u, rate = (uint32_t)tf_sw(1);
+    uint32_t j, lit = (uint32_t)tfm_macro_get(t, 1) * JAM_RING_N / 128u, rate = (uint32_t)tf_sw(2);   /* (round 8: WOB 2, RATE 3) */
     int32_t lfo = (t->lfo_val >> 8), br = clamp(70 + lfo * 28 / 128, 25, 100);
     tu_text(10, 38, &AF_PN, "WOBBLER", RGB(80, 255, 140), tf_under(38));
     tf_preset(10, 54, fc.ink, tf_under(54));
@@ -315,21 +315,22 @@ static void tf_wobbler(void)
             int32_t x = 120 + JAM_RING[j][0] * 52 / 1024, y = 92 + JAM_RING[j][1] * 52 / 1024;
             tu_disc(x, y, 2, j < lit ? tu_mix(RGB(20, 50, 30), RGB(80, 255, 140), (uint32_t)br) : RGB(32, 38, 34));
         }
-        tf_knob(120, 92, 36, RGB(24, 26, 28), RGB(80, 255, 140), tfm_macro_get(t, 0));
-        tu_text_c(120, 142, &AF_TM, "WOB", RGB(80, 255, 140), tf_under(142));
-        for (j = 2; j < 4u; j++) {                                                    /* GROWL and CUT: small knobs */
-            int32_t cy = j == 2u ? 52 : 118;
-            tf_knob(205, cy, 16, RGB(24, 26, 28), TU_TC[j], tfm_macro_get(t, j));
-            tu_disc(186, cy + 24, 2, TU_TC[j]);
-            tu_text(190, cy + 24, &AF_TS, TFM_INS[TI_WOBBLER].mac[j].name, fc.ink, tf_under(cy + 24));
+        tf_knob(120, 92, 36, RGB(24, 26, 28), RGB(80, 255, 140), tfm_macro_get(t, 0));   /* (round 8: the big knob MORPH, */
+        tu_text_c(120, 142, &AF_TM, "MORPH", RGB(80, 255, 140), tf_under(142));          /* the ring WOB) */
+        for (j = 0; j < 2u; j++) {                                                    /* WOB (K2) and GROWL (K4): small knobs */
+            uint32_t m = j ? 3u : 1u;
+            int32_t cy = j ? 118 : 52;
+            tf_knob(205, cy, 16, RGB(24, 26, 28), TU_TC[m], tfm_macro_get(t, m));
+            tu_disc(186, cy + 24, 2, TU_TC[m]);
+            tu_text(190, cy + 24, &AF_TS, TFM_INS[TI_WOBBLER].mac[m].name, fc.ink, tf_under(cy + 24));
         }
         for (j = 0; j < 6u; j++) {                                                    /* the RATE tiles: the lit one is the rate */
             char nb[6];
-            str_cpy(nb, TFM_INS[TI_WOBBLER].mac[1].swn ? TFM_INS[TI_WOBBLER].mac[1].swn[j] : "-", 6);
+            str_cpy(nb, TFM_INS[TI_WOBBLER].mac[2].swn ? TFM_INS[TI_WOBBLER].mac[2].swn[j] : "-", 6);
             tu_rrect(36 + (int32_t)j * 29, 166, 26, 17, 3, j == rate ? RGB(80, 255, 140) : RGB(26, 44, 34), tf_under(166));
             tu_text_c(49 + (int32_t)j * 29, 175, &AF_TS, nb, j == rate ? RGB(18, 28, 22) : RGB(120, 200, 150), j == rate ? RGB(80, 255, 140) : RGB(26, 44, 34));
         }
-        tu_text_c(120, 192, &AF_TS, "K2 RATE", fc.mute, tf_under(192));
+        tu_text_c(120, 192, &AF_TS, "K3 RATE", fc.mute, tf_under(192));
     } else {
         tf_row(100, 17, 0, 56, 36, RGB(24, 26, 28), RGB(80, 255, 140), 140);
     }
@@ -348,7 +349,7 @@ static void tf_chordette(void)
     else
         tf_chord_name(60, name, notes), notes[0] = 0;
     tu_text(18, 68, &AF_PL, t->nheld || fs[song.sel].env > 400 ? name : "---", RGB(150, 236, 190), RGB(14, 34, 24));
-    tfm_macro_text(t, 0, cn, &unit);
+    tfm_macro_text(t, 1, cn, &unit);                    /* (CHORD: macro 2 since round 8) */
     {
         char b[36];
         str_cpy(b, cn, 12);
@@ -373,7 +374,7 @@ static void tf_razor(void)
     tu_text(10, 36, &AF_PN, "RAZOR", RGB(230, 244, 255), tf_under(36));
     tu_text(88, 36, &AF_TM, "SYNC LEAD", RGB(110, 220, 255), tf_under(36));
     tf_preset(10, 52, fc.ink, tf_under(52));
-    tf_row(73, 98, 1, 54, 33, RGB(150, 232, 255), RGB(70, 190, 230), 182);
+    tf_row(73, 98, 1, 54, 36, RGB(150, 232, 255), RGB(70, 190, 230), 184);   /* (round 8: 36, MORPH fits its cell) */
 }
 static void tf_haze(void)
 {
@@ -392,7 +393,7 @@ static void tf_haze(void)
 static void tf_pixel(void)
 {
     track_t *t = &trk[song.sel];
-    uint32_t j, w = (uint32_t)tf_sw(1);
+    uint32_t j, w = (uint32_t)tf_sw(2);                 /* (WAVE: macro 3 since round 8) */
     int32_t x, y0 = 70, lastx = 22, lasty = 0;
     char b[24], v[12];
     const char *unit;
@@ -415,7 +416,7 @@ static void tf_pixel(void)
         lasty = y;
     }
     tfm_snd_label(t, b);
-    tfm_macro_text(t, 1, v, &unit);
+    tfm_macro_text(t, 2, v, &unit);
     str_cpy(b + str_len(b), " \xB7 ", 5);
     str_cpy(b + str_len(b), v, 10);
     tu_text(22, 100, &AF_TS, b, RGB(34, 52, 20), RGB(134, 168, 40));
@@ -432,7 +433,7 @@ static void tf_pixel(void)
 static void tf_tine(void)
 {
     track_t *t = &trk[song.sel];
-    int32_t tp = tfm_macro_get(t, 2), trem = tp < 43 ? 0 : tp < 85 ? 1 : 2;       /* TREM: past 1/3 MONO, past 2/3 STEREO */
+    int32_t tp = tfm_macro_get(t, 3), trem = tp < 43 ? 0 : tp < 85 ? 1 : 2;   /* (TREM: macro 4 since round 8) */       /* TREM: past 1/3 MONO, past 2/3 STEREO */
     uint32_t j;
     tu_text(10, 40, &AF_PN, "Tine", fc.ink, tf_under(40));
     tf_preset(70, 42, fc.ink, tf_under(42));
@@ -496,7 +497,7 @@ static void tf_vox(void)
 {
     track_t *t = &trk[song.sel];
     static const char VL[5] = {'U', 'O', 'A', 'E', 'I'};
-    uint32_t j, v = (uint32_t)clamp(tfm_macro_get(t, 0) * 5 / 128, 0, 4), glow = fs[song.sel].flash || fs[song.sel].env > 900;
+    uint32_t j, v = (uint32_t)clamp(tfm_macro_get(t, 1) * 5 / 128, 0, 4),   /* (VOWEL: macro 2) */ glow = fs[song.sel].flash || fs[song.sel].env > 900;
     int32_t open = clamp(fs[song.sel].env / 400, 2, 18), rx = v == 0u ? 8 : v == 1u ? 11 : v == 2u ? 14 : v == 3u ? 15 : 16;
     int32_t ry = v == 4u ? open / 3 + 1 : v == 3u ? open / 2 + 1 : open;
     tu_rrect(18, 32, 75, 83, 14, RGB(150, 168, 190), tf_under(70));
@@ -523,8 +524,8 @@ static void tf_wheel(void)
     static const uint8_t REG[10][9] = {{8, 8, 8, 8, 8, 8, 8, 8, 8}, {8, 8, 8, 0, 0, 0, 0, 0, 0}, {8, 8, 8, 6, 0, 0, 0, 0, 0}, {8, 0, 8, 0, 0, 0, 0, 0, 0},
                                        {8, 8, 8, 8, 0, 0, 0, 0, 0}, {0, 0, 8, 6, 4, 0, 0, 0, 0}, {8, 8, 8, 8, 8, 8, 0, 0, 0}, {8, 0, 8, 8, 8, 0, 0, 0, 0},
                                        {0, 0, 4, 4, 6, 6, 0, 0, 0}, {8, 6, 8, 6, 8, 6, 4, 4, 4}};
-    uint32_t j, st = (uint32_t)tf_sw(0) % 10u;
-    int32_t sub = tfm_macro_get(t, 4), body = tfm_macro_get(t, 5), top = tfm_macro_get(t, 6), rotor = tf_sw(2);
+    uint32_t j, st = (uint32_t)tf_sw(1) % 10u;          /* (round 8: STOPS 2, ROTOR 4; CLICK went into MORPH) */
+    int32_t sub = tfm_macro_get(t, 4), body = tfm_macro_get(t, 5), top = tfm_macro_get(t, 6), rotor = tf_sw(3);
     char b[24];
     tu_rrect(6, 27, 228, 162, 8, RGB(78, 44, 24), tf_under(100));
     for (j = 0; j < 9u; j++) {                                                         /* the drawbars: the STOPS registration; SUB / BODY / TOP scale their groups */
@@ -542,16 +543,16 @@ static void tf_wheel(void)
         tu_text_fit(150, 68, &AF_TM, pb, fc.ink, tf_under(68), 78);
     }
     tu_text(150, 84, &AF_TS, "ROTARY", fc.ink, tf_under(84));
-    tf_tiles(150, 93, 25, 14, 27, 2, RGB(240, 232, 208), RGB(40, 24, 14), RGB(30, 24, 20), RGB(200, 180, 150));
+    tf_tiles(150, 93, 25, 14, 27, 3, RGB(240, 232, 208), RGB(40, 24, 14), RGB(30, 24, 20), RGB(200, 180, 150));
     str_cpy(b, "STOPS: ", 8);
     str_cpy(b + str_len(b), TFM_INS[TI_WHEEL].snd[tfm_snd_of(t) % TFM_INS[TI_WHEEL].nsnd].name, 14);
     tu_disc(14, 126, 2, TU_TC[0]);
     tu_text_fit(20, 126, &AF_TS, b, fc.ink, tf_under(126), 200);
     if (tu.page == 0u) {
-        tf_knob(49, 147, 13, RGB(206, 204, 198), RGB(30, 30, 30), tfm_macro_get(t, 1));
-        tf_label(1, 49, 168, 1, 1);
-        tf_knob(180, 147, 13, RGB(206, 204, 198), RGB(30, 30, 30), tfm_macro_get(t, 3));
-        tf_label(3, 180, 168, 3, 1);
+        tf_knob(49, 147, 13, RGB(206, 204, 198), RGB(30, 30, 30), tfm_macro_get(t, 0));   /* (round 8: MORPH, DRIVE) */
+        tf_label(0, 49, 168, 0, 1);
+        tf_knob(180, 147, 13, RGB(206, 204, 198), RGB(30, 30, 30), tfm_macro_get(t, 2));
+        tf_label(2, 180, 168, 2, 1);
     } else {
         tf_row(147, 13, 0, 55, 49, RGB(206, 204, 198), RGB(30, 30, 30), 168);
     }

@@ -573,3 +573,30 @@ PLUCK NYLON and MUTED stay 1.6-3 LU under PLUCK's reference: at the -2 dBFS ceil
 | WHEELHOUSE | TOP | -11.4 / -11.4 / -11.6 | -17.8 / -17.7 / -18.8 |
 | WHEELHOUSE | SPACE | -11.0 / -11.6 / -11.4 | -18.3 / -17.6 / -16.0 |
 
+## MORPH (round 8)
+
+Macro 1 of every instrument is **MORPH**, and it is JAM's knob. One turn bends the sound from the preset as it is set (0) to a
+contrasting voicing of the same instrument (100), many values together (`tfm_instr.c` `TFM_MORPH`). It works from where the
+sound is: the values it moves are taken when it leaves 0 and put back exactly at 0; another macro turned while MORPH is out
+moves that base, and MORPH bends from there. Level within 3 LU over the turn (a level offset per instrument, measured), in key
+at 50 and 100 (YIN, +-35 cents), 0 and 100 may be wild, every point between usable (straight lines between the two).
+
+| instrument | 0 (as set) -> 100 |
+|---|---|
+| THUMP LAB | tight and dry -> big, crushed, a room (decay, room, the INSERT driven, drive, hats up) |
+| SQUELCH | round and mellow -> screaming acid (cutoff, resonance, envelope, bite, decay, gnaw) |
+| WOBBLER | a soft sway -> a heavy, growling wobble (wob depth, resonance, cutoff, growl, dirt) |
+| CHORDETTE | warm and still -> bright, pumping, wide (cutoff, chorus, the pump, space) |
+| RAZOR | thin and dark -> screaming, wide, echoing (resonance, drive, cutoff, envelope, detune, spread, echo) |
+| HAZE | dark and still -> bright and moving (the band up, filter movement, shine, space, dust) |
+| PIXEL | a clean chip -> crushed, bright, ringing (crush, duty, decay, tone, space; no pitch sweep: in key) |
+| TINE | soft and dry -> barking, trembling, wet (bark, tine, tremolo, chorus, warmth, space) |
+| GLINT | pure -> metallic, blooming, shimmering (metal, bloom, decay, space, shimmer) |
+| PLUCK | muted and short -> bright, ringing, wide (brightness, ring, accent, space; no bow: it pulls the pitch) |
+| VOX | a closed mumble -> a buzzing choir (buzz, Q, talk, choir, spread, space) |
+| WHEELHOUSE | clean -> driven, the rotor fast, clicking (drive, rotor at 50, click, top, space) |
+
+To make room, one macro per instrument went (the other seven keep their jobs, one place later): THUMP LAB ECHO, SQUELCH GNAW,
+WOBBLER SPREAD, CHORDETTE AGE, RAZOR ECHO, HAZE HOLD, PIXEL TONE, TINE REL, GLINT SHIMMER, PLUCK ECHO, VOX SHIFT, WHEELHOUSE
+CLICK (most of them live on inside MORPH). Every named preset keeps its sound: the value its old place gave is now one of the
+preset's own changes. MACROS-TO-TUNE.md lists MORPH's targets per instrument.

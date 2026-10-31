@@ -342,6 +342,7 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
 
 /* MONO / LEGATO / UNISON: one note on one voice (eight for UNISON, or the
  * engine's voice cap, spread by DETUNE over the same width) */
+static uint32_t uni_seed = 0x1234567u;                 /* UNISON's random start phases (mono_play; a file's: tests reset it) */
 static void mono_play(track_t *t, uint32_t note, uint32_t vel, int retrig, int glide)
 {
     uint32_t mode = (uint32_t)t->p[P_VOICE], nv = mode == V_UNISON ? trk_nvoice(t) : 1u, i;
@@ -358,9 +359,8 @@ static void mono_play(track_t *t, uint32_t note, uint32_t vel, int retrig, int g
             voice_start(t, v, note, nv >= NVOICE ? vel * 36u / 100u : nv > 1u ? vel / 2u : vel, glide);
             v->side = (uint8_t)(i & 1u);                    /* SPREAD: the detuned voices alternate */
             if (nv > 1u && i && !ENGINES[t->engine]->sampled) {   /* random start phases: */
-                static uint32_t seed = 0x1234567u;          /* in phase they stack, evenly spread they cancel */
-                seed = seed * 1664525u + 1013904223u;
-                v->ph[0] += seed;
+                uni_seed = uni_seed * 1664525u + 1013904223u;   /* in phase they stack, evenly spread they cancel */
+                v->ph[0] += uni_seed;
             }
         } else {                                            /* legato: new pitch, same envelope */
             v->note = (uint8_t)note;

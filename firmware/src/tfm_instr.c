@@ -31,6 +31,7 @@ typedef struct {
 #define TCV_EXP 1u                                      /* a share of the turn squared: the low end gets more room */
 #define TCV_GATE 2u                                     /* moves only over 70 % of the turn */
 typedef struct { uint8_t id; int8_t lo, hi; uint8_t cv; } tfm_tgt_t;
+#define TFM_MSW 0xF0u                                   /* (round 8: nsw of MORPH, macro 1: its targets are TFM_MORPH's) */
 typedef struct {
     const char *name;                                   /* the dial's label (7 at most) */
     uint8_t nsw;                                        /* a SWITCH (stepped, named): its values sw[], the first target's id */
@@ -73,6 +74,7 @@ static const char *const SWN_11_2[] = {"OFF", "SLOW", "FAST"};
 static const tfm_instr_t TFM_INS[TI_N] = {
     /* THUMP LAB */
     {"THUMP LAB", "drum kit \xB7 bumpers pop on hits", IG_DRUMS, E_DRUM, 4, 0, 15, 1, {RGB(21, 10, 8), RGB(31, 14, 11), RGB(255, 122, 61), RGB(181, 148, 138), RGB(248, 236, 230)}, {{P_E0, 0}, {P_E6, 0}, {P_LN0, 110}, {P_LN1, 100}, {P_LN2, 92}, {P_LN3, 110}, {P_LN4, 110}, {P_LN5, 80}, {P_LN6, 80}, {P_LN7, 80}, {P_ITYPE, 1}, {P_IMIX, 20}, {P_REV, 10}, {P_E2, 26}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"PUNCH", 0, {0}, 0, {{P_LN0, 96, 127, 0}, {P_E7, 0, 80, 0}, {P_E5, 40, 120, 0}, {P_LEVEL, 108, 102, 0}}},
         {"SMACK", 0, {0}, 0, {{P_E4, 10, 120, 0}, {P_LN1, 80, 115, 0}, {P_LN2, 80, 115, 0}, {P_LEVEL, 106, 100, 0}}},
         {"TIME", 0, {0}, 0, {{P_E3, 8, 120, TCV_EXP}, {P_LEVEL, 104, 94, 0}, NT, NT}},
@@ -80,13 +82,12 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"TUNE", 0, {0}, 0, {{P_E1, 16, 112, 0}, NT, NT, NT}},
         {"DIRT", 0, {0}, 0, {{P_IA, 0, 110, 0}, {P_IMIX, 20, 100, 0}, {P_LEVEL, 106, 104, 0}, NT}},
         {"HATS", 0, {0}, 0, {{P_LN3, 80, 127, 0}, {P_LN4, 80, 127, 0}, NT, NT}},
-        {"ECHO", 0, {0}, 0, {{P_DLY, 0, 80, 0}, NT, NT, NT}},
     }, {
-        {"WAREHOUSE", 1, {{P_E0, 0}, {X, 0}}, 1, {60, 80, 70, 50, 40, 35, 95, 10}},
-        {"BOOM BAP", 1, {{P_E0, 4}, {X, 0}}, 1, {55, 75, 75, 35, 35, 25, 100, 30}},
-        {"DISCO", 1, {{P_E0, 3}, {X, 0}}, 1, {40, 85, 25, 70, 65, 5, 95, 45}},
-        {"TRASH CAN", 1, {{P_E0, 1}, {X, 0}}, 1, {75, 80, 40, 55, 50, 80, 70, 40}},
-        {"ARCADE", 1, {{P_E0, 2}, {X, 0}}, 1, {60, 90, 30, 20, 85, 50, 80, 20}},
+        {"WAREHOUSE", 1, {{P_E0, 0}, {P_DLY, 8}, {X, 0}}, 1, {0, 60, 80, 70, 50, 40, 35, 95}},
+        {"BOOM BAP", 1, {{P_E0, 4}, {P_DLY, 24}, {X, 0}}, 1, {0, 55, 75, 75, 35, 35, 25, 100}},
+        {"DISCO", 1, {{P_E0, 3}, {P_DLY, 36}, {X, 0}}, 1, {0, 40, 85, 25, 70, 65, 5, 95}},
+        {"TRASH CAN", 1, {{P_E0, 1}, {P_DLY, 31}, {X, 0}}, 1, {0, 75, 80, 40, 55, 50, 80, 70}},
+        {"ARCADE", 1, {{P_E0, 2}, {P_DLY, 16}, {X, 0}}, 1, {0, 60, 90, 30, 20, 85, 50, 80}},
         {"DEEP CLASSIC", 1, NOV},
         {"LONG BOOM", 1, {{P_E3, 100}, {P_E1, 40}, {P_E5, 110}, {X, 0}}},
         {"CLUB STD", 0, NOV},
@@ -100,20 +101,20 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* SQUELCH */
     {"SQUELCH", "acid bass \xB7 spins with the cutoff", IG_BASS, E_ANALOG, 1, 0, 15, 2, {RGB(14, 18, 6), RGB(30, 42, 10), RGB(200, 242, 90), RGB(155, 168, 137), RGB(242, 246, 232)}, {{P_VOICE, 2}, {P_FTYPE, 0}, {P_E0, 0}, {P_ED_FLT, 30}, {P_DEC, 40}, {P_ITYPE, 4}, {P_IMIX, 0}, {P_M1SRC, 3}, {P_M1DST, 2}, {P_M1AMT, 20}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"CUTOFF", 0, {0}, 0, {{P_E4, 18, 112, TCV_EXP}, NT, NT, NT}},
         {"RESO", 0, {0}, 0, {{P_E5, 10, 118, 0}, {P_LEVEL, 108, 102, 0}, NT, NT}},
         {"ENV MOD", 0, {0}, 0, {{P_ED_FLT, 0, 60, 0}, {P_DEC, 30, 55, 0}, {P_LEVEL, 108, 102, 0}, NT}},
         {"DECAY", 0, {0}, 0, {{P_DEC, 20, 100, 0}, {P_REL, 10, 50, 0}, NT, NT}},
         {"BITE", 0, {0}, 0, {{P_E6, 0, 120, 0}, {P_LEVEL, 108, 99, 0}, NT, NT}},
-        {"GNAW", 0, {0}, 0, {{P_IMIX, 0, 100, 0}, {P_LEVEL, 106, 108, 0}, NT, NT}},
         {"WAVE", 0, {0}, 0, {{P_E2, 0, 127, 0}, NT, NT, NT}},
         {"SLIDE", 0, {0}, 0, {{P_GLIDE, 0, 80, TCV_EXP}, NT, NT, NT}},
     }, {
-        {"RUBBER", 4, {{X, 0}}, 1, {45, 40, 40, 45, 35, 20, 30, 40}},
-        {"ACID RAIN", 4, {{X, 0}}, 1, {70, 62, 62, 55, 40, 30, 25, 50}},
-        {"LOW RIDER", 4, {{P_E0, 1}, {X, 0}}, 1, {30, 50, 30, 60, 55, 25, 70, 30}},
-        {"ZAPPER", 4, {{X, 0}}, 1, {60, 80, 85, 20, 30, 40, 40, 20}},
-        {"GNARLY", 4, {{X, 0}}, 1, {55, 88, 55, 40, 85, 80, 25, 45}},
+        {"RUBBER", 4, {{P_IMIX, 20}, {P_LEVEL, 106}, {X, 0}}, 1, {0, 45, 40, 40, 45, 35, 30, 40}},
+        {"ACID RAIN", 4, {{P_IMIX, 30}, {P_LEVEL, 107}, {X, 0}}, 1, {0, 70, 62, 62, 55, 40, 25, 50}},
+        {"LOW RIDER", 4, {{P_E0, 1}, {P_IMIX, 24}, {P_LEVEL, 106}, {X, 0}}, 1, {0, 30, 50, 30, 60, 55, 70, 30}},
+        {"ZAPPER", 4, {{P_IMIX, 39}, {P_LEVEL, 107}, {X, 0}}, 1, {0, 60, 80, 85, 20, 30, 40, 20}},
+        {"GNARLY", 4, {{P_IMIX, 80}, {P_LEVEL, 108}, {X, 0}}, 1, {0, 55, 88, 55, 40, 85, 25, 45}},
         {"CLASSIC", 4, NOV},
         {"RUBBER", 4, {{P_E4, 40}, {P_E5, 45}, {P_ED_FLT, 20}, {P_DEC, 70}, {X, 0}}},
         {"SCREAMER", 4, {{P_E4, 70}, {P_E5, 110}, {P_ED_FLT, 50}, {P_E6, 90}, {P_LEVEL, 92}, {X, 0}}},
@@ -127,20 +128,20 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* WOBBLER */
     {"WOBBLER", "wobble bass \xB7 the magnet shakes with the LFO", IG_BASS, E_TRIO, 5, 0, 13, 2, {RGB(10, 11, 22), RGB(22, 26, 48), RGB(140, 123, 255), RGB(142, 138, 176), RGB(238, 235, 255)}, {{P_VOICE, 1}, {P_LSYNC, 6}, {P_LTRIG, 0}, {P_LWAVE, 0}, {P_LD_FLT, 40}, {P_ITYPE, 3}, {P_IMIX, 0}, {P_E3, 6}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"WOB", 0, {0}, 0, {{P_LD_FLT, 0, 63, 0}, {P_E6, 10, 60, 0}, NT, NT}},
         {"RATE", 8, {3, 4, 5, 6, 7, 8, 9, 10}, SWN_2_1, {{P_LSYNC, 0, 0, 0}, NT, NT, NT}},
         {"GROWL", 0, {0}, 0, {{P_IMIX, 0, 100, 0}, {P_IA, 20, 90, 0}, NT, NT}},
         {"CUT", 0, {0}, 0, {{P_E5, 15, 110, TCV_EXP}, NT, NT, NT}},
-        {"SPREAD", 0, {0}, 0, {{P_E3, 0, 40, 0}, {P_SPRD, 0, 100, 0}, NT, NT}},
         {"DIRT", 0, {0}, 0, {{P_DIST, 0, 90, 0}, {P_LEVEL, 106, 98, 0}, NT, NT}},
         {"DROP", 3, {0, -12, -24}, SWN_2_6, {{P_TRANS, 0, 0, 0}, NT, NT, NT}},
         {"SLIDE", 0, {0}, 0, {{P_GLIDE, 0, 80, 0}, NT, NT, NT}},
     }, {
-        {"HALF STEP", 0, {{X, 0}}, 1, {60, 40, 30, 55, 30, 20, 0, 10}},
-        {"YOY", 0, {{X, 0}}, 1, {75, 20, 70, 50, 40, 30, 0, 20}},
-        {"TRASH FLOOR", 0, {{X, 0}}, 1, {85, 60, 90, 40, 60, 80, 40, 10}},
-        {"LASER WOB", 0, {{X, 0}}, 1, {55, 90, 40, 70, 20, 30, 0, 50}},
-        {"SUBWAY", 0, {{X, 0}}, 1, {50, 30, 20, 35, 25, 40, 100, 30}},
+        {"HALF STEP", 0, {{P_E3, 12}, {P_SPRD, 30}, {X, 0}}, 1, {0, 60, 40, 30, 55, 20, 0, 10}},
+        {"YOY", 0, {{P_E3, 16}, {P_SPRD, 39}, {X, 0}}, 1, {0, 75, 20, 70, 50, 30, 0, 20}},
+        {"TRASH FLOOR", 0, {{P_E3, 24}, {P_SPRD, 60}, {X, 0}}, 1, {0, 85, 60, 90, 40, 80, 40, 10}},
+        {"LASER WOB", 0, {{P_E3, 8}, {P_SPRD, 20}, {X, 0}}, 1, {0, 55, 90, 40, 70, 30, 0, 50}},
+        {"SUBWAY", 0, {{P_E3, 10}, {P_SPRD, 24}, {X, 0}}, 1, {0, 50, 30, 20, 35, 40, 100, 30}},
         {"CLASSIC WOB", 0, {{P_LD_FLT, 40}, {P_LSYNC, 6}, {P_E5, 50}, {P_E6, 70}, {X, 0}}},
         {"SLOW GROWL", 0, {{P_LD_FLT, 50}, {P_LSYNC, 5}, {P_E6, 95}, {X, 0}}},
         {"YOI", 0, {{P_LD_FLT, 55}, {P_LSYNC, 8}, {P_E6, 100}, {P_E5, 35}, {X, 0}}},
@@ -152,6 +153,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* CHORDETTE */
     {"CHORDETTE", "one key, whole chords \xB7 targets drop per note", IG_HARMONY, E_ANALOG, 2, 0, 14, 4, {RGB(18, 10, 20), RGB(36, 20, 42), RGB(255, 143, 208), RGB(184, 152, 172), RGB(255, 238, 247)}, {{P_VOICE, 0}, {P_CHRD, 1}, {P_FTYPE, 0}, {P_E0, 0}, {P_E2, 64}, {P_CHOR, 20}, {P_ITYPE, 5}, {P_IMIX, 0}, {P_LSYNC, 5}, {P_LD_AMP, 0}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"CHORD", 9, {1, 2, 3, 4, 5, 6, 7, 8, 9}, SWN_3_0, {{P_CHRD, 0, 0, 0}, NT, NT, NT}},
         {"VOICE", 5, {0, 1, 2, 3, 4}, SWN_3_1, {{P_VOIC, 0, 0, 0}, NT, NT, NT}},
         {"WARM", 0, {0}, 0, {{P_E4, 30, 110, 0}, {P_E5, 40, 10, 0}, {P_LEVEL, 110, 100, 0}, NT}},
@@ -159,13 +161,12 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"SHIMMER", 0, {0}, 0, {{P_CHOR, 0, 60, 0}, {P_E1, 0, 20, 0}, NT, NT}},
         {"SPACE", 0, {0}, 0, {{P_REV, 0, 90, 0}, {P_DLY, 0, 40, TCV_GATE}, NT, NT}},
         {"PUMP", 0, {0}, 0, {{P_LD_AMP, 0, 80, 0}, NT, NT, NT}},
-        {"AGE", 0, {0}, 0, {{P_IMIX, 0, 70, 0}, {P_IA, 10, 90, 0}, NT, NT}},
     }, {
-        {"HOUSE STAB", 1, {{X, 0}}, 1, {0, 0, 60, 10, 20, 30, 40, 10}},
-        {"SUNDAY", 1, {{X, 0}}, 1, {10, 40, 55, 50, 40, 50, 10, 20}},
-        {"VELVET", 1, {{X, 0}}, 1, {30, 0, 35, 70, 60, 60, 20, 10}},
-        {"PUMPER", 1, {{X, 0}}, 1, {0, 0, 70, 20, 30, 20, 90, 0}},
-        {"MIXTAPE", 1, {{X, 0}}, 1, {20, 20, 45, 40, 70, 30, 30, 80}},
+        {"HOUSE STAB", 1, {{P_IMIX, 7}, {P_IA, 18}, {X, 0}}, 1, {0, 0, 0, 60, 10, 20, 30, 40}},
+        {"SUNDAY", 1, {{P_IMIX, 14}, {P_IA, 26}, {X, 0}}, 1, {0, 10, 40, 55, 50, 40, 50, 10}},
+        {"VELVET", 1, {{P_IMIX, 7}, {P_IA, 18}, {X, 0}}, 1, {0, 30, 0, 35, 70, 60, 60, 20}},
+        {"PUMPER", 1, {{P_IMIX, 0}, {P_IA, 10}, {X, 0}}, 1, {0, 0, 0, 70, 20, 30, 20, 90}},
+        {"MIXTAPE", 1, {{P_IMIX, 56}, {P_IA, 74}, {X, 0}}, 1, {0, 20, 20, 45, 40, 70, 30, 30}},
         {"WARM STAB", 1, {{P_CHRD, 2}, {P_ATK, 4}, {P_REL, 40}, {X, 0}}},
         {"HOUSE ORGAN", 1, {{P_CHRD, 1}, {P_E0, 1}, {P_ATK, 0}, {P_DEC, 40}, {P_SUS, 60}, {X, 0}}},
         {"PWM CHORDS", 3, {{P_CHRD, 1}, {X, 0}}},
@@ -178,6 +179,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* RAZOR */
     {"RAZOR", "unison lead \xB7 the ball rides the ramp", IG_LEAD, E_ANALOG, 3, 0, 14, 8, {RGB(11, 16, 20), RGB(20, 32, 40), RGB(79, 212, 255), RGB(135, 162, 176), RGB(232, 248, 255)}, {{P_VOICE, 3}, {P_E0, 0}, {P_FTYPE, 0}, {P_LRATE, 20}, {P_LD_PIT, 0}, {P_LFADE, 60}, {P_DLY, 0}, {P_ITYPE, 2}, {P_IMIX, 0}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"SCREAM", 0, {0}, 0, {{P_E5, 10, 110, 0}, {P_E6, 0, 70, 0}, {P_LEVEL, 108, 92, 0}, NT}},
         {"SWEEP", 0, {0}, 0, {{P_ED_FLT, -20, 60, 0}, {P_DEC, 20, 70, 0}, NT, NT}},
         {"CUT", 0, {0}, 0, {{P_E4, 30, 120, TCV_EXP}, {P_LEVEL, 122, 100, 0}, NT, NT}},
@@ -185,13 +187,12 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"WIDTH", 0, {0}, 0, {{P_DETUNE, 0, 80, 0}, {P_SPRD, 0, 127, 0}, NT, NT}},
         {"ATTACK", 0, {0}, 0, {{P_ATK, 0, 80, 0}, NT, NT, NT}},
         {"VIB", 0, {0}, 0, {{P_LD_PIT, 0, 2, 0}, NT, NT, NT}},
-        {"ECHO", 0, {0}, 0, {{P_DLY, 0, 90, 0}, NT, NT, NT}},
     }, {
-        {"HERO", 0, {{X, 0}}, 1, {45, 40, 60, 30, 60, 30, 40, 30}},
-        {"TRANCE GATE", 0, {{P_E0, 1}, {X, 0}}, 1, {35, 70, 55, 10, 80, 10, 10, 60}},
-        {"ARENA", 0, {{X, 0}}, 1, {60, 30, 50, 40, 90, 40, 50, 50}},
-        {"SINE RIDER", 0, {{P_E0, 3}, {X, 0}}, 1, {10, 20, 40, 70, 20, 60, 70, 40}},
-        {"HOT WIRE", 0, {{X, 0}}, 1, {90, 75, 70, 20, 50, 10, 20, 20}},
+        {"HERO", 0, {{P_DLY, 27}, {X, 0}}, 1, {0, 53, 47, 76, 56, 28, 24, 40}},
+        {"TRANCE GATE", 0, {{P_E0, 1}, {P_DLY, 54}, {X, 0}}, 1, {0, 35, 70, 55, 10, 80, 10, 10}},
+        {"ARENA", 0, {{P_DLY, 45}, {X, 0}}, 1, {0, 60, 30, 50, 40, 90, 40, 50}},
+        {"SINE RIDER", 0, {{P_E0, 3}, {P_DLY, 35}, {X, 0}}, 1, {0, 10, 20, 40, 70, 20, 60, 70}},
+        {"HOT WIRE", 0, {{P_DLY, 18}, {X, 0}}, 1, {0, 90, 75, 70, 20, 50, 10, 20}},
         {"SAW LEAD", 0, NOV},
         {"SYNC SCREAM", 0, {{P_E0, 5}, {P_E5, 70}, {P_ED_PIT, 30}, {X, 0}}},
         {"SUPER UNISON", 0, {{P_VOICE, 3}, {P_E1, 40}, {P_SPRD, 90}, {X, 0}}},
@@ -204,6 +205,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* HAZE */
     {"HAZE", "slow pad \xB7 the lights glow and drift", IG_HARMONY, E_TRIO, 6, 0, 13, 16, {RGB(14, 12, 20), RGB(28, 24, 40), RGB(185, 166, 255), RGB(154, 146, 180), RGB(242, 238, 255)}, {{P_VOICE, 0}, {P_ATK, 60}, {P_REL, 70}, {P_LRATE, 15}, {P_LTRIG, 1}, {P_LD_PIT, 0}, {P_REV, 60}, {P_ITYPE, 5}, {P_IMIX, 0}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"DRIFT", 0, {0}, 0, {{P_LD_PIT, 0, 2, TCV_GATE}, {P_E3, 5, 30, 0}, NT, NT}},
         {"DUST", 0, {0}, 0, {{P_IMIX, 0, 100, 0}, NT, NT, NT}},
         {"SPACE", 0, {0}, 0, {{P_REV, 10, 127, 0}, {P_LEVEL, 108, 99, 0}, NT, NT}},
@@ -211,13 +213,12 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"TONE", 0, {0}, 0, {{P_E5, 10, 28, TCV_EXP}, NT, NT, NT}},
         {"SHINE", 0, {0}, 0, {{P_CHOR, 0, 110, 0}, NT, NT, NT}},
         {"MOVE", 0, {0}, 0, {{P_LD_FLT, 0, 60, 0}, NT, NT, NT}},
-        {"HOLD", 0, {0}, 0, {{P_SUS, 60, 127, 0}, {P_REL, 40, 70, 0}, NT, NT}},
     }, {
-        {"FOG", 4, {{X, 0}}, 1, {20, 30, 60, 40, 30, 40, 30, 50}},
-        {"MORNING", 4, {{X, 0}}, 1, {10, 0, 50, 35, 70, 50, 20, 40}},
-        {"VHS", 4, {{X, 0}}, 1, {50, 55, 40, 30, 45, 60, 40, 30}},
-        {"AURORA", 4, {{X, 0}}, 1, {30, 10, 75, 60, 60, 80, 70, 60}},
-        {"DEEP END", 4, {{X, 0}}, 1, {40, 20, 90, 80, 20, 30, 20, 90}},
+        {"FOG", 4, {{P_SUS, 93}, {P_REL, 55}, {X, 0}}, 1, {0, 20, 30, 60, 40, 30, 40, 30}},
+        {"MORNING", 4, {{P_SUS, 86}, {P_REL, 52}, {X, 0}}, 1, {0, 10, 0, 50, 35, 70, 50, 20}},
+        {"VHS", 4, {{P_SUS, 80}, {P_REL, 49}, {X, 0}}, 1, {0, 50, 55, 40, 30, 45, 60, 40}},
+        {"AURORA", 4, {{P_SUS, 100}, {P_REL, 58}, {X, 0}}, 1, {0, 30, 10, 75, 60, 60, 80, 70}},
+        {"DEEP END", 4, {{P_SUS, 120}, {P_REL, 67}, {X, 0}}, 1, {0, 40, 20, 90, 80, 20, 30, 20}},
         {"WARM HAZE", 4, {{P_ATK, 70}, {P_REL, 90}, {P_REV, 70}, {X, 0}}},
         {"DUSTY", 4, {{P_ATK, 60}, {P_ITYPE, 5}, {P_IA, 80}, {P_IMIX, 70}, {P_REV, 60}, {X, 0}}},
         {"GLASS AIR", 3, {{P_ATK, 80}, {P_REL, 100}, {P_REV, 90}, {X, 0}}},
@@ -229,20 +230,20 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* PIXEL */
     {"PIXEL", "chip lead \xB7 the sprite jumps on notes", IG_LEAD, E_LOFI, 7, 0, 14, 8, {RGB(8, 16, 12), RGB(16, 32, 24), RGB(92, 255, 143), RGB(134, 168, 146), RGB(234, 255, 240)}, {{P_VOICE, 1}, {P_E1, 0}, {P_DEC, 30}, {P_ED_PIT, 0}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"JUMP", 3, {0, 1, 2}, SWN_6_0, {{P_E6, 0, 0, 0}, NT, NT, NT}},
         {"WAVE", 5, {0, 1, 2, 3, 4}, SWN_6_1, {{P_E1, 0, 0, 0}, NT, NT, NT}},
         {"SWEEP", 0, {0}, 0, {{P_E4, 0, 25, 0}, {P_LEVEL, 104, 110, 0}, NT, NT}},
         {"CRUSH", 0, {0}, 0, {{P_E3, 0, 120, 0}, NT, NT, NT}},
         {"VIB", 0, {0}, 0, {{P_E5, 0, 110, 0}, NT, NT, NT}},
         {"DECAY", 0, {0}, 0, {{P_DEC, 15, 100, 0}, NT, NT, NT}},
-        {"TONE", 0, {0}, 0, {{P_E7, 20, 127, 0}, NT, NT, NT}},
         {"DUTY", 0, {0}, 0, {{P_E2, 0, 120, 0}, {P_LEVEL, 110, 104, 0}, NT, NT}},
     }, {
-        {"1UP", 0, {{X, 0}}, 1, {0, 0, 0, 30, 20, 25, 70, 70}},
-        {"BOSS LEVEL", 0, {{P_E1, 2}, {X, 0}}, 1, {30, 0, 0, 50, 30, 15, 60, 20}},
-        {"WARP ZONE", 0, {{X, 0}}, 1, {0, 40, 90, 20, 40, 30, 80, 10}},
-        {"HIGH SCORE", 0, {{X, 0}}, 1, {60, 70, 0, 10, 80, 90, 50, 20}},
-        {"GLITCH", 0, {{X, 0}}, 1, {90, 80, 0, 90, 70, 20, 50, 30}},
+        {"1UP", 0, {{P_E7, 94}, {X, 0}}, 1, {0, 0, 0, 0, 30, 20, 25, 70}},
+        {"BOSS LEVEL", 0, {{P_E1, 2}, {P_E7, 84}, {X, 0}}, 1, {0, 30, 0, 0, 50, 30, 0, 20}},
+        {"WARP ZONE", 0, {{P_E7, 105}, {X, 0}}, 1, {0, 0, 40, 90, 20, 40, 30, 10}},
+        {"HIGH SCORE", 0, {{P_E7, 73}, {X, 0}}, 1, {0, 60, 70, 0, 10, 80, 90, 20}},
+        {"GLITCH", 0, {{P_E7, 73}, {X, 0}}, 1, {0, 90, 80, 0, 90, 70, 20, 30}},
         {"PULSE LEAD", 0, NOV},
         {"COIN ARP", 2, NOV},
         {"WAVE LEAD", 3, NOV},
@@ -255,6 +256,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* TINE */
     {"TINE", "electric piano \xB7 notes light the rollovers", IG_HARMONY, E_FM6, 11, 0, 13, 4, {RGB(20, 16, 10), RGB(38, 30, 18), RGB(255, 197, 107), RGB(180, 164, 134), RGB(255, 246, 230)}, {{P_LRATE, 60}, {P_LD_AMP, 0}, {P_CHOR, 20}, {P_ITYPE, 1}, {P_IMIX, 0}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"BARK", 0, {0}, 0, {{P_E2, -40, 40, 0}, NT, NT, NT}},
         {"TINE", 0, {0}, 0, {{P_E4, -40, 40, 0}, NT, NT, NT}},
         {"TREM", 0, {0}, 0, {{P_LD_AMP, 0, 90, 0}, NT, NT, NT}},
@@ -262,13 +264,12 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"DECAY", 0, {0}, 0, {{P_DEC, 30, 110, 0}, NT, NT, NT}},
         {"WARMTH", 0, {0}, 0, {{P_IMIX, 0, 80, 0}, {P_LEVEL, 106, 110, 0}, NT, NT}},
         {"SPACE", 0, {0}, 0, {{P_REV, 0, 100, 0}, NT, NT, NT}},
-        {"REL", 0, {0}, 0, {{P_REL, 10, 100, 0}, NT, NT, NT}},
     }, {
-        {"SUITCASE", 0, {{X, 0}}, 1, {50, 45, 20, 30, 50, 30, 20, 50}},
-        {"LOUNGE", 0, {{X, 0}}, 1, {30, 40, 40, 45, 60, 25, 45, 60}},
-        {"BARK BARK", 0, {{X, 0}}, 1, {85, 55, 15, 25, 40, 55, 10, 35}},
-        {"DREAMY", 0, {{X, 0}}, 1, {25, 60, 55, 70, 65, 20, 70, 75}},
-        {"CHURCH BASEMENT", 0, {{X, 0}}, 1, {15, 10, 100, 0, 100, 30, 95, 100}},
+        {"SUITCASE", 0, {{P_REL, 55}, {X, 0}}, 1, {0, 50, 45, 20, 30, 50, 30, 20}},
+        {"LOUNGE", 0, {{P_REL, 64}, {X, 0}}, 1, {0, 30, 40, 59, 0, 33, 0, 0}},
+        {"BARK BARK", 0, {{P_REL, 41}, {X, 0}}, 1, {0, 85, 55, 15, 25, 40, 55, 10}},
+        {"DREAMY", 0, {{P_REL, 77}, {X, 0}}, 1, {0, 25, 60, 55, 92, 65, 0, 70}},
+        {"CHURCH BASEMENT", 0, {{P_REL, 100}, {X, 0}}, 1, {0, 15, 10, 100, 0, 100, 30, 95}},
         {"CLASSIC EP", 0, NOV},
         {"BRIGHT EP", 0, {{P_E2, 20}, {X, 0}}},
         {"MELLOW EP", 0, {{P_E2, -24}, {P_REV, 40}, {X, 0}}},
@@ -280,6 +281,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* GLINT */
     {"GLINT", "FM bells \xB7 stars sparkle on notes", IG_HARMONY, E_FM6, 8, 0, 13, 40, {RGB(10, 18, 20), RGB(20, 36, 40), RGB(127, 240, 230), RGB(134, 170, 166), RGB(234, 255, 252)}, {{P_E7, 1}, {P_E3, 5}, {P_REV, 40}, {P_ITYPE, 8}, {P_IMIX, 0}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"METAL", 0, {0}, 0, {{P_E2, -40, 50, 0}, {P_LEVEL, 106, 100, 0}, NT, NT}},
         {"RATIO", 5, {-4, -2, 0, 2, 4}, 0, {{P_E3, 0, 0, 0}, NT, NT, NT}},
         {"BLOOM", 0, {0}, 0, {{P_E4, -40, 50, 0}, NT, NT, NT}},
@@ -287,13 +289,12 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"BITE", 0, {0}, 0, {{P_E1, -5, 7, 0}, NT, NT, NT}},
         {"ATTACK", 0, {0}, 0, {{P_ATK, 0, 80, 0}, NT, NT, NT}},
         {"SPACE", 0, {0}, 0, {{P_REV, 0, 110, 0}, NT, NT, NT}},
-        {"SHIMMER", 0, {0}, 0, {{P_IMIX, 0, 90, 0}, {P_DLY, 0, 40, 0}, NT, NT}},
     }, {
-        {"MUSIC BOX", 1, {{X, 0}}, 1, {50, 30, 50, 15, 30, 0, 25, 10}},         /* (round 4: RATIO at its in-tune place, 30 %) */
-        {"TEMPLE", 1, {{X, 0}}, 1, {55, 30, 60, 100, 20, 40, 100, 40}},
-        {"ICE", 1, {{X, 0}}, 1, {55, 30, 90, 40, 10, 60, 70, 90}},
-        {"CHIMES", 1, {{X, 0}}, 1, {70, 30, 30, 90, 60, 0, 20, 0}},
-        {"ROBOT BELLS", 1, {{X, 0}}, 1, {95, 30, 95, 30, 95, 10, 10, 0}},
+        {"MUSIC BOX", 1, {{P_IMIX, 9}, {P_DLY, 4}, {X, 0}}, 1, {0, 50, 30, 50, 15, 30, 0, 25}},         /* (round 4: RATIO at its in-tune place, 30 %) */
+        {"TEMPLE", 1, {{P_IMIX, 35}, {P_DLY, 16}, {X, 0}}, 1, {0, 55, 30, 60, 100, 20, 40, 100}},
+        {"ICE", 1, {{P_IMIX, 81}, {P_DLY, 36}, {X, 0}}, 1, {0, 55, 30, 90, 40, 10, 60, 70}},
+        {"CHIMES", 1, {{P_IMIX, 0}, {P_DLY, 0}, {X, 0}}, 1, {0, 70, 30, 30, 90, 60, 0, 20}},
+        {"ROBOT BELLS", 1, {{P_IMIX, 0}, {P_DLY, 0}, {X, 0}}, 1, {0, 95, 30, 95, 30, 95, 10, 10}},
         {"GLASS BELL", 1, NOV},
         {"MARIMBA", 5, NOV},
         {"FM BRASS", 3, NOV},
@@ -305,6 +306,7 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* PLUCK */
     {"PLUCK", "plucked strings \xB7 flippers kick on notes", IG_HARMONY, E_PHYS, 12, 0, 14, 12, {RGB(18, 14, 8), RGB(36, 28, 16), RGB(232, 176, 122), RGB(168, 152, 128), RGB(255, 244, 230)}, {{P_E0, 1}, {P_REV, 20}, {P_ITYPE, 1}, {P_IMIX, 0}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"BRIGHT", 0, {0}, 0, {{P_E2, 20, 127, 0}, {P_E4, 40, 20, 0}, {P_LEVEL, 106, 100, 0}, NT}},
         {"DAMP", 0, {0}, 0, {{P_E3, 20, 127, 0}, NT, NT, NT}},
         {"BODY", 0, {0}, 0, {{P_E1, 10, 120, 0}, NT, NT, NT}},
@@ -312,13 +314,12 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"BOW", 0, {0}, 0, {{P_E6, 0, 110, 0}, {P_LEVEL, 106, 90, 0}, NT, NT}},
         {"ACCENT", 0, {0}, 0, {{P_E5, 30, 127, 0}, NT, NT, NT}},
         {"SPACE", 0, {0}, 0, {{P_REV, 0, 100, 0}, {P_LEVEL, 108, 99, 0}, NT, NT}},
-        {"ECHO", 0, {0}, 0, {{P_DLY, 0, 80, 0}, NT, NT, NT}},
     }, {
-        {"KOTO", 2, {{X, 0}}, 1, {60, 40, 40, 30, 0, 60, 30, 30}},
-        {"NYLON", 2, {{X, 0}}, 1, {25, 25, 55, 40, 0, 40, 25, 10}},                 /* (round 4: DAMP where the string is in tune) */
-        {"MUTED", 2, {{X, 0}}, 1, {30, 10, 40, 50, 0, 70, 15, 5}},
-        {"HARP", 2, {{X, 0}}, 1, {35, 95, 20, 10, 0, 20, 85, 50}},
-        {"BANJO-ISH", 2, {{X, 0}}, 1, {90, 20, 30, 15, 8, 90, 10, 20}},
+        {"KOTO", 2, {{P_DLY, 24}, {X, 0}}, 1, {0, 60, 40, 40, 30, 0, 60, 30}},
+        {"NYLON", 2, {{P_DLY, 8}, {X, 0}}, 1, {0, 25, 25, 55, 40, 0, 40, 25}},                 /* (round 4: DAMP where the string is in tune) */
+        {"MUTED", 2, {{P_DLY, 4}, {X, 0}}, 1, {0, 30, 10, 40, 50, 0, 70, 15}},
+        {"HARP", 2, {{P_DLY, 40}, {X, 0}}, 1, {0, 35, 95, 20, 10, 0, 20, 85}},
+        {"BANJO-ISH", 2, {{P_DLY, 16}, {X, 0}}, 1, {0, 90, 20, 30, 15, 8, 90, 10}},
         {"NYLON", 2, NOV},
         {"HARP", 8, NOV},
         {"KALIMBA", 4, NOV},
@@ -331,20 +332,20 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* VOX */
     {"VOX", "talking synth \xB7 the mouth opens with the sound", IG_HARMONY, E_FORMANT, 16, 1, 11, 48, {RGB(20, 10, 14), RGB(40, 20, 28), RGB(255, 111, 111), RGB(184, 144, 152), RGB(255, 238, 240)}, {{P_LRATE, 15}, {P_CHOR, 10}, {P_ITYPE, 7}, {P_IMIX, 0}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"VOWEL", 0, {0}, 0, {{P_E0, 0, 127, 0}, NT, NT, NT}},
         {"TALK", 0, {0}, 0, {{P_E2, 0, 110, 0}, NT, NT, NT}},
         {"BUZZ", 0, {0}, 0, {{P_E4, 10, 127, 0}, {P_LEVEL, 108, 100, 0}, NT, NT}},
         {"BREATH", 0, {0}, 0, {{P_E5, 0, 110, 0}, NT, NT, NT}},
-        {"SHIFT", 7, {-12, -7, -5, 0, 5, 7, 12}, 0, {{P_E3, 0, 0, 0}, NT, NT, NT}},
         {"Q", 0, {0}, 0, {{P_E6, 10, 127, 0}, NT, NT, NT}},
         {"CHOIR", 0, {0}, 0, {{P_CHOR, 0, 90, 0}, {P_SPRD, 0, 120, 0}, {P_IMIX, 0, 40, 0}, NT}},
         {"SPACE", 0, {0}, 0, {{P_REV, 0, 100, 0}, {P_LEVEL, 106, 100, 0}, NT, NT}},
     }, {
-        {"ROBOT", 0, {{X, 0}}, 1, {20, 60, 90, 10, 50, 40, 10, 20}},
-        {"CHOIR BOY", 0, {{X, 0}}, 1, {40, 10, 50, 20, 50, 50, 85, 60}},
-        {"WHISPER", 0, {{X, 0}}, 1, {60, 30, 15, 95, 50, 40, 30, 40}},
-        {"YAMMER", 0, {{X, 0}}, 1, {50, 90, 60, 30, 70, 60, 20, 30}},
-        {"MONK", 0, {{X, 0}}, 1, {30, 5, 55, 10, 25, 70, 70, 80}},
+        {"ROBOT", 0, {{P_E3, 0}, {X, 0}}, 1, {0, 20, 60, 90, 10, 40, 10, 20}},
+        {"CHOIR BOY", 0, {{P_E3, 0}, {X, 0}}, 1, {0, 40, 10, 50, 20, 50, 85, 60}},
+        {"WHISPER", 0, {{P_E3, 0}, {X, 0}}, 1, {0, 45, 20, 0, 95, 31, 62, 18}},
+        {"YAMMER", 0, {{P_E3, 5}, {X, 0}}, 1, {0, 50, 90, 60, 30, 60, 20, 30}},
+        {"MONK", 0, {{P_E3, -7}, {X, 0}}, 1, {0, 30, 5, 55, 10, 70, 70, 80}},
         {"CHOIR AAH", 0, NOV},
         {"VOX LEAD", 1, NOV},
         {"WHISPER", 3, NOV},
@@ -354,20 +355,20 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     }},
     /* WHEELHOUSE */
     {"WHEELHOUSE", "tonewheel organ \xB7 the disc spins with the rotor", IG_HARMONY, E_WHEEL, 13, 1, 11, 20, {RGB(18, 12, 6), RGB(36, 24, 12), RGB(255, 170, 60), RGB(176, 156, 128), RGB(255, 242, 224)}, {{P_E7, 1}, {P_ITYPE, 1}, {P_IMIX, 0}, {X, 0}}, {
+        {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
         {"STOPS", 10, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 0, {{P_E0, 0, 0, 0}, NT, NT, NT}},
         {"DRIVE", 0, {0}, 0, {{P_E6, 0, 120, 0}, {P_LEVEL, 104, 100, 0}, NT, NT}},
         {"ROTOR", 3, {0, 1, 2}, SWN_11_2, {{P_E7, 0, 0, 0}, NT, NT, NT}},
-        {"CLICK", 0, {0}, 0, {{P_E5, 0, 127, 0}, NT, NT, NT}},
         {"SUB", 0, {0}, 0, {{P_E1, -8, 8, 0}, NT, NT, NT}},
         {"BODY", 0, {0}, 0, {{P_E2, -8, 8, 0}, {P_LEVEL, 120, 102, 0}, NT, NT}},
         {"TOP", 0, {0}, 0, {{P_E3, -8, 8, 0}, NT, NT, NT}},
         {"SPACE", 0, {0}, 0, {{P_REV, 0, 90, 0}, NT, NT, NT}},
     }, {
-        {"SMOKY", 0, {{X, 0}}, 1, {20, 25, 50, 20, 70, 60, 30, 40}},
-        {"SUNDAY SERVICE", 0, {{X, 0}}, 1, {60, 15, 50, 40, 55, 55, 50, 70}},
-        {"ROCK OUT", 0, {{X, 0}}, 1, {70, 85, 100, 60, 60, 70, 80, 20}},
-        {"BALLPARK", 0, {{X, 0}}, 1, {90, 40, 100, 80, 50, 30, 95, 30}},
-        {"FLUTES", 0, {{X, 0}}, 1, {0, 0, 50, 30, 30, 30, 90, 50}},
+        {"SMOKY", 0, {{P_E5, 25}, {X, 0}}, 1, {0, 20, 25, 50, 70, 60, 30, 40}},
+        {"SUNDAY SERVICE", 0, {{P_E5, 50}, {X, 0}}, 1, {0, 60, 0, 50, 55, 55, 82, 91}},
+        {"ROCK OUT", 0, {{P_E5, 76}, {X, 0}}, 1, {0, 70, 85, 100, 60, 70, 80, 20}},
+        {"BALLPARK", 0, {{P_E5, 101}, {X, 0}}, 1, {0, 90, 40, 100, 50, 30, 95, 30}},
+        {"FLUTES", 0, {{P_E5, 38}, {X, 0}}, 1, {0, 0, 0, 50, 23, 19, 61, 71}},
         {"FULL ORGAN", 0, NOV},
         {"JAZZ PERC", 1, NOV},
         {"GOSPEL", 2, NOV},
@@ -417,17 +418,17 @@ static uint32_t tfm_snd_of(const track_t *t) { return (t->preset - TFM_PRE0) % 1
  * measurements: docs/TFM-INSTRUMENTS.md */
 static const int8_t TFM_TRIM[TI_N][6] = {
     {1, 0, -3, 0, 10, 1},                /* THUMP LAB */
-    {4, 5, -1, -3, 6, 0},                /* SQUELCH */
+    {4, 5, -2, -3, 6, 0},                /* SQUELCH */
     {8, 0, 0, 5, -2, -3},                /* WOBBLER */
-    {-14, 4, 0, -5, 9, -1},              /* CHORDETTE */
-    {-29, -1, 0, 1, 16, -7},             /* RAZOR */
-    {-33, -2, 0, 2, 6, -6},              /* HAZE */
-    {-16, -3, 0, 11, -1, 2},             /* PIXEL */
-    {-20, 0, -1, 0, -2, 2},              /* TINE */
+    {-14, 5, 0, -4, 9, -2},              /* CHORDETTE */
+    {-30, -2, 0, 1, 16, -6},             /* RAZOR */
+    {-33, -3, 0, 2, 4, -5},              /* HAZE */
+    {-14, -5, 1, 9, -3, 0},              /* PIXEL */
+    {-20, 0, 3, 0, -3, 2},               /* TINE */
     {-2, 1, -2, 2, 0, -1},               /* GLINT */
-    {23, -6, 0, 2, -34, 3},              /* PLUCK */
-    {-28, -5, 0, 6, 2, -1},              /* VOX */
-    {-29, 0, -3, 3, -6, 0},              /* WHEELHOUSE */
+    {23, -6, 0, 2, -33, 3},              /* PLUCK */
+    {-28, -5, 0, 9, 2, -2},              /* VOX */
+    {-28, -1, 0, 2, -7, 6},              /* WHEELHOUSE */
 };
 static const uint8_t TFM_KT[TI_N][2] = {
     {0, 0}, {48, 5}, {48, 4}, {60, 3}, {72, 1}, {60, 2}, {72, 3}, {60, 0}, {72, 1}, {60, 4}, {60, 6}, {60, 3},
@@ -461,6 +462,7 @@ static int32_t (*key_gain_fn)(const track_t *t, uint32_t note) = tfm_key_gain;
  * does: one undo, the steps kept), the changes, the instrument's mark */
 static void tfm_macro_put(track_t *t, uint32_t m, int32_t pos, int rec);
 static uint8_t tfm_mok[NTRK];                           /* bit m: macro m's place is stored (the places: below) */
+static uint8_t tfm_mb[NTRK];                            /* (round 8: MORPH's base is taken: tfm_morph_put) */
 static int8_t tfm_swhalf[NTRK][8];                      /* a switch steps once per two detents: the detents so far */
 static int tfm_mslot(const track_t *t) { return t >= trk && t < trk + NTRK ? (int)(t - trk) : -1; }
 static void tfm_load(track_t *t, uint32_t i, uint32_t s)
@@ -482,11 +484,17 @@ static void tfm_load(track_t *t, uint32_t i, uint32_t s)
     t->preset = (uint8_t)TFM_PRE(i % TI_N, s % in->nsnd);
     if (tfm_mslot(t) >= 0) {                            /* (the places are the preset's: set below, or derived once from it) */
         tfm_mok[tfm_mslot(t)] = 0;
+        tfm_mb[tfm_mslot(t)] = 0;                       /* (round 8: MORPH starts from this sound) */
         memset(tfm_swhalf[tfm_mslot(t)], 0, 8);
     }
-    if (sn->hasmp)                                      /* a named preset: its eight macros' places (not recorded) */
+    if (sn->hasmp) {                                    /* a named preset: its eight macros' places (not recorded) */
         for (k = 0; k < 8u; k++)
             tfm_macro_put(t, k, (int32_t)sn->mp[k] * 127 / 100, 0);
+        for (k = 0; k < 6u && sn->ov[k].id != 0xFFu; k++) {   /* (round 8: then its own changes again: what the macro that */
+            const param_desc_t *d = param_desc_of(in->eng, sn->ov[k].id);   /* MORPH replaced set, kept as it was) */
+            t->p[sn->ov[k].id] = (int16_t)clamp(sn->ov[k].v, d->min, d->max);
+        }
+    }
 }
 /* a sound's name (the PRESETS list, NEW SONG, the bottom line): "SQUELCH RUBBER" */
 static void tfm_snd_name(uint32_t i, uint32_t s, char *b, uint32_t n)
@@ -506,6 +514,100 @@ static uint32_t tfm_isqrt(uint32_t n)
     while ((r + 1u) * (r + 1u) <= n)
         r++;
     return r;
+}
+/* round 8: MORPH (macro 1 of every instrument, JAM's knob): one turn from the sound as it is (0) to a contrasting voicing
+ * (127), many values together. It bends from where the sound is: the values it moves are taken when it leaves 0 (the base)
+ * and put back exactly at 0; ABS goes from the base to v, REL adds v to the base (the level), SW is v from the middle up.
+ * Another macro moving one of them while MORPH is out moves the base (MORPH bends from there). RAM only: after a load
+ * the sound as it was saved is the base (MORPH reads 0) */
+enum { TMM_ABS, TMM_REL, TMM_SW };
+typedef struct { uint8_t id; int8_t v; uint8_t md; } tfm_mt_t;
+#define MT_END {0xFFu, 0, 0}
+static const tfm_mt_t TFM_MORPH[TI_N][8] = {
+    /* THUMP LAB: tight and dry -> big, crushed, a room */
+    {{P_E3, 110, TMM_ABS}, {P_REV, 90, TMM_ABS}, {P_IA, 110, TMM_ABS}, {P_IMIX, 100, TMM_ABS}, {P_E7, 90, TMM_ABS},
+     {P_DLY, 25, TMM_ABS}, {P_LN3, 127, TMM_ABS}, {P_LEVEL, -9, TMM_REL}},
+    /* SQUELCH: round and mellow -> screaming acid */
+    {{P_E4, 100, TMM_ABS}, {P_E5, 118, TMM_ABS}, {P_ED_FLT, 60, TMM_ABS}, {P_E6, 100, TMM_ABS}, {P_DEC, 55, TMM_ABS},
+     {P_IMIX, 60, TMM_ABS}, {P_LEVEL, -3, TMM_REL}, MT_END},
+    /* WOBBLER: a soft sway -> a heavy, growling wobble */
+    {{P_LD_FLT, 63, TMM_ABS}, {P_E6, 60, TMM_ABS}, {P_E5, 100, TMM_ABS}, {P_IMIX, 90, TMM_ABS}, {P_IA, 80, TMM_ABS},
+     {P_DIST, 60, TMM_ABS}, {P_LEVEL, 0, TMM_REL}, MT_END},
+    /* CHORDETTE: warm and still -> bright, pumping, wide */
+    {{P_E4, 110, TMM_ABS}, {P_E5, 10, TMM_ABS}, {P_CHOR, 60, TMM_ABS}, {P_LD_AMP, 70, TMM_ABS}, {P_REV, 70, TMM_ABS},
+     {P_DLY, 30, TMM_ABS}, {P_LEVEL, 0, TMM_REL}, MT_END},
+    /* RAZOR: thin and dark -> screaming, wide, echoing */
+    {{P_E5, 110, TMM_ABS}, {P_E6, 70, TMM_ABS}, {P_E4, 120, TMM_ABS}, {P_ED_FLT, 60, TMM_ABS}, {P_DETUNE, 80, TMM_ABS},
+     {P_SPRD, 127, TMM_ABS}, {P_DLY, 60, TMM_ABS}, {P_LEVEL, 0, TMM_REL}},
+    /* HAZE: dark and still -> bright and moving */
+    {{P_E5, 22, TMM_ABS}, {P_LD_FLT, 60, TMM_ABS}, {P_CHOR, 110, TMM_ABS}, {P_REV, 127, TMM_ABS}, {P_IMIX, 60, TMM_ABS},
+     {P_LEVEL, 12, TMM_REL}, MT_END, MT_END},
+    /* PIXEL: a clean chip -> crushed, bright, ringing (no pitch sweep: MORPH stays in key) */
+    {{P_E3, 70, TMM_ABS}, {P_E2, 120, TMM_ABS}, {P_DEC, 80, TMM_ABS}, {P_E7, 127, TMM_ABS}, {P_REV, 40, TMM_ABS},
+     {P_LEVEL, -2, TMM_REL}, MT_END, MT_END},
+    /* TINE: soft and dry -> barking, trembling, wet */
+    {{P_E2, 40, TMM_ABS}, {P_E4, 40, TMM_ABS}, {P_LD_AMP, 90, TMM_ABS}, {P_CHOR, 110, TMM_ABS}, {P_IMIX, 80, TMM_ABS},
+     {P_REV, 60, TMM_ABS}, {P_LEVEL, 4, TMM_REL}, MT_END},
+    /* GLINT: pure -> metallic, blooming, shimmering */
+    {{P_E2, 50, TMM_ABS}, {P_E4, 50, TMM_ABS}, {P_DEC, 120, TMM_ABS}, {P_REV, 110, TMM_ABS}, {P_IMIX, 90, TMM_ABS},
+     {P_DLY, 40, TMM_ABS}, {P_LEVEL, 0, TMM_REL}, MT_END},
+    /* PLUCK: muted and short -> bright, ringing, wide (no bow: it pulls the pitch) */
+    {{P_E2, 80, TMM_ABS}, {P_E3, 50, TMM_ABS}, {P_E5, 127, TMM_ABS}, {P_REV, 80, TMM_ABS}, {P_DLY, 30, TMM_ABS},
+     {P_LEVEL, -6, TMM_REL}, MT_END, MT_END},
+    /* VOX: a closed mumble -> a buzzing choir */
+    {{P_E4, 127, TMM_ABS}, {P_E6, 127, TMM_ABS}, {P_E2, 110, TMM_ABS}, {P_CHOR, 90, TMM_ABS}, {P_SPRD, 120, TMM_ABS},
+     {P_REV, 80, TMM_ABS}, {P_LEVEL, -7, TMM_REL}, MT_END},
+    /* WHEELHOUSE: clean -> driven, the rotor fast, clicking */
+    {{P_E6, 120, TMM_ABS}, {P_E7, 2, TMM_SW}, {P_E5, 127, TMM_ABS}, {P_E3, 8, TMM_ABS}, {P_REV, 60, TMM_ABS},
+     {P_LEVEL, 0, TMM_REL}, MT_END, MT_END},
+};
+static int16_t tfm_mbase[NTRK][8];                      /* MORPH's base, per track (tfm_mb: taken) */
+static int32_t tfm_morph_val(const track_t *t, uint32_t ins, uint32_t k, int32_t base, int32_t pos)
+{
+    const tfm_mt_t *g = &TFM_MORPH[ins % TI_N][k];
+    const param_desc_t *d = param_desc_of(TFM_INS[ins % TI_N].eng, g->id);
+    int32_t v = g->md == TMM_SW ? (pos >= 64 ? g->v : base) :
+                g->md == TMM_REL ? base + g->v * pos / 127 : base + (g->v - base) * pos / 127;
+    (void)t;
+    return clamp(v, d->min, d->max);
+}
+static int tfm_mslot(const track_t *t);
+static void tfm_mstore(const track_t *t, uint32_t m, int32_t pos);
+static void tfm_morph_put(track_t *t, int32_t pos, int rec)
+{
+    uint32_t ins = tfm_ins_of(t), k;
+    int s = tfm_mslot(t);
+    if (s < 0 || ins == TI_NONE)
+        return;
+    if (pos && !tfm_mb[s]) {                            /* leaving 0: the sound as it is, the base */
+        for (k = 0; k < 8u && TFM_MORPH[ins][k].id != 0xFFu; k++)
+            tfm_mbase[s][k] = t->p[TFM_MORPH[ins][k].id];
+        tfm_mb[s] = 1;
+    }
+    if (tfm_mb[s])
+        for (k = 0; k < 8u && TFM_MORPH[ins][k].id != 0xFFu; k++) {
+            uint32_t id = TFM_MORPH[ins][k].id;
+            t->p[id] = (int16_t)tfm_morph_val(t, ins, k, tfm_mbase[s][k], pos);
+            if (rec)
+                motion_capture(t, id, t->p[id]);
+        }
+    if (!pos)
+        tfm_mb[s] = 0;                                  /* (at 0: the base put back exactly; the next move takes it again) */
+    tfm_mstore(t, 0, pos);
+}
+/* another macro wrote value id: while MORPH is out that is its new base, MORPH bends from there */
+static uint8_t tfm_mpos[NTRK][8];
+static void tfm_morph_follow(track_t *t, uint32_t id)
+{
+    uint32_t ins = tfm_ins_of(t), k;
+    int s = tfm_mslot(t);
+    if (s < 0 || ins == TI_NONE || !tfm_mb[s])
+        return;
+    for (k = 0; k < 8u && TFM_MORPH[ins][k].id != 0xFFu; k++)
+        if (TFM_MORPH[ins][k].id == id) {
+            tfm_mbase[s][k] = t->p[id];
+            t->p[id] = (int16_t)tfm_morph_val(t, ins, k, tfm_mbase[s][k], tfm_mpos[s][0]);
+        }
 }
 static int32_t tfm_tgt_val(const tfm_tgt_t *g, int32_t pos)
 {
@@ -550,7 +652,6 @@ static uint32_t tfm_sw_idx(const tfm_macro_t *mc, int32_t v)     /* the value ne
  * rounds, and a knob turn stalled). tfm_mval is the first target's value the place wrote: while the parameter still
  * has it the place is good; anything else that moved it (DEEP, a load, undo, a MIDI CC) makes the place derived once
  * from the parameter and kept again. RAM only: no format change. */
-static uint8_t tfm_mpos[NTRK][8];
 static int16_t tfm_mval[NTRK][8];
 static void tfm_mstore(const track_t *t, uint32_t m, int32_t pos)
 {
@@ -559,7 +660,7 @@ static void tfm_mstore(const track_t *t, uint32_t m, int32_t pos)
     if (s < 0 || i == TI_NONE)
         return;
     tfm_mpos[s][m & 7u] = (uint8_t)clamp(pos, 0, 127);
-    tfm_mval[s][m & 7u] = (int16_t)motion_base_value(t, TFM_INS[i].mac[m & 7u].t[0].id);
+    tfm_mval[s][m & 7u] = TFM_INS[i].mac[m & 7u].nsw == TFM_MSW ? 0 : (int16_t)motion_base_value(t, TFM_INS[i].mac[m & 7u].t[0].id);
     tfm_mok[s] |= (uint8_t)(1u << (m & 7u));
 }
 /* macro m of the track's instrument: its place 0..127 (stored; else read back from its first target, once) */
@@ -572,9 +673,11 @@ static int32_t tfm_macro_get(const track_t *t, uint32_t m)
     if (i == TI_NONE)
         return 0;
     mc = &TFM_INS[i].mac[m & 7u];
+    if (mc->nsw == TFM_MSW)                             /* (MORPH: its place while its base is held, else 0) */
+        return s >= 0 && tfm_mb[s] && ((tfm_mok[s] >> (m & 7u)) & 1u) ? tfm_mpos[s][m & 7u] : 0;
     if (s >= 0 && ((tfm_mok[s] >> (m & 7u)) & 1u) && tfm_mval[s][m & 7u] == (int16_t)motion_base_value(t, mc->t[0].id))
         return tfm_mpos[s][m & 7u];
-    if (mc->nsw)
+    if (mc->nsw)                                        /* (MORPH returned above) */
         pos = tfm_sw_pos(mc, tfm_sw_idx(mc, motion_base_value(t, mc->t[0].id)));
     else
         pos = tfm_tgt_pos(&mc->t[0], motion_base_value(t, mc->t[0].id));
@@ -589,6 +692,10 @@ static void tfm_macro_put(track_t *t, uint32_t m, int32_t pos, int rec)
         return;
     mc = &TFM_INS[i].mac[m & 7u];
     pos = clamp(pos, 0, 127);
+    if (mc->nsw == TFM_MSW) {
+        tfm_morph_put(t, pos, rec);
+        return;
+    }
     for (k = 0; k < 4u; k++) {
         const tfm_tgt_t *g = &mc->t[k];
         const param_desc_t *d;
@@ -604,6 +711,7 @@ static void tfm_macro_put(track_t *t, uint32_t m, int32_t pos, int rec)
             v = tfm_tgt_val(g, pos);
         }
         t->p[g->id] = (int16_t)clamp(v, d->min, d->max);
+        tfm_morph_follow(t, g->id);                     /* (round 8: MORPH out: its base moves, it bends from there) */
         if (rec)
             motion_capture(t, g->id, t->p[g->id]);      /* (REC: recorded as automation, as a knob turn is) */
     }
@@ -620,7 +728,7 @@ static void tfm_macro_text(const track_t *t, uint32_t m, char *val, const char *
     if (i == TI_NONE)
         return;
     mc = &TFM_INS[i].mac[m & 7u];
-    if (mc->nsw) {
+    if (mc->nsw && mc->nsw != TFM_MSW) {
         uint32_t k = tfm_sw_idx(mc, motion_base_value(t, mc->t[0].id));
         if (mc->swn)
             str_cpy(val, mc->swn[k], 8);
@@ -718,10 +826,8 @@ static void tfm_tag_name(uint32_t k, char *tag, char *nm)
     str_cpy(nm, TFM_INS[i].snd[s % TFM_INS[i].nsnd].name, 13);
 }
 static const char *tfm_ins_name(const track_t *t) { return TFM_INS[tfm_ins_of(t) % TI_N].name; }
-/* JAM's knob turns this macro of the instrument, never a switch: THUMP PUNCH, SQUELCH CUTOFF, WOBBLER WOB, CHORDETTE WARM,
- * RAZOR CUT, HAZE BLOOM, PIXEL SWEEP, TINE BARK, GLINT METAL, PLUCK BRIGHT, VOX VOWEL, WHEELHOUSE DRIVE */
-static const uint8_t TFM_JAMM[TI_N] = {0, 0, 0, 2, 2, 3, 6, 0, 0, 0, 0, 1};
-static uint32_t tfm_jam_m(const track_t *t) { return TFM_JAMM[tfm_ins_of(t) % TI_N]; }
+/* JAM's knob: MORPH, macro 1 of every instrument (round 8) */
+static uint32_t tfm_jam_m(const track_t *t) { (void)t; return 0u; }
 static void tfm_snd_label(const track_t *t, char *b)
 {
     const tfm_instr_t *in = &TFM_INS[tfm_ins_of(t) % TI_N];
@@ -738,7 +844,7 @@ static void tfm_macro_turn_k(track_t *t, uint32_t m, uint32_t k, int32_t steps)
         return;
     mc = &TFM_INS[i].mac[m & 7u];
     pos = tfm_macro_get(t, m);
-    if (mc->nsw) {                                      /* a switch: one value per two detents (a detent alone only counts) */
+    if (mc->nsw && mc->nsw != TFM_MSW) {                /* a switch: one value per two detents (a detent alone only counts) */
         int s = tfm_mslot(t);
         int32_t d = steps > 0 ? 1 : -1, idx, h;
         h = s >= 0 ? tfm_swhalf[s][m & 7u] : 0;

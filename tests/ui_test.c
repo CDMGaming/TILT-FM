@@ -10565,7 +10565,7 @@ static int test_tfm_dice(void)
     ns_start();
     ok = tfm_ins_of(&trk[0]) == TI_THUMP && tfm_snd_of(&trk[0]) == 2u && drum_track(&trk[0]);
     ok &= tfm_ins_of(&trk[3]) == TI_SQUELCH && !drum_track(&trk[3]) && trk[3].p[P_QUANT] == QN_WHITE;
-    ok &= song.g[G_SWING] == 35 && trk[3].p[P_E4] == tfm_tgt_val(&TFM_INS[TI_SQUELCH].mac[0].t[0], 70 * 127 / 100);   /* (ACID RAIN: CUTOFF at 70) */
+    ok &= song.g[G_SWING] == 35 && trk[3].p[P_E4] == tfm_tgt_val(&TFM_INS[TI_SQUELCH].mac[1].t[0], 70 * 127 / 100);   /* (ACID RAIN: CUTOFF at 70) */
     project_save(0);
     project_load(0);
     ok &= tfm_ins_of(&trk[0]) == TI_THUMP && tfm_ins_of(&trk[3]) == TI_SQUELCH && tfm_snd_of(&trk[3]) == 1u;
@@ -10609,6 +10609,10 @@ static int test_tfm_instruments(void)
             const tfm_macro_t *mc = &TFM_INS[i].mac[m];
             const param_desc_t *d;
             int32_t lo, hi;
+            if (mc->nsw == TFM_MSW) {                   /* (round 8: MORPH, macro 1: its own test, test_r8_morph) */
+                ok &= m == 0u && str_eq(mc->name, "MORPH");
+                continue;
+            }
             ok &= mc->name && str_len(mc->name) <= 7u && mc->t[0].id != 0xFFu && strcmp(mc->name, "LEVEL") != 0;   /* (no LEVEL macro) */
             for (k = 0; k < 4u && mc->t[k].id != 0xFFu; k++) {
                 d = param_desc_of(TFM_INS[i].eng, mc->t[k].id);
@@ -11372,6 +11376,7 @@ int main(void)
     bad += test_r7_noinst();
     bad += test_r7_build();
     bad += test_r8_dj();
+    bad += test_r8_morph();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4
