@@ -218,8 +218,8 @@ static const param_desc_t GP[G_COUNT] = {
     /* inert: they set the GM drum part (level, reverb send), which is gone (drums are the DRUM engine
      * on any part). On no page; kept so the ids and G_COUNT, which the project format and the
      * editor protocol depend on, do not move */
-    [G_DRLVL] = PD("-", F_INT, 0, 32767, 0),   /* (TFM round 9: the DJ's FILTER and ECHO, perform.c dj_get) */
-    [G_DRREV] = PD("-", F_INT, 0, 32767, 0),   /* (.. its SPACE and DIRT) */
+    [G_DRLVL] = PD("-", F_INT, -8192, 8191, 0),   /* (TFM round 9: the DJ's FILTER and ECHO, perform.c dj_get) */
+    [G_DRREV] = PD("-", F_INT, -8192, 8191, 0),   /* (.. its SPACE and DIRT) */
 };
 
 /* TFM round 9: hold ARP's DJ on the master (tfm_live.c): its four as motion ids after the track's (motion.c, MO_DJ + 0..3:

@@ -93,21 +93,21 @@ static volatile uint8_t perf_solo;    /* main: tracks soloed in the GLO layer (t
 static volatile uint8_t perf_kill;    /* main: every effect off (the menu, a dialog, UBOOT) */
 /* TFM round 9: hold ARP's DJ (tfm_live.c) on the master: FILTER (-63..63: the LPF | HPF below, as KNOB 1 with FX), ECHO and
  * SPACE (0..127: ECHO THROW's and REV THROW's shares, so the delay's feedback too), DIRT (0..127: a drive, perf_block). The
- * song's values: song.g G_DRLVL (FILTER, ECHO) and G_DRREV (SPACE, DIRT), a byte each (two globals inert since 1.0: no
- * format change); while the motion of a track plays one (motion.c MO_DJ) it sounds instead (dj_mv, dj_mb, its track
+ * song's values: song.g G_DRLVL (FILTER, ECHO) and G_DRREV (SPACE, DIRT), 7 bits each as a signed 14-bit value (the editor
+ * protocol's range; neutral is 0; two globals inert since 1.0: no format change); while the motion of a track plays one (motion.c MO_DJ) it sounds instead (dj_mv, dj_mb, its track
  * dj_mown) until that track's pass starts again or the transport stops */
 static volatile int8_t dj_mv[DJ_N];
 static volatile uint8_t dj_mb, dj_mown[DJ_N];
 static int32_t dj_get(uint32_t i)                     /* the song's value */
 {
-    uint32_t w = (uint16_t)song.g[i < 2u ? G_DRLVL : G_DRREV], b = (w >> ((i & 1u) * 8u)) & 255u;
-    return i ? (int32_t)b : (int32_t)(int8_t)b;
+    uint32_t w = (uint32_t)song.g[i < 2u ? G_DRLVL : G_DRREV] & 16383u, b = (w >> ((i & 1u) * 7u)) & 127u;
+    return i ? (int32_t)b : (int32_t)(b ^ 64u) - 64;    /* (FILTER: 7-bit two's complement) */
 }
 static void dj_put(uint32_t i, int32_t v)
 {
-    uint32_t sh = (i & 1u) * 8u, w = (uint16_t)song.g[i < 2u ? G_DRLVL : G_DRREV];
-    w = (w & ~(255u << sh)) | (((uint32_t)v & 255u) << sh);
-    song.g[i < 2u ? G_DRLVL : G_DRREV] = (int16_t)w;
+    uint32_t sh = (i & 1u) * 7u, w = (uint32_t)song.g[i < 2u ? G_DRLVL : G_DRREV] & 16383u;
+    w = (w & ~(127u << sh)) | (((uint32_t)v & 127u) << sh);
+    song.g[i < 2u ? G_DRLVL : G_DRREV] = (int16_t)(w >= 8192u ? (int32_t)w - 16384 : (int32_t)w);
 }
 static int32_t dj_now(uint32_t i) { return (dj_mb >> i) & 1u ? dj_mv[i] : dj_get(i); }   /* as it sounds */
 static volatile int8_t perf_k[4];     /* main: the knob macros, 0 = untouched: FILTER -100..100 (- LPF, + HPF),

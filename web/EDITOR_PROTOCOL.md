@@ -405,8 +405,9 @@ grid lives in the steps themselves, so every engine has it:
   DRUM engine on any part: the first C key is the kick (C2 = 36), notes are GM numbers.
 - The globals `G_DRCH`, `G_DRLVL`, `G_DRREV` (ids 24..26: the old drum track's MIDI channel, level and
   reverb send) keep their ids, and `G_COUNT` stays 27. `G_DRLVL` and `G_DRREV` were inert (range 0..0); TILT-FM
-  (round 9) keeps hold ARP's four DJ values in them, a byte each (`G_DRLVL`: FILTER low byte as -63..63, ECHO high;
-  `G_DRREV`: SPACE low, DIRT high), so `DESC` gives label "-", range 0..32767; no page shows them. Id 24 (`G_DRCH`, never read since 1.0) is `G_RTYPE`
+  (round 9) keeps hold ARP's four DJ values in them, 7 bits each as a signed 14-bit value (`G_DRLVL`: FILTER in bits
+  0..6 as 7-bit two's complement -63..63, ECHO in bits 7..13; `G_DRREV`: SPACE low, DIRT high; all neutral = 0), so `DESC`
+  gives label "-", range -8192..8191; no page shows them. Id 24 (`G_DRCH`, never read since 1.0) is `G_RTYPE`
   since 1.0: the reverb's model, `DESC` label "TYPE", enum ROOM (0) / SPRING (1) / HALL (2, since 1.2), on the
   REVERB page (FX). The power-on value (`DESC` def) is HALL since 1.2, ROOM before; a project keeps its own, and
   projects of formats before FUN7 load it as ROOM. MIDI channel 10 is no longer special (channels 1..4 play
