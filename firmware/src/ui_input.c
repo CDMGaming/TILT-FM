@@ -1363,6 +1363,7 @@ static void fx_default(void);
 static int layer_play(void);
 static int layer_set_open(void);
 static uint32_t layer_oct(uint32_t pressed, uint32_t oct);
+static uint32_t layer_open(void);
 static void layer_oct_open(uint32_t pressed);
 static int layer_allowed(void);
 static uint32_t ly_bit(uint32_t l);
@@ -1564,7 +1565,8 @@ static void ui_input(void)
     if (((pressed >> panel.btn[B_REC]) & 1u) && ui.ly == LAYER_REC)
         ui.rec_t0 |= 2u;                                /* (REC is its layer's button now: its tap is layer_tap's) */
     layer_oct_open(pressed);                            /* (OCT± with a SET layer's button down: it opens now) */
-    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on || tu_oct_ok());
+    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on || tu_oct_ok() ||
+                         (layer_open() == LAYER_SCENE && !tu_classic()));   /* (round 8: hold ARP, OCT- / OCT+ are the DJ's) */
     oct = layer_oct(pressed, oct);                      /* (a SET layer's OCT-: put back) */
     layer_masks();                                      /* seq.c: keys pressed with a layer's button are its own */
     lay = layer_held();
@@ -1602,6 +1604,8 @@ static void ui_input(void)
         }
         if (ui.ly == LAYER_FX && ((pressed >> panel.btn[B_EDIT]) & 1u))
             fx_default();                               /* .. EDIT: its default back */
+        if (ui.ly == LAYER_SCENE && !tu_classic() && (s = panel_enc(EN_ALGO)) != 0)   /* (TFM round 8: hold ARP, the DJ's */
+            prf_pick((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));   /* track) */
         panel_enc(EN_ALGO);                             /* (another track: OCT- puts back the layer's track only) */
         if (glo && (sel = panel_enc(EN_SELECT)) != 0)   /* GLO + SELECT: the tempo, a combo (OCT- puts it back) */
             combo = 1;

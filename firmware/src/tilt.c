@@ -8,9 +8,10 @@
  *   F3 NEW SONG  the NEW SONG screen (below)
  *   G3 STUCK     the selected track: COOK if it holds something (a NOTE step, a drum hit), else RANDOM: the SEQ TOOLS
  *                actions themselves (ui_tools.c), in the track's scale (ROOT, SCL), one undo each
- *   A3 TIMER     (below)
+ *   A3 MUTATE    (TFM round 8, from PERFORM) the selected track's pattern and / or sound re-rolled in key; KNOB 2 the mode
+ *   B3 TIMER     (below)
  * The song's scenes have a layer of their own, ARP held (SCENE LAYER, below) */
-enum { TT_NEW, TT_STUCK, TT_TIMER, TT_N };              /* the white keys from F3 (key_place) */
+enum { TT_NEW, TT_STUCK, TT_MUTATE, TT_TIMER, TT_N };   /* (round 8: MUTATE from PERFORM, next to STUCK) */              /* the white keys from F3 (key_place) */
 static uint8_t tilt_timer_min;                          /* the TIMER: 0 off, else its minutes */
 
 /* the selected track holds something to cook (as tl_do counts it) */
@@ -571,7 +572,7 @@ static void tilt_ns_draw(void)
 }
 
 /* ------------------------------------------------------------- TIMER --- */
-/* OFF / 5 / 10 / 15 / 20 minutes (the TILT layer: A3 steps it, KNOB 1 turns it). Setting it starts the countdown, so
+/* OFF / 5 / 10 / 15 / 20 minutes (the TILT layer: B3 steps it, KNOB 1 turns it). Setting it starts the countdown, so
  * does NEW SONG's START with it set; it runs in real time (stopped or playing). In the header, left of the battery, on
  * every screen: M:SS in a 3 x 5 dot matrix, 1 px dots 2 px apart (9 px high, "20:00" 29 px wide: the octave or the
  * song row still fits between it and the BPM, ui_draw.c draw_head); amber (fixed, as the splash: dim, from 1:00
@@ -1095,23 +1096,29 @@ static void tilt_key(uint32_t k, uint32_t p)
         tilt_ns_show();
     else if (p == TT_STUCK)
         tilt_stuck();
-    else if (p == TT_TIMER)                             /* A3: OFF 5 10 15 20, each press the next */
+    else if (p == TT_MUTATE)
+        prf_mutate();
+    else if (p == TT_TIMER)                             /* B3: OFF 5 10 15 20, each press the next */
         tilt_timer_set(TM_STEPS[(tm_step_of(tilt_timer_min) + 1u) % sizeof TM_STEPS]);
 }
-static void tilt_knob(uint32_t k, int32_t s)            /* KNOB 1: the TIMER */
+static void tilt_knob(uint32_t k, int32_t s)            /* KNOB 1: the TIMER; KNOB 2: MUTATE's mode (round 8) */
 {
+    if (k == 1u && s) {
+        prf_mut = (uint8_t)clamp((int32_t)prf_mut + (s > 0 ? 1 : -1), 0, 2);
+        ui.force = 1;
+    }
     if (k == 0u && s)
         tilt_timer_set(TM_STEPS[(uint32_t)clamp((int32_t)tm_step_of(tilt_timer_min) + (s > 0 ? 1 : -1), 0,
                                                 (int32_t)sizeof TM_STEPS - 1)]);
 }
 static uint32_t tilt_can(uint32_t k, uint32_t p)
 {
-    return !key_black(k) && (((p == TT_NEW || p == TT_STUCK) && !chain_busy()) || p == TT_TIMER);
+    return !key_black(k) && (((p == TT_NEW || p == TT_STUCK || p == TT_MUTATE) && !chain_busy()) || p == TT_TIMER);
 }
 static uint32_t tilt_on(uint32_t k, uint32_t p) { return !key_black(k) && p == TT_TIMER && tilt_timer_min; }
 static uint32_t tilt_sig(void)
 {
-    return (tilt_used(TSEL) != 0u) * 31u + (uint32_t)chain_busy() * 3u + song.sel * 977u + tilt_timer_min * 7919u;
+    return (tilt_used(TSEL) != 0u) * 31u + (uint32_t)chain_busy() * 3u + song.sel * 977u + tilt_timer_min * 7919u + prf_mut * 65537u;
 }
 static void tilt_cards(void)
 {
@@ -1120,10 +1127,14 @@ static void tilt_cards(void)
     fmt_int(v, tilt_timer_min);
     draw_column(0, "TIMER", tilt_timer_min ? v : "OFF", tilt_timer_min ? "MIN" : "", tilt_timer_min ? VAL(0u) : T_DIM,
                 (int32_t)tm_step_of(tilt_timer_min) * 250, ICON_TIME);
-    for (c = 1; c < 4u; c++)
+    {
+        static const char *const MN[3] = {"PATTERN", "SOUND", "BOTH"};
+        draw_column(1, "MUTATE", MN[prf_mut % 3u], "", VAL(1u), (int32_t)(prf_mut % 3u) * 500, ICON_PROB);
+    }
+    for (c = 2; c < 4u; c++)
         draw_column(c, "", "", "", T_THEME, -1, ICON_NONE);
 }
-/* the map: F3 NEW SONG, G3 STUCK, A3 TIMER, and under them what STUCK will do to the selected track */
+/* the map: F3 NEW SONG, G3 STUCK, A3 MUTATE, B3 TIMER, and under them what STUCK will do to the selected track */
 static void layer_tilt(void)
 {
     uint32_t st = chain_busy() ? LS_DIM : LS_OFF;
@@ -1133,6 +1144,8 @@ static void layer_tilt(void)
     n[0] = 'G';
     lcell(LC_X(TT_STUCK), 4, LC_H, n, ICON_PROB, 0, "STUCK", st, 0);
     n[0] = 'A';
+    lcell(LC_X(TT_MUTATE), 4, LC_H, n, ICON_PROB, 0, "MUTATE", st, 0);   /* (round 8: from PERFORM) */
+    n[0] = 'B';
     lcell(LC_X(TT_TIMER), 4, LC_H, n, ICON_TIME, 0, "TIMER", tilt_timer_min ? LS_SEL : LS_OFF, 0);
     b[0] = 'T';
     b[1] = (char)('1' + song.sel);

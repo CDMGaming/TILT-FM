@@ -548,6 +548,12 @@ static int jl_on(void);
 static int jl_keep(void);
 static void prf_key(uint32_t k, uint32_t p);
 static void prf_knob(uint32_t k, int32_t s);
+static void prf_oct(uint32_t taps);                     /* (round 8: the DJ layer, tfm_live.c) */
+static uint8_t prf_rate, prf_cap, prf_mut;
+static void prf_mutate(void);
+static void prf_pick(uint32_t k);
+static int32_t dj_shown(uint32_t k, uint32_t knob);
+static int dj_latched(void);
 static void prf_poll(void);
 static int prf_fill_key(void);
 static int prf_on(void);

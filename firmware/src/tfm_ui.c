@@ -505,19 +505,19 @@ static void tu_jam_dmd(void)                            /* y 22 .. 79: the score
     tu_rrect(7, 27, 226, 48, 5, RGB(10, 7, 4), RGB(42, 32, 18));
     tu_timer_text(t);
     tu_bars(&bar, &tot);
-    if (prf_on()) {                                     /* PERFORM: the display turns violet */
-        static const char *const RN[5] = {"1/8", "1/8T", "1/16", "1/16T", "1/32"}, *const MN[3] = {"PATTERN", "SOUND", "BOTH"};
-        dmd_str(14, 36, 3, "PERFORM", RGB(170, 130, 255), RGB(34, 26, 56));
+    if (prf_on()) {                                     /* round 8: DJ: the display violet as PERFORM's was */
+        static const char *const RN[5] = {"1/8", "1/8T", "1/16", "1/16T", "1/32"};
+        dmd_str(14, 36, 4, "DJ", RGB(170, 130, 255), RGB(34, 26, 56));
+        b[0] = 'T';
+        b[1] = (char)('1' + song.sel % NTRK);
+        str_cpy(b + 2, " \xB7 ", 6);
+        str_cpy(b + str_len(b), tu_inst_name(TSEL), 14);
+        tu_text(96, 36, &AF_TS, b, RGB(190, 160, 255), RGB(10, 7, 4));
         str_cpy(b, "ROLL ", 8);
         str_cpy(b + 5, RN[prf_rate % 5u], 8);
-        tu_text(142, 36, &AF_TS, b, RGB(190, 160, 255), RGB(10, 7, 4));
-        str_cpy(b, "CAPTURE ", 10);
-        fmt_int(b + 8, 1 << prf_cap);
-        str_cpy(b + str_len(b), prf_cap ? " BARS" : " BAR", 6);
-        tu_text(142, 52, &AF_TS, b, RGB(110, 230, 150), RGB(10, 7, 4));
-        str_cpy(b, "MUTATE ", 9);
-        str_cpy(b + 7, MN[prf_mut % 3u], 9);
-        tu_text(142, 68, &AF_TS, b, RGB(255, 170, 60), RGB(10, 7, 4));
+        tu_text(96, 52, &AF_TS, b, RGB(150, 130, 210), RGB(10, 7, 4));
+        tu_text(96, 68, &AF_TS, dj_latched() ? "LATCH ON" : "LATCH OFF", dj_latched() ? RGB(255, 170, 60) : RGB(120, 100, 150),
+                RGB(10, 7, 4));
         return;
     }
     if (writing) {                                      /* CHAIN held: the taps, spelled out */
@@ -701,7 +701,7 @@ static void tu_cab_draw(uint32_t c)
                 i < lvl ? (i >= 13 ? TC_REC : i >= 10 ? TC_AMBER : TC_GOOD) :
                 i + 1 == (int32_t)tu.mpk[c] ? (i >= 13 ? TC_REC : i >= 10 ? TC_AMBER : TC_GOOD) :      /* (the peak dot) */
                 tu_mix(tu_mat_at(m, (uint32_t)(8 + (13 - i) * 5), CAB_H), ink, 12));
-    if (!prf_on()) {                                    /* (PERFORM: the dial gives way to its ON / MUTED panel) */
+    {
     acc = ins ? TFM_INS[tfm_ins_of(t) % TI_N].col[2] : TC_AMBER;
     if (mute)
         acc = TC_DIM;
@@ -728,16 +728,44 @@ static void tu_cab_draw(uint32_t c)
     tu_text_c(x0 + 14, y0 + 78, &AF_TS, b, TC_BG, col);
     }
     tu_cab_rec(x0 + 45, y0 + 79, c, tu_mat_at(m, 79, CAB_H));
-    if (prf_on()) {                                     /* PERFORM: an ON / MUTED panel over it (M1..M4 on the black keys) */
-        uint16_t pc = mute ? TC_DIM : TU_TC[c], dk = mute ? RGB(12, 10, 8) : tu_mix(RGB(10, 8, 6), TU_TC[c], 6);
-        tu_cut(x0 + 3, y0 + 8, 48, 76, pc);
-        tu_cut(x0 + 5, y0 + 10, 44, 72, dk);
-        tu_text_c(x0 + 27, y0 + 46, mute ? &AF_TM : &AF_TL, mute ? "MUTED" : "ON", mute ? RGB(150, 140, 120) : TC_TEXT, dk);
+}
+/* round 8: hold ARP: the selected track's four DJ knobs, big, over the cabinets (its colour at the edge) */
+static void tu_dj_panel(void)
+{
+    static const char *const KN[4] = {"FILTER", "ECHO", "SPACE", "DIRT"};
+    uint32_t k, c = song.sel % NTRK;
+    uint16_t col = TU_TC[c], bg = RGB(16, 12, 26), vi = RGB(170, 130, 255);
+    tu_cut(3, 82, 234, 93, col);
+    tu_cut(5, 84, 230, 89, bg);
+    for (k = 0; k < 4u; k++) {
+        int32_t cx = 32 + (int32_t)k * 58, cy = 120, v = dj_shown(c, k);
+        char b[8];
+        uint32_t pos;
+        if (k == 0u) {                                  /* FILTER: the middle off, LP left, HP right */
+            pos = (uint32_t)(500 + v * 500 / 63);
+            str_cpy(b, v <= -4 ? "LP" : v >= 4 ? "HP" : "OFF", 4);
+        } else {
+            pos = (uint32_t)(v * 1000 / 127);
+            fmt_int(b, v * 100 / 127);
+        }
+        tu_dial(cx, cy, 22, 18, pos, k == 0u && v > -4 && v < 4 ? RGB(90, 76, 120) : vi, RGB(48, 38, 72));
+        tu_disc(cx, cy, 17, RGB(30, 24, 46));
+        tu_text_c(cx, cy, &AF_TM, b, TC_TEXT, RGB(30, 24, 46));
+        tu_text_c(cx, 157, &AF_TS, KN[k], k == 0u ? vi : RGB(190, 170, 230), bg);
+        {
+            char kb[3] = {'K', (char)('1' + k), 0};
+            tu_text_c(cx, 92, &AF_TS, kb, RGB(120, 100, 150), bg);
+        }
     }
 }
-static void tu_jam_body(void)                           /* y 79 .. 177: the four cabinets */
+static void tu_jam_body(void)                           /* y 79 .. 177: the four cabinets (hold ARP: the DJ knobs) */
 {
     uint32_t c;
+    if (prf_on()) {
+        tu_rect(0, 79, TU_W, 98, TC_BG);
+        tu_dj_panel();
+        return;
+    }
     for (c = 0; c < NTRK; c++)
         tu_cab_draw(c);
 }
@@ -757,22 +785,17 @@ static void tu_strip_draw(void)                         /* y 177 .. 215: the 11 
     static const char *const KN[11] = {"F#3", 0, 0, "C#4", 0, "F#4", 0, 0, "C#5", 0, "F#5"};
     uint32_t s, cur = chain.running && chain.config.row[chain.row].slot[0] < NSCN ? chain.config.row[chain.row].slot[0] : tu_scene_cur();
     uint32_t cue = tsc.cue < NSCN ? tsc.cue : 0xFFu, blink = (ui.frame >> 3) & 1u;
-    if (prf_on()) {                                     /* PERFORM: M1 M2 M3 M4 FILL CAP MUT on the keys */
-        static const char *const PN[7] = {"M1", "M2", "M3", "M4", "FIL", "CAP", "MUT"};
+    if (prf_on()) {                                     /* round 8, DJ: F#3 .. C#4 pick T1 .. T4 (the selected lit) */
+        static const char *const PN[4] = {"T1", "T2", "T3", "T4"};
         for (s = 0; s < 11u; s++) {
             int32_t x = X[s];
             if (KN[s])
                 tu_text(x, 208, &AF_TS, KN[s], TC_QUIET, TC_BG);
-            if (s < 7u) {
-                uint16_t col = s < 4u ? TU_TC[s] : s == 4u ? RGB(120, 96, 200) : s == 5u ? RGB(80, 220, 140) : RGB(255, 170, 60);
-                int lit = s < 4u ? !trk[s].p[P_MUTE] : s == 4u ? jl_held(4) : 0;
-                if (s < 4u) {
-                    tu_disc(x + 9, 190, 8, lit ? col : tu_mix(TC_BG, col, 30));
-                    tu_text_c(x + 9, 190, &AF_TS, PN[s], lit ? TC_BG : tu_mix(TC_BG, col, 85), lit ? col : tu_mix(TC_BG, col, 30));
-                } else {                                /* (round 6: the three-letter ones: the word in colour over a bar, no pill to crowd) */
-                    tu_text_c(x + 9, 188, &AF_TS, PN[s], lit ? col : tu_mix(TC_BG, col, 85), TC_BG);
-                    tu_rect(x + 2, 196, 14, 3, lit ? col : tu_mix(TC_BG, col, 35));
-                }
+            if (s < 4u) {
+                uint16_t col = TU_TC[s];
+                int lit = s == song.sel;
+                tu_disc(x + 9, 190, 8, lit ? col : tu_mix(TC_BG, col, 30));
+                tu_text_c(x + 9, 190, &AF_TS, PN[s], lit ? TC_BG : tu_mix(TC_BG, col, 85), lit ? col : tu_mix(TC_BG, col, 30));
             } else {
                 tu_rect(x, 180, 18, 1, RGB(42, 32, 18)); tu_rect(x, 199, 18, 1, RGB(42, 32, 18));
                 tu_rect(x, 180, 1, 20, RGB(42, 32, 18)); tu_rect(x + 17, 180, 1, 20, RGB(42, 32, 18));
@@ -842,7 +865,7 @@ static void tu_jam_draw(void)
     str_cpy(tn + str_len(tn), tu_inst_name(&trk[song.sel % NTRK]), 14);
     {   /* the header: the selected track, "T3 \xB7 SQUELCH" */
         static char hl[24];
-        str_cpy(hl, prf_on() ? "HOLD ARP \xB7 PERFORM" : jw.held ? "HOLD F#5 \xB7 CHAIN" : tn, sizeof hl);
+        str_cpy(hl, prf_on() ? "HOLD ARP \xB7 DJ" : jw.held ? "HOLD F#5 \xB7 CHAIN" : tn, sizeof hl);
         tu_head(-1, hl, 0, 0, 1);
     }
     for (i = 0; i < NTRK; i++)                          /* (the meters: tu_meter_poll, in dB) */
@@ -850,23 +873,26 @@ static void tu_jam_draw(void)
     dsig = (tm.on ? tm.left * 31u : 0u) + (uint32_t)tilt_timer_min * 977u + bar * 7u + tot * 131u + (uint32_t)song.g[G_BPM] * 4099u +
            (uint32_t)TSEL->p[P_ROOT] * 17u + (uint32_t)TSEL->p[P_SCALE] * 19u + cur * 6151u + (chain.running ? chain.row + 1u : 0u) * 53u +
            str_hash(5u, nmb) + (uint32_t)song.sel * 2999u + (uint32_t)jw.held * 977u + jw.n * 31u + (tsc.cue < NSCN ? 1u + tsc.cue * 13u + jl_bars_left() * 101u : 0u) +
-           (chain.running ? 1u + chain.row * 17u + chain.remaining * 3u : 0u) + (prf_on() ? 11u + prf_rate * 7u + prf_cap * 31u + prf_mut * 131u : 0u);
+           (chain.running ? 1u + chain.row * 17u + chain.remaining * 3u : 0u) + (prf_on() ? 11u + prf_rate * 7u + (uint32_t)dj_latched() * 31u : 0u);
     tu_zone(1, TU_HY, 57, TC_BG, dsig, tu_jam_dmd);
     for (i = 0; i < NTRK; i++) {
         sig = sig * 131u + (uint32_t)jam_pos(&trk[i]) * 7u + (uint32_t)(trk[i].p[P_MUTE] != 0) * 3u + trk[i].eng_req +
               (uint32_t)tfm_ins_of(&trk[i]) * 257u + (uint32_t)tu.flash[i] * 1031u + (uint32_t)tu.lvl[i] * 4001u + (uint32_t)tu.mpk[i] * 37u +
               (uint32_t)((song.rec >> i) & 1u) * 8209u + (uint32_t)prf_on() * 65537u;
+        if (prf_on())
+            sig = sig * 31u + (uint32_t)(dj_shown(i, 0) + 64) + (uint32_t)dj_shown(i, 1) * 3u + (uint32_t)dj_shown(i, 2) * 5u +
+                  (uint32_t)dj_shown(i, 3) * 7u;
     }
     sig = sig * 31u + song.sel * 6151u + (song.playing ? 977u : 0u);
     tu_zone(2, 79, 98, TC_BG, sig, tu_jam_body);
     tu_zone(3, 177, 38, TC_BG, cur * 977u + tu_used_mask() * 5u + (uint32_t)sng_cur * 131u + (tsc.cue < NSCN ? 1u + ((ui.frame >> 3) & 1u) + tsc.cue * 3u : 0u) +
-            (chain.running ? 1u + chain.row * 17u : 0u) + (uint32_t)jw.held * 7919u + (uint32_t)jl_held(9) * 4001u + (prf_on() ? 3u + (trk[0].p[P_MUTE] | trk[1].p[P_MUTE] << 1 | trk[2].p[P_MUTE] << 2 | trk[3].p[P_MUTE] << 3) * 31u + (uint32_t)jl_held(4) * 977u : 0u), tu_strip_draw);
+            (chain.running ? 1u + chain.row * 17u : 0u) + (uint32_t)jw.held * 7919u + (uint32_t)jl_held(9) * 4001u + (prf_on() ? 3u + song.sel * 31u : 0u), tu_strip_draw);
     if (prf_on())
-        tu_foot(3, "WHITE", "ROLL", "K1", "RATE", "LET GO", "BACK", 0, 0, 0, 0);
+        tu_foot(3, "WHITE", "ROLL", "OCT+", "LATCH", "LET GO", "BACK", 0, 0, 0, 0);
     else if (jw.held)
         tu_foot(3, "BLACK", "ADD SCENE", "OCT-", "UNDO TAP", "LET GO", "DONE", 0, 0, 0, 0);
     else
-        tu_foot(3, "BLACK", "SCENES", "HOLD F#5", "CHAIN", "HOLD ARP", "PERFORM", 0, 0, 0, 0);
+        tu_foot(3, "BLACK", "SCENES", "HOLD F#5", "CHAIN", "HOLD ARP", "DJ", 0, 0, 0, 0);
 }
 
 /* ================================================================== MIX ====================================== */

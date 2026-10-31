@@ -624,3 +624,91 @@ static int test_r7_build(void)
     bad += check("round 7 item 3: the build name (TILT_BUILD) is drawn on START's display", ok);
     return bad;
 }
+/* ------------------------------------------------------------ round 8 --- */
+#define R8(c) do { if (!(c)) { ok = 0; fprintf(stderr, "R8 line %d ", __LINE__); } } while (0)
+/* item 1: hold ARP = DJ: K1 FILTER (LP left, HP right, off in the middle), K2 ECHO (+ feedback past 70 %), K3 SPACE, K4 DIRT
+ * (the INSERT, its type kept), ALGORITHM / F#3..C#4 pick the track, let go: back (a glide), OCT+ LATCH, OCT- all back */
+static int test_r8_dj(void)
+{
+    int bad = 0, ok = 1;
+    static int32_t buf[CTL];
+    uint32_t i, n;
+    int16_t dly, rev, imix, ia, fb;
+    double e0, e1;
+    /* the filter itself: Nyquist through the LP far closed, DC through the HP */
+    dj_f[0] = -60; dj_s1[0] = dj_s2[0] = 0;
+    for (n = 0; n < 4u; n++) {
+        for (i = 0; i < CTL; i++) buf[i] = i & 1u ? 20000 : -20000;
+        dj_filter(&trk[0], buf, CTL);
+    }
+    e0 = 0; for (i = 0; i < CTL; i++) e0 += fabs((double)buf[i]);
+    R8(e0 / CTL < 2000.0);                              /* (-20 dB at least) */
+    dj_f[0] = 60; dj_s1[0] = dj_s2[0] = 0;
+    for (n = 0; n < 200u; n++) {
+        for (i = 0; i < CTL; i++) buf[i] = 20000;
+        dj_filter(&trk[0], buf, CTL);
+    }
+    e1 = 0; for (i = 0; i < CTL; i++) e1 += fabs((double)buf[i]);
+    R8(e1 / CTL < 200.0);
+    dj_f[0] = 2;                                        /* (the middle: off, untouched) */
+    for (i = 0; i < CTL; i++) buf[i] = i & 1u ? 1234 : -1234;
+    dj_filter(&trk[0], buf, CTL);
+    R8(buf[0] == -1234 && buf[1] == 1234);
+    dj_f[0] = 0;
+    /* the layer */
+    ui_power_on();
+    tu_off = 0;
+    tu_goto(TU_JAM);
+    tfm_load(&trk[0], TI_SQUELCH, 0);
+    tfm_load(&trk[1], TI_HAZE, 0);
+    trk[1].p[P_ITYPE] = 0;                              /* (no INSERT: DIRT runs SOFT while it moves) */
+    song.sel = 1;
+    frames(32);
+    dly = trk[1].p[P_DLY]; rev = trk[1].p[P_REV]; imix = trk[1].p[P_IMIX]; ia = trk[1].p[P_IA]; fb = song.g[G_DFDBK];
+    r5_perf_open();
+    R8(prf_on() && tu.scr == TU_JAM);
+    turn(EN_K1, -10); frames(16);
+    R8(dj_f[1] < -3);
+    for (n = 0; n < 20u; n++) turn(EN_K2, 10);
+    frames(16);
+    R8(trk[1].p[P_DLY] == TP[P_DLY].max && song.g[G_DFDBK] > fb);
+    turn(EN_K3, 10); frames(16);
+    R8(trk[1].p[P_REV] > rev);
+    turn(EN_K4, 10); frames(16);
+    R8(trk[1].p[P_ITYPE] == 1 && trk[1].p[P_IMIX] > 0 && trk[1].p[P_IA] >= ia);
+    /* ALGORITHM and F#3 pick the track */
+    turn(EN_ALGO, 1); frames(16);
+    R8(song.sel == 2u);
+    r5_key(0);
+    R8(song.sel == 0u);
+    /* let go: a glide back to where it started (exactly) */
+    r5_perf_close();
+    for (n = 0; n < 40u; n++) { fm1_ms += 16u; frame(); }
+    R8(dj_f[1] == 0 && trk[1].p[P_DLY] == dly && trk[1].p[P_REV] == rev && trk[1].p[P_IMIX] == imix && trk[1].p[P_IA] == ia &&
+       trk[1].p[P_ITYPE] == 0 && song.g[G_DFDBK] == fb);
+    /* LATCH: OCT+ tapped while holding, let go: the moves stay; OCT- (no key rolling): all back */
+    song.sel = 0; frames(16);
+    dly = trk[0].p[P_DLY];
+    r5_perf_open();
+    press(B_OCTUP); frames(16);
+    R8(dj_latched());
+    for (n = 0; n < 6u; n++) turn(EN_K2, 10);
+    frames(16);
+    r5_perf_close();
+    for (n = 0; n < 40u; n++) { fm1_ms += 16u; frame(); }
+    R8(trk[0].p[P_DLY] > dly && dj_latched());
+    r5_perf_open();
+    press(B_OCTDN); frames(16);
+    R8(!dj_latched() && trk[0].p[P_DLY] == dly);
+    /* with a white key held (it rolls), OCT- / OCT+ step the roll rate */
+    prf_rate = 2;
+    fm1_in.notes |= 1u << key_at(0, 4); host_notes |= 1u << key_at(0, 4); frame();
+    press(B_OCTUP); frames(16);
+    R8(prf_rate == 3u && !dj_latched());
+    press(B_OCTDN); press(B_OCTDN); frames(16);
+    R8(prf_rate == 1u);
+    fm1_in.notes &= ~(1u << key_at(0, 4)); frame(); frame();
+    r5_perf_close();
+    bad += check("round 8 item 1: hold ARP = DJ (FILTER LP / HP / off, ECHO with feedback, SPACE, DIRT on the INSERT; ALGORITHM and F#3 pick; let go: back exactly; OCT+ LATCH, OCT- all back; OCT-/+ the roll rate while rolling)", ok);
+    return bad;
+}

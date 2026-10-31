@@ -171,7 +171,7 @@ static void r5_perf_open(void)                          /* ARP held until its la
     btn_down(B_ARP);
     for (q = 0; q < 52u; q++) frame();
 }
-static void r5_perf_close(void) { btn_up(B_ARP); fm1_ms += 3000u; frames(30); }
+static void r5_perf_close(void) { btn_up(B_ARP); frames(2); fm1_ms += 3000u; frames(30); }   /* (round 8: the quiet after it, timed out) */
 static int test_r5_perform(void)
 {
     int bad = 0, ok = 1;
@@ -213,21 +213,17 @@ static int test_r5_perform(void)
         R5(r > 0u);
     }
     song.rec = 0;
-    /* the mutes: F#3 .. C#4 mute T1-T4, the cabinets say so, the lights follow */
-    R5(!trk[0].p[P_MUTE] && ((prf_lit() >> jl_key(0)) & 1u));
-    r5_key(0);
-    R5(trk[0].p[P_MUTE] == 1 && !((prf_lit() >> jl_key(0)) & 1u));
-    r5_key(3); R5(trk[3].p[P_MUTE] == 1);
-    r5_key(0); r5_key(3);
-    R5(!trk[0].p[P_MUTE] && !trk[3].p[P_MUTE]);
-    /* FILL: D#4 held */
-    r5_down(4); R5(seq_fill == 1u); frame(); R5(seq_fill == 1u);
-    r5_up(4); frame(); R5(seq_fill == 0u);
+    /* (round 8: F#3 .. C#4 pick T1-T4 now, no mutes; FILL is JAM's D#5) */
+    r5_key(3); R5(song.sel == 3u && !trk[3].p[P_MUTE] && ((prf_lit() >> jl_key(3)) & 1u));
+    r5_key(0); R5(song.sel == 0u && !trk[0].p[P_MUTE]);
+    /* LET GO: back to JAM, the roll off */
+    r5_perf_close();
+    R5(ui.layer == LAYER_NONE && perf_roll_on == 0u);
     /* CAPTURE: the last 2 bars played, REC off, written into the pattern, undoable */
     for (q = 0; q < NSTEP; q++) step_clear(&t->step[q]);
     t->p[P_SLEN] = 32;
     song.rec = 0;
-    prf_cap = 1;
+    CFG(CF_CAP) = 1;                                     /* (round 8: SETUP's CAPTURE: 2 bars) */
     {
         uint32_t bar = div_samples(2) * 16u, sp = div_samples(2), e;
         transport_req = 2; events_block(32); frames(16);
@@ -242,7 +238,8 @@ static int test_r5_perform(void)
     {
         step_t before[NSTEP];
         memcpy(before, t->step, sizeof before);
-        r5_key(5);
+        fm1_ms += 1000u; frames(32);                     /* (the layer let go above: its quiet over) */
+        r5_key(8);                                       /* (round 8: JAM's C#5) */
         R5(memcmp(before, t->step, sizeof before) != 0);
         q = 0;
         for (n = 0; n < NSTEP; n++) q += t->step[n].time == ST_NOTE && t->step[n].n;
@@ -250,12 +247,12 @@ static int test_r5_perform(void)
         undo_swap();
         R5(!memcmp(before, t->step, sizeof before));
     }
-    prf_cap = 2; r5_key(5);
+    CFG(CF_CAP) = 2; r5_key(8);
     q = 0;
     for (n = 0; n < NSTEP; n++) q += t->step[n].time == ST_NOTE && t->step[n].n;
     R5(q == 4u);                                         /* 4 bars */
     for (q = 0; q < NSTEP; q++) step_clear(&t->step[q]);
-    prf_cap = 0; r5_key(5);
+    CFG(CF_CAP) = 0; r5_key(8);
     q = 0;
     for (n = 0; n < NSTEP; n++) q += t->step[n].time == ST_NOTE && t->step[n].n;
     R5(q == 1u);                                         /* 1 bar */
@@ -263,7 +260,7 @@ static int test_r5_perform(void)
     for (q = 0; q < NSTEP; q++) step_clear(&t->step[q]);
     t->p[P_SLEN] = 16; prf_mut = 0;
     t->p[P_ROOT] = 2; t->p[P_SCALE] = 1;
-    r5_key(6);
+    tilt_key(key_at(0, 2), TT_MUTATE);                   /* (round 8: hold ENV, A3) */
     q = 0;
     for (n = 0; n < NSTEP; n++)
         if (t->step[n].time == ST_NOTE && t->step[n].n) {
@@ -278,13 +275,10 @@ static int test_r5_perform(void)
     prf_mut = 1;
     {
         uint32_t snd = tfm_snd_of(t);
-        r5_key(6); r5_key(6);
+        tilt_key(key_at(0, 2), TT_MUTATE); tilt_key(key_at(0, 2), TT_MUTATE);
         R5(tfm_ins_of(t) == TI_SQUELCH && (tfm_snd_of(t) != snd || fm1_ms != 0u));
     }
-    /* LET GO: back to JAM, the roll off */
-    r5_perf_close();
-    R5(ui.layer == LAYER_NONE && perf_roll_on == 0u);
-    bad += check("round 5 item 4: hold ARP = PERFORM (roll rates 1/8..1/32, a ratchet when REC, mutes, FILL, CAPTURE 1 / 2 / 4 bars with REC off, MUTATE in key, undo)", ok);
+    bad += check("round 5 item 4 / round 8 item 1: hold ARP (roll rates 1/8..1/32, a ratchet when REC, F#3..C#4 pick the track) and its old keys moved: CAPTURE on JAM's C#5 1 / 2 / 4 bars from SETUP with REC off, MUTATE on hold ENV's A3 in key, undo; was PERFORM ", ok);
     return bad;
 }
 /* round 6 item 1: SONG plays what you hear: B's notes written without leaving B, a chain A B on JAM, PLAY on SONG: B sounds */

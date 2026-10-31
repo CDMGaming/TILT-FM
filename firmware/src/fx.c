@@ -226,6 +226,52 @@ static uint32_t div_samples(uint32_t div)
     return div < 6u ? quarter / DIV_DEN[div] : div < 10u ? quarter << (div - 5u) : quarter / DIV_DEN[div % 6u];
 }
 
+/* TFM round 8: the DJ FILTER (hold ARP, K1: tfm_live.c), per part on its signal before the level and the sends: two
+ * one-poles in a row (12 dB / octave), dj_f below 0 a low-pass closing (12 kHz .. 150 Hz), above 0 a high-pass opening
+ * (30 Hz .. 5 kHz), -3..3 off (nothing run). The coefficients Q12, 1 - exp(-2 pi fc / fs), log-spaced over 4..63 */
+static const uint16_t DJF_LP[64] = {
+    0, 0, 0, 0, 3355, 3258, 3158, 3053, 2946, 2837, 2726, 2614, 2502, 2391, 2280, 2171, 2064, 1960, 1858, 1759, 1663, 1571,
+    1482, 1396, 1315, 1237, 1162, 1091, 1024, 960, 899, 842, 788, 737, 689, 644, 601, 561, 524, 489, 456, 425, 396, 369,
+    344, 320, 298, 277, 258, 240, 224, 208, 193, 180, 167, 156, 145, 134, 125, 116, 108, 100, 93, 87};
+static const uint16_t DJF_HP[64] = {
+    0, 0, 0, 0, 17, 19, 21, 23, 25, 27, 29, 32, 35, 38, 41, 45, 49, 54, 59, 64, 70, 76, 83, 90, 98, 107, 116, 127, 138, 150,
+    164, 178, 194, 211, 229, 249, 271, 295, 321, 348, 378, 411, 446, 484, 525, 569, 617, 668, 722, 781, 844, 911, 983, 1060,
+    1141, 1227, 1318, 1414, 1515, 1621, 1731, 1846, 1965, 2087};
+static volatile int8_t dj_f[NTRK];
+static int32_t dj_s1[NTRK], dj_s2[NTRK];
+static __attribute__((noinline)) void dj_run(uint32_t k, int32_t *b, uint32_t n)
+{
+    int32_t v = dj_f[k], s1 = dj_s1[k], s2 = dj_s2[k], a;
+    uint32_t i;
+    if (v < 0) {
+        a = DJF_LP[(-v) & 63];
+        for (i = 0; i < n; i++) {                       /* (>> 2 first: a loud part times Q12 stays in 32 bits) */
+            s1 += (((b[i] - s1) >> 2) * a) >> 10;
+            s2 += (((s1 - s2) >> 2) * a) >> 10;
+            b[i] = s2;
+        }
+    } else {
+        a = DJF_HP[v & 63];
+        for (i = 0; i < n; i++) {
+            int32_t h;
+            s1 += (((b[i] - s1) >> 2) * a) >> 10;
+            h = b[i] - s1;
+            s2 += (((h - s2) >> 2) * a) >> 10;
+            b[i] = h - s2;
+        }
+    }
+    dj_s1[k] = s1;
+    dj_s2[k] = s2;
+}
+static inline void dj_filter(const track_t *t, int32_t *b, uint32_t n)
+{
+    uint32_t k = (uint32_t)(t - trk) % NTRK;
+    if (dj_f[k] > -4 && dj_f[k] < 4) {
+        dj_s1[k] = dj_s2[k] = 0;                        /* (off: the next move starts clean) */
+        return;
+    }
+    dj_run(k, b, n);
+}
 /* the part's LEVEL as the mix takes it (Q12): TFM round 6 adds the instrument's and the sound's trim (tfm_instr.c
  * tfm_lvl_trim, loudness matched); a project or sound of before has none */
 static int32_t (*lvl_trim_fn)(const track_t *t);
@@ -854,6 +900,7 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     slicer_track_sd(t, b, d, n);
     if ((pf.mute >> (t - trk)) & 1u)
         perf_mute_sd((uint32_t)(t - trk), b, d, n);
+    dj_filter(t, b, n);                                 /* (TFM round 8: hold ARP's FILTER; the side passes by) */
     for (i = 0; i < n; i++) {
         int32_t x = ((b[i] >> 2) * lvl) >> 10, a = x < 0 ? -x : x, y = ((d[i] >> 2) * lvl) >> 10;
         int32_t xs = clamp(x, -xmax, xmax);
@@ -922,6 +969,7 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
         slicer_track(t, b, n);                          /* slicer.c: before the level, pan and sends */
         if ((pf.mute >> (t - trk)) & 1u)
             perf_mute((uint32_t)(t - trk), b, n);       /* perform.c: a black key in the FX layer */
+        dj_filter(t, b, n);                             /* (TFM round 8: hold ARP's FILTER) */
     }
     if (!T_SPREAD(t)) {                                /* (the mix's values read after the calls: none is held over
                                                          * them, no spill in the loop: the ISR's cost as before 1.5) */

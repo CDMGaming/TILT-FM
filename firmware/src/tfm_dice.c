@@ -8,7 +8,7 @@
  *   KEY            0 random, else key + 1          SCALE   0 random (no chromatic), else TILT scale + 1
  *   TEMPO          low, high (0: 90 .. 130)         TIMER   the default minutes' step (0 OFF, 5, 10, 15, 20) */
 #define CFG(i) (favorites.factory[13][16 + (i)])
-enum { CF_RULE = 0, CF_KEY = 4, CF_SCALE = 5, CF_LO = 6, CF_HI = 7, CF_TIMER = 8, CF_NEW = 9 };
+enum { CF_RULE = 0, CF_KEY = 4, CF_SCALE = 5, CF_LO = 6, CF_HI = 7, CF_TIMER = 8, CF_NEW = 9, CF_CAP = 10 };   /* (round 8: CAPTURE 0..2: 1 2 4 bars) */
 static int tfm_newsong_keep(void) { return CFG(CF_NEW) == 1u; }   /* round 3: 0 FRESH (default), 1 KEEP SCENES */
 static const uint8_t TM_LIST[5] = {0, 5, 10, 15, 20};
 /* round 3: the TIMER default is 10 minutes: the stored byte 0 (every older setting) means 10, 1..4 are 5 15 .. as before
@@ -653,21 +653,23 @@ static void tu_su_row_text(uint32_t r, char *b)
         } else {
             str_cpy(b, "OFF", 4);
         }
-    } else {
+    } else if (r == 8u) {
         str_cpy(b, tfm_newsong_keep() ? "KEEP SCENES" : "FRESH", 14);
+    } else {                                            /* (round 8: JAM's C#5 CAPTURE takes the last 1, 2 or 4 bars) */
+        str_cpy(b, CFG(CF_CAP) % 3u == 0u ? "1 BAR" : CFG(CF_CAP) % 3u == 1u ? "2 BARS" : "4 BARS", 8);
     }
 }
 static void tu_su_rows(void)
 {
-    static const char *const LBL[9] = {"T1", "T2", "T3", "T4", "KEY", "SCALE", "TEMPO", "TIMER", "NEW SONG"};
+    static const char *const LBL[10] = {"T1", "T2", "T3", "T4", "KEY", "SCALE", "TEMPO", "TIMER", "NEW SONG", "CAPTURE"};
     uint32_t r;
-    for (r = 0; r < 9u; r++) {
-        int32_t y = 28 + (int32_t)r * 19;
+    for (r = 0; r < 10u; r++) {                         /* (round 8: ten rows, 17 apart) */
+        int32_t y = 28 + (int32_t)r * 17;
         int lit = r >= tu_su_top && r < tu_su_top + 4u;
         uint32_t k = r - tu_su_top;
         char v[28], kb[3] = {'K', (char)('1' + k), 0};
         uint16_t bg = lit ? TC_SURF : RGB(26, 20, 12);
-        tu_rrect(8, y, 224, 17, 4, bg, TC_BG);
+        tu_rrect(8, y, 224, 16, 4, bg, TC_BG);
         if (lit)
             tu_text(13, y + 8, &AF_TS, kb, TU_TC[k & 3u], bg);
         tu_text(33, y + 8, &AF_TM, LBL[r], lit ? TC_TEXT : TC_QUIET, bg);
@@ -733,6 +735,8 @@ static void tu_su_step(uint32_t row, int32_t s)
             tilt_timer_min = TM_LIST[cfg_timer_idx()];
     } else if (row == 8u) {
         CFG(CF_NEW) = (uint8_t)clamp((int32_t)CFG(CF_NEW) + d, 0, 1);
+    } else if (row == 9u) {
+        CFG(CF_CAP) = (uint8_t)clamp((int32_t)(CFG(CF_CAP) % 3u) + d, 0, 2);
     }
     if (row < 4u) {                                     /* (a rule changed: that track rolls at once, unless held) */
         if (!((ns.hold >> (3u + row)) & 1u)) {
@@ -833,7 +837,7 @@ static void tu_dice_input(uint32_t pressed, uint32_t notes, uint32_t oct)
     }
     if (tu_setup_on) {
         if ((s = panel_enc(EN_SELECT)) != 0) {
-            tu_su_top = (uint8_t)clamp((int32_t)tu_su_top + (s > 0 ? 1 : -1), 0, 5);
+            tu_su_top = (uint8_t)clamp((int32_t)tu_su_top + (s > 0 ? 1 : -1), 0, 6);
             ui.force = 1;
         }
         for (k = 0; k < 4u; k++)

@@ -1438,7 +1438,8 @@ static void setup(int s)
             jw.held = 1; jw.n = 5;
             jw.sc[0] = 0; jw.sc[1] = 0; jw.sc[2] = 1; jw.sc[3] = 1; jw.sc[4] = 0;
         } else if (s == S_UI_PERFORM) {
-            ui.layer = LAYER_SCENE; prf_rate = 2; prf_cap = 1; prf_mut = 0;
+            ui.layer = LAYER_SCENE; prf_rate = 2; song.sel = 2;   /* (round 8: DJ, T3 with its moves) */
+            dj.on = 1u << 2; dj.f[2] = -40; dj.e[2] = 90; dj.s[2] = 50; dj.d[2] = 0; dj.latch = 1;
         } else if (s == S_UI_JAM) {
             tsc.cue = 2;
         } else if (s == S_UI_JAM_NONE) {                /* round 7: T2 with no instrument (a raw engine preset) */

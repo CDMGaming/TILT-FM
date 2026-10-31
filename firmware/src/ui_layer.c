@@ -805,6 +805,11 @@ static void layer_oct_open(uint32_t pressed)
 static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
 {
     uint32_t dn = panel.btn[B_OCTDN], up = panel.btn[B_OCTUP], k, mine;
+    if (layer_open() == LAYER_SCENE && !tu_classic()) { /* (TFM round 8: hold ARP: LATCH, the roll rate, all back) */
+        if (oct & 3u)
+            prf_oct(oct & 3u);
+        return oct & ~3u;
+    }
     if (layer_set_open())
         lys.oct |= (uint8_t)(((pressed >> dn) & 1u) | ((pressed >> up) & 1u) << 1);
     mine = oct & lys.oct;

@@ -112,7 +112,8 @@ static void jl_drop_to_live(void)                       /* a scene key while the
 }
 /* round 6: a scene key launches on its RELEASE (it waits for the loop's end anyway); held, another scene key copies the held
  * scene there (any scene; CF_SCENE_OVR asks when the target has something, Cancel the default) and OCT- clears it (asks) */
-static struct { uint8_t held, used; } jh;               /* held: 1 + the scene key held (0 none) */
+static struct { uint8_t held, used; } jh;
+static void prf_capture(void);
 static void jl_launch(uint32_t s)
 {
     if (chain_busy())
@@ -198,6 +199,8 @@ static void jl_input(uint32_t keys, uint32_t btns)
         if (k >= 0 && ((keys >> k) & 1u))
             jl_scene_key(i);
     }
+    if (jl_key(8) >= 0 && ((keys >> jl_key(8)) & 1u) && !jw.held)   /* (round 8: C#5 CAPTURE, the length on SETUP) */
+        prf_capture();
     if (dn && jw.held) {                                /* F#5 held + OCT-: the last tap goes; no taps: the chain before comes back */
         oct_as_mod(1u);                                 /* (the octave stays) */
         if (jw.n) {
@@ -290,19 +293,121 @@ static uint32_t jl_leds(uint32_t *br, uint32_t *mid)
     return lit;
 }
 
-/* ================================================================== PERFORM (hold ARP) ============================ */
-/* The layer of the ARP button held (LAYER_SCENE's slot; tap stays the arpeggiator page): the white keys ROLL (the held note
- * repeats at K1's rate: seq.c roll_tick; REC on, recorded as ratchets), F#3 G#3 A#3 C#4 mute T1-T4, D#4 held is FILL, F#4
- * CAPTURE (the last 1, 2 or 4 bars played on the selected track, REC off too, written into its pattern, K2 the length), G#4
- * MUTATE (the selected track's pattern and / or sound re-rolled in key, K3 the mode) */
-static uint8_t prf_rate, prf_cap, prf_mut;           /* K1 0..4: 1/8 1/8T 1/16 1/16T 1/32; K2 0..2: 1 2 4 bars; K3 0..2: PATTERN SOUND BOTH */
+/* ================================================================== DJ (hold ARP), round 8 ======================= */
+/* The layer of the ARP button held (LAYER_SCENE's slot; a tap stays the arpeggiator page): the selected track through four
+ * DJ moves: K1 FILTER (left a low-pass closing, right a high-pass opening, the middle off: fx.c dj_filter, the one filter
+ * every engine gets alike, so no sound's own filter or macro is touched), K2 ECHO (its delay send; past 70 % the delay's
+ * feedback too: a dub throw), K3 SPACE (its reverb send), K4 DIRT (its INSERT driven and mixed in, its TYPE kept; SOFT
+ * while it has none). ALGORITHM or F#3 G#3 A#3 C#4 pick the track. Let go of ARP: the moves glide back (~0.2 s) to what
+ * they started from; OCT+ tapped while holding: LATCH (they stay; again: off). The white keys ROLL; with one held OCT- /
+ * OCT+ step the roll rate, with none OCT- puts everything back now. REC on and playing: ECHO, SPACE, DIRT recorded as
+ * motion (the FILTER is the mix's, live only). CAPTURE is JAM's C#5 now (the length on SETUP), MUTATE hold ENV's A3 */
+static uint8_t prf_rate, prf_cap, prf_mut;           /* the roll 0..4: 1/8 1/8T 1/16 1/16T 1/32; CAPTURE 0..2: 1 2 4 bars (SETUP); MUTATE 0..2 */
+#define DJ_BACK_MS 200u
+static struct {
+    int8_t f[NTRK];                                     /* FILTER -63..63 */
+    uint8_t e[NTRK], s[NTRK], d[NTRK];                  /* ECHO, SPACE, DIRT 0..127: how far from the start to the top */
+    uint8_t on, latch, was, back;                       /* on: bit k, track k's start values taken */
+    int16_t dly[NTRK], rev[NTRK], imix[NTRK], ia[NTRK], ityp[NTRK], fb;
+    uint32_t t;
+} dj;
 static int prf_on(void) { return ui.layer == LAYER_SCENE && !tu_classic() && tu_on() && !ui.menu; }
-static int prf_fill_key(void) { return (prf_on() && jl_held(4)) || jl_fill_prev; }
-static void prf_mute(uint32_t i)
+static int prf_fill_key(void) { return jl_fill_prev; }  /* (FILL is JAM's D#5) */
+static void dj_take(uint32_t k)                         /* the start values, once per move */
 {
-    track_t *t = &trk[i % NTRK];
-    t->p[P_MUTE] = t->p[P_MUTE] ? 0 : 1;
-    motion_capture(t, P_MUTE, t->p[P_MUTE]);
+    track_t *t = &trk[k % NTRK];
+    if ((dj.on >> k) & 1u)
+        return;
+    if (!dj.on)
+        dj.fb = song.g[G_DFDBK];
+    dj.dly[k] = t->p[P_DLY];
+    dj.rev[k] = t->p[P_REV];
+    dj.imix[k] = t->p[P_IMIX];
+    dj.ia[k] = t->p[P_IA];
+    dj.ityp[k] = t->p[P_ITYPE];
+    dj.f[k] = 0;
+    dj.e[k] = dj.s[k] = dj.d[k] = 0;
+    dj.on |= (uint8_t)(1u << k);
+}
+static int32_t dj_to(int32_t from, int32_t top, uint32_t amt) { return from + (top - from) * (int32_t)amt / 127; }
+static void dj_apply(uint32_t k, int rec)
+{
+    track_t *t = &trk[k % NTRK];
+    uint32_t i, emax = 0;
+    if (!((dj.on >> k) & 1u))
+        return;
+    dj_f[k] = dj.f[k];
+    t->p[P_DLY] = (int16_t)dj_to(dj.dly[k], TP[P_DLY].max, dj.e[k]);
+    t->p[P_REV] = (int16_t)dj_to(dj.rev[k], TP[P_REV].max, dj.s[k]);
+    t->p[P_ITYPE] = (int16_t)(dj.d[k] && !dj.ityp[k] ? 1 : dj.ityp[k]);
+    t->p[P_IMIX] = (int16_t)dj_to(dj.ityp[k] ? dj.imix[k] : 0, TP[P_IMIX].max, dj.d[k]);
+    t->p[P_IA] = (int16_t)dj_to(dj.ia[k], TP[P_IA].max, dj.d[k]);
+    if (rec) {
+        motion_capture(t, P_DLY, t->p[P_DLY]);
+        motion_capture(t, P_REV, t->p[P_REV]);
+        motion_capture(t, P_IMIX, t->p[P_IMIX]);
+    }
+    for (i = 0; i < NTRK; i++)
+        if (((dj.on >> i) & 1u) && dj.e[i] > emax)
+            emax = dj.e[i];
+    song.g[G_DFDBK] = (int16_t)(emax > 89u ? dj_to(dj.fb, GP[G_DFDBK].max * 9 / 10, (emax - 89u) * 127u / 38u) : dj.fb);
+}
+static void dj_put_back(void)                           /* every move back to where it started, now */
+{
+    uint32_t k;
+    for (k = 0; k < NTRK; k++)
+        if ((dj.on >> k) & 1u) {
+            track_t *t = &trk[k];
+            t->p[P_DLY] = dj.dly[k];
+            t->p[P_REV] = dj.rev[k];
+            t->p[P_IMIX] = dj.imix[k];
+            t->p[P_IA] = dj.ia[k];
+            t->p[P_ITYPE] = dj.ityp[k];
+            dj_f[k] = 0;
+        }
+    if (dj.on)
+        song.g[G_DFDBK] = dj.fb;
+    dj.on = 0;
+    dj.back = 0;
+    ui.force = 1;
+}
+static int32_t dj_shown(uint32_t k, uint32_t knob)      /* (the screen) FILTER -63..63, the others 0..127 */
+{
+    k %= NTRK;
+    return knob == 0u ? dj.f[k] : knob == 1u ? dj.e[k] : knob == 2u ? dj.s[k] : dj.d[k];
+}
+static int dj_latched(void) { return dj.latch; }
+static uint32_t dj_white(void)                          /* the white keys held now (they ROLL) */
+{
+    uint32_t k, m = 0;
+    for (k = 0; k < 27u; k++)
+        if (!key_black(k))
+            m |= 1u << k;
+    return fm1_in.notes & m;
+}
+static void prf_oct(uint32_t taps)                      /* OCT- (bit 0) / OCT+ (bit 1) tapped with ARP held */
+{
+    if (dj_white()) {                                   /* rolling: the rate */
+        if (taps & 1u)
+            prf_rate = (uint8_t)(prf_rate ? prf_rate - 1u : 0u);
+        if (taps & 2u)
+            prf_rate = (uint8_t)(prf_rate < 4u ? prf_rate + 1u : 4u);
+    } else if (taps & 2u) {                             /* OCT+: LATCH */
+        dj.latch = (uint8_t)!dj.latch;
+        ui_message(dj.latch ? "DJ LATCH ON" : "DJ LATCH OFF");
+    } else if (taps & 1u) {                             /* OCT-: all back now */
+        dj.latch = 0;
+        dj_put_back();
+        ui_message("DJ BACK");
+    }
+    ui.force = 1;
+}
+static void prf_pick(uint32_t k)                        /* the track the knobs move */
+{
+    if (k < NTRK && k != song.sel) {
+        track_select(k);
+        tq_adapt();
+    }
     ui.force = 1;
 }
 static void prf_capture(void)
@@ -387,46 +492,83 @@ static void prf_mutate(void)
     ui_message(prf_mut == 0u ? "MUTATED: PATTERN" : prf_mut == 1u ? "MUTATED: SOUND" : "MUTATED: BOTH");
     ui.force = 1;
 }
-static void prf_key(uint32_t k, uint32_t p)            /* a black key under the layer */
+static void prf_key(uint32_t k, uint32_t p)            /* a black key under the layer: F#3 G#3 A#3 C#4 pick T1-T4 */
 {
     uint32_t i;
     (void)p;
     if (!key_black(k))
         return;
-    for (i = 0; i < 11u; i++)
+    for (i = 0; i < 4u; i++)
         if (jl_key(i) == (int32_t)k)
-            break;
-    if (i < 4u)
-        prf_mute(i);
-    else if (i == 5u)
-        prf_capture();
-    else if (i == 6u)
-        prf_mutate();
+            prf_pick(i);
 }
-static void prf_knob(uint32_t k, int32_t s)
+static void prf_knob(uint32_t k, int32_t s)            /* K1 FILTER, K2 ECHO, K3 SPACE, K4 DIRT on the selected track */
 {
-    int32_t d = s > 0 ? 1 : -1;
+    uint32_t c = song.sel % NTRK;
+    int32_t v;
+    dj_take(c);
+    dj.back = 0;
+    v = accel(EN_K1 + k, s, 127);
     if (k == 0u)
-        prf_rate = (uint8_t)clamp((int32_t)prf_rate + d, 0, 4);
+        dj.f[c] = (int8_t)clamp((int32_t)dj.f[c] + (v > 0 ? (v + 1) / 2 : v / 2 ? v / 2 : -1), -63, 63);
     else if (k == 1u)
-        prf_cap = (uint8_t)clamp((int32_t)prf_cap + d, 0, 2);
+        dj.e[c] = (uint8_t)clamp((int32_t)dj.e[c] + v, 0, 127);
     else if (k == 2u)
-        prf_mut = (uint8_t)clamp((int32_t)prf_mut + d, 0, 2);
+        dj.s[c] = (uint8_t)clamp((int32_t)dj.s[c] + v, 0, 127);
+    else
+        dj.d[c] = (uint8_t)clamp((int32_t)dj.d[c] + v, 0, 127);
+    dj_apply(c, 1);
     ui.force = 1;
 }
-static void prf_poll(void)                             /* every pass: the roll on while the layer is up */
+static void prf_poll(void)                             /* every pass: the roll while the layer is up; let go: the glide back */
 {
+    uint32_t k, dt, st, left = 0;
     perf_roll_on = (uint8_t)prf_on();
     perf_roll_rate = prf_rate;
+    prf_cap = (uint8_t)(CFG(CF_CAP) % 3u);
+    if (prf_on()) {
+        dj.was = 1;
+        dj.back = 0;
+        return;
+    }
+    if (dj.was) {                                       /* ARP let go */
+        dj.was = 0;
+        if (!dj.latch && dj.on) {
+            dj.back = 1;
+            dj.t = fm1_ms;
+        }
+    }
+    if (!dj.back)
+        return;
+    dt = fm1_ms - dj.t;
+    if (!dt)
+        return;
+    dj.t = fm1_ms;
+    st = dt * 127u / DJ_BACK_MS + 1u;
+    for (k = 0; k < NTRK; k++) {
+        if (!((dj.on >> k) & 1u))
+            continue;
+        dj.f[k] = (int8_t)(dj.f[k] > 0 ? (dj.f[k] > (int32_t)st ? dj.f[k] - (int32_t)st : 0) :
+                           (-dj.f[k] > (int32_t)st ? dj.f[k] + (int32_t)st : 0));
+        dj.e[k] = (uint8_t)(dj.e[k] > st ? dj.e[k] - st : 0u);
+        dj.s[k] = (uint8_t)(dj.s[k] > st ? dj.s[k] - st : 0u);
+        dj.d[k] = (uint8_t)(dj.d[k] > st ? dj.d[k] - st : 0u);
+        dj_apply(k, 0);
+        left |= (uint32_t)dj.f[k] | dj.e[k] | dj.s[k] | dj.d[k];
+    }
+    if (!left)
+        dj_put_back();                                  /* (the exact values it started from) */
+    ui.force = 1;
 }
-static uint32_t prf_lit(void)                          /* the key lights: the tracks playing, FILL held */
+static uint32_t prf_lit(void)                          /* the key lights: the selected track's key */
+{
+    return jl_key(song.sel % NTRK) >= 0 ? 1u << jl_key(song.sel % NTRK) : 0u;
+}
+static uint32_t prf_mid(void)                          /* the other tracks' keys */
 {
     uint32_t i, m = 0;
-    for (i = 0; i < 4u; i++)
-        if (jl_key(i) >= 0 && !trk[i].p[P_MUTE])
+    for (i = 0; i < NTRK; i++)
+        if (i != song.sel && jl_key(i) >= 0)
             m |= 1u << jl_key(i);
-    if (jl_held(4))
-        m |= 1u << jl_key(4);
     return m;
 }
-static uint32_t prf_mid(void) { return (1u << jl_key(5)) | (1u << jl_key(6)); }
