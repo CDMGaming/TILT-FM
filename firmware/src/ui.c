@@ -557,6 +557,8 @@ static int dj_any(void);
 static int sheet_undo_ready(void);                     /* (round 10: JAM's scene sheet, tfm_live.c) */
 static void sheet_undo(void);
 static void sheet_clear_do(uint32_t s);
+static int song_undo_ready(void);                      /* (round 10: SONG's delete, tfm_song.c) */
+static void song_undo(void);
 static void prf_poll(void);
 static int prf_fill_key(void);
 static int prf_on(void);

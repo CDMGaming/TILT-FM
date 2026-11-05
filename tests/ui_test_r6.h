@@ -1524,3 +1524,61 @@ static int test_r10_hold_foot(void)
     bad += check("round 10 item 3: a button held on any TFM screen puts its hold in the footer (OCT+ only on NOTES, DRUMS, BARS); JAM's first-run line until a hold, gone for good after (kept with the settings)", ok);
     return bad;
 }
+
+/* item 5: undo undoes the last action: NOTES' delete, SONG's section delete, STEP's clear each take their copy first, so hold
+ * SAVE right after gives the state just before the delete (not an older copy's) */
+static int test_r10_undo_delete(void)
+{
+    int bad = 0, ok = 1;
+    track_t *t;
+    step_t keep, other;
+    chain_config_t c0;
+    /* NOTES: an older edit takes a copy (step 3), then step 5 edited, then deleted: SAVE gives step 5 back, step 3 as edited */
+    ui_power_on();
+    tu_off = 0;
+    layer_seen |= 1u;
+    song.sel = 0;
+    t = &trk[0];
+    tfm_load(t, TI_SQUELCH, 0);
+    tu_goto(TU_NOTES); frames(4);
+    step_undo_take(t, 0);                               /* (an older copy: before step 3's note) */
+    sc_note(0, 3, 60);
+    motion_undo_done(t);
+    sc_note(0, 5, 64);
+    other = t->step[3];
+    keep = t->step[5];
+    cursor_set(5); frames(2);
+    stap(B_EDIT);
+    R10(!t->step[5].n);
+    hold(B_SAVE); frames(4);
+    R10(t->step[5].n == keep.n && t->step[5].note[0] == keep.note[0] && t->step[3].n == other.n && t->step[3].note[0] == other.note[0]);
+    /* SONG: three sections, an older chain change first; EDIT deletes the row; SAVE gives the three back */
+    chain_defaults(&chain_config);
+    chain_config.row[0] = chain_row_of(0, 1);
+    chain_config.row[1] = chain_row_of(1, 2);
+    chain_config.row[2] = chain_row_of(2, 1);
+    chain_config.count = 3;
+    c0 = chain_config;
+    tu_goto(TU_SONG); frames(4);
+    ui.song_row = 1;
+    stap(B_EDIT);
+    R10(chain_config.count == 2u);
+    hold(B_SAVE); frames(4);
+    R10(chain_config.count == 3u && !memcmp(&chain_config, &c0, sizeof c0));
+    /* STEP (Felucca's page, CLASSIC): EDIT clears the step; SAVE gives it back */
+    tu_off = 1;
+    ui_power_on();
+    t = TSEL;
+    sc_note(trk_index(t), 2, 62);
+    keep = t->step[2];
+    go_page(GR_ROLL); frame();
+    cursor_set(2); frames(2);
+    R10(cur_page()->graph == GR_ROLL);
+    press(B_EDIT); frames(2);
+    R10(!t->step[2].n);
+    hold(B_SAVE); frames(4);
+    R10(t->step[2].n == keep.n && t->step[2].note[0] == keep.note[0]);
+    tu_off = 0;
+    bad += check("round 10 item 5: hold SAVE right after a delete gives the state just before it (NOTES' delete, SONG's section delete, STEP's clear)", ok);
+    return bad;
+}

@@ -862,8 +862,10 @@ static void tq_notes_delete(void)
         ui_message("STOP TO EDIT");
         return;
     }
+    step_undo_take(TSEL, 0);                            /* (round 10: one undo, the step as it was just before) */
     step_clear(&TSEL->step[ui.cursor % NSTEP]);
     (void)motion_clear_locks(TSEL, ui.cursor % NSTEP);
+    motion_undo_done(TSEL);
     ui_message("NOTE DELETED");
 }
 /* ================================================================== DRUMS =================================== */

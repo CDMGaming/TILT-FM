@@ -2291,7 +2291,7 @@ static void sh_undo_set(uint32_t op, uint32_t s, uint32_t d, uint32_t live)
     sh.us = (uint8_t)s;
     sh.ud = (uint8_t)d;
     sh.ulive = (uint8_t)live;
-    sh.ugen = undo_gen;
+    sh.ugen = ++undo_gen;                               /* (the last action: SAVE undoes this one, not an older) */
 }
 /* the music (the scene now): x2, /2 or CLEAR on its tracks, its steps, lengths and automation kept first for the undo */
 static void sh_live(uint32_t op)

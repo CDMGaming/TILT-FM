@@ -278,6 +278,7 @@ static void tu_song_input(uint32_t oct)
         }
     }
 }
+static uint32_t song_ugen;                              /* round 10: the undo generation of the last section delete */
 static void tu_song_delete(void)
 {
     uint32_t i;
@@ -289,12 +290,30 @@ static void tu_song_delete(void)
         ui_message("A SONG KEEPS ONE SECTION");
         return;
     }
+    jw_undo = chain_config;                             /* (round 10: one undo, the chain as it was just before, as JAM's */
+    jw_undo_ok = 1;                                     /* CHAIN keeps it; hold SAVE right after: song_undo) */
+    song_ugen = ++undo_gen;
     for (i = ui.song_row; i + 1u < chain_config.count; i++)
         chain_config.row[i] = chain_config.row[i + 1u];
     chain_config.count--;
     if (ui.song_row >= chain_config.count)
         ui.song_row = (uint8_t)(chain_config.count - 1u);
     ui_message("SECTION DELETED");
+}
+static int song_undo_ready(void) { return song_ugen && song_ugen == undo_gen && jw_undo_ok; }
+static void song_undo(void)                             /* SAVE held right after: the chain before the delete (again: redo) */
+{
+    chain_config_t c = chain_config;
+    if (chain_busy()) {
+        ui_message("STOP TO UNDO");
+        return;
+    }
+    chain_config = jw_undo;
+    jw_undo = c;
+    if (ui.song_row >= chain_config.count)
+        ui.song_row = (uint8_t)(chain_config.count ? chain_config.count - 1u : 0u);
+    ui_message("SECTION PUT BACK");
+    ui.force = 1;
 }
 static void tu_song_sounds(void)                        /* GLO again: SOUNDS SCENE / CURRENT (the song's sounds from each scene, or the current ones) */
 {

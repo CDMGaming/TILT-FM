@@ -1418,8 +1418,10 @@ static int page_tap(uint32_t b)
             lock_clear(held);
             return 1;
         }
+        step_undo_take(TSEL, 0);                        /* (TILT-FM round 10: one undo, the step as it was just before) */
         step_clear(&TSEL->step[ui.cursor]);
         (void)motion_clear_locks(TSEL, ui.cursor);
+        motion_undo_done(TSEL);
         cursor_set(ui.cursor + 1);
         ui_message("STEP CLEARED");
         return 1;
@@ -1698,6 +1700,8 @@ static void ui_input(void)
         ui_message("STOP TO UNDO");
     else if (save == BT_HOLD && sheet_undo_ready())          /* (round 10: the scene sheet's action the last) */
         sheet_undo();
+    else if (save == BT_HOLD && song_undo_ready())           /* (round 10: SONG's section delete the last) */
+        song_undo();
     else if (save == BT_HOLD)                                /* SAVE held: undo the last sound load */
         undo_swap();
     else if (save == BT_TAP && !ui.confirm && tu_on())   /* TFM-UI: SONGS */

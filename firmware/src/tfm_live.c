@@ -16,8 +16,7 @@ static void (*chain_live_fn)(void) = scene_keep_live;
 static struct { uint8_t sc, loops; } jl[JL_N];
 static uint32_t jl_n;
 static uint8_t jl_playing, jl_row = 0xFF, jl_prev_idx;
-static chain_config_t jw_undo;                          /* the chain before the last replace (one level) */
-static uint8_t jw_undo_ok, jm_chain;                    /* jm_chain: PLAY plays the chain (a scene key makes it live) */
+static uint8_t jm_chain;                                /* jm_chain: PLAY plays the chain (a scene key makes it live) */
 static uint8_t jl_fill_prev, jl_rechain, jw_did;      /* jw_did: F#5 held did an undo (its release then plays nothing) */
 
 static int32_t jl_key(uint32_t idx)                     /* the key (0..26) of black key idx 0..10, -1 none */

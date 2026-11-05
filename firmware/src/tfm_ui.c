@@ -68,6 +68,8 @@ static int sheet_held(void);
 static int proj_slot_info(uint32_t slot, uint32_t *len, uint32_t *parts);   /* (project.c) */
 static uint32_t proj_slot_l48(uint32_t slot);
 static struct { uint8_t held, n, sc[24]; } jw;          /* CHAIN (F#5 held): the taps */
+static chain_config_t jw_undo;                          /* the chain before the last replace (one level: JAM's CHAIN, tfm_live.c; */
+static uint8_t jw_undo_ok;                              /* round 10: SONG's section delete too, tfm_song.c) */
 static int jl_held(uint32_t idx);
 static uint8_t prf_rate, prf_cap, prf_mut;              /* (tfm_live.c: PERFORM) */
 static uint32_t jl_bars_left(void);
