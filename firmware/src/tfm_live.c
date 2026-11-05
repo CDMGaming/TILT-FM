@@ -110,9 +110,10 @@ static void jl_drop_to_live(void)                       /* a scene key while the
     fm1_irq_on();
     jm_chain = 0;
 }
-/* round 6: a scene key launches on its RELEASE (it waits for the loop's end anyway); held, another scene key copies the held
- * scene there (any scene; CF_SCENE_OVR asks when the target has something, Cancel the default) and OCT- clears it (asks) */
-static struct { uint8_t held, used; } jh;
+/* round 6: a scene key launches on its RELEASE (it waits for the loop's end anyway). Round 10: held past SH_HOLD_MS it
+ * opens the SCENE SHEET instead (below); the old held combos (another scene key: copy; OCT-: clear) are gone, so two
+ * quick taps never copy */
+static struct { uint8_t held, used; uint32_t t0; } jh;
 static void prf_capture(void);
 static void jl_launch(uint32_t s)
 {
@@ -129,14 +130,48 @@ static void jl_scene_key(uint32_t s)                    /* a scene key went down
         ui.force = 1;
         return;
     }
-    if (jh.held && jh.held - 1u != s && jl_held(jh.held - 1u)) {   /* held + another: copy the held one into it */
-        jh.used = 1;
-        scene_copy_ui(jh.held - 1u, s, 0);
+    if (jh.held)                                        /* (another held: nothing; round 6's copy is gone) */
         return;
-    }
     jh.held = (uint8_t)(s + 1u);
     jh.used = 0;
+    jh.t0 = fm1_ms;
 }
+/* ================================================================== the SCENE SHEET, round 10 ===================== */
+/* A scene key held SH_HOLD_MS: its sheet over JAM (tfm_ui.c tu_sheet_panel: the letter, its bars, its tracks, the four
+ * actions). While it is open no key plays (seq.c jam_sheet) and the white keys act:
+ *   F3 DUP    the scene copied to the next empty scene (up from it, wrapping; NO EMPTY SCENE) and that one cued: the
+ *             next edits make the variation (playing: at the bar's end, as a scene key)
+ *   G3 CLEAR  asks (CF_SHEET_CLR, the words of CF_SCENE_CLR), then the scene's steps and automation go
+ *   A3 x2     every track twice as long, its steps, notes and automation copied after themselves (NSTEP at most)
+ *   B3 /2     every track half as long, the first half kept
+ * C4 .. G5 nothing. Let go: the sheet closes, nothing launches. A stored scene changes now: stopped written as SAVE >
+ * PROJECT writes it, playing to RAM only (project.c scn_store_ram, flash at the stop; STOP TO SAVE when three wait):
+ * nothing erases or writes flash while playing. The scene playing changes at its loop's end (the header: AT LOOP END),
+ * stopped at once. Hold SAVE right after: put back (project.c scene_ubuf, the one-level scene undo the SCENE layer has:
+ * the stored scene's image, or the music's steps, lengths and automation; DUP: the copy goes again) */
+#define SH_HOLD_MS 400u
+enum { SH_DUP = 1, SH_CLR, SH_X2, SH_H2 };
+static struct {
+    uint8_t open, s;                                    /* the sheet of scene s */
+    uint8_t pend, ps;                                   /* an action on the scene playing, at its loop's end */
+    uint8_t uk, us, ud, ulive;                          /* the undo: its action (0 none), the scene, DUP's copy, the music's */
+    uint32_t ugen, pidx;
+} sh;
+static void tilt_scene_uncue(void);
+static int sheet_open(void) { return sh.open; }
+static int sheet_held(void) { return jh.held && !jw.held; }
+static uint32_t sheet_scene(void) { return sh.s; }
+static int sheet_pending(void) { return sh.pend != 0; }
+static uint32_t sh_wkey(uint32_t p)                     /* the key of white key place p */
+{
+    uint32_t k;
+    for (k = 0; k < 27u; k++)
+        if (!key_black(k) && key_place(k) == p)
+            return k;
+    return 0;
+}
+static void sheet_do(uint32_t op);                      /* (project.c: the sheet's actions, with the scenes' storage) */
+static void sheet_poll(void);
 static void jl_chain_done(void)                         /* F#5 let go */
 {
     uint32_t i;
@@ -179,8 +214,11 @@ static void jl_input(uint32_t keys, uint32_t btns)
     uint32_t i;
     int h5 = jl_held(10), fill = jl_held(9), dn = (int)((btns >> panel.btn[B_OCTDN]) & 1u);
     jam_silent = (uint8_t)jl_on();
-    if (!jl_on())
+    if (!jl_on()) {
+        jam_sheet = 0;
+        sh.open = 0;
         return;
+    }
     if (h5 && !jw.held) {
         jw.held = 1;
         jw.n = 0;
@@ -213,22 +251,36 @@ static void jl_input(uint32_t keys, uint32_t btns)
             ui_message("CHAIN UNDONE");
         }
         ui.force = 1;
-    } else if (dn && jh.held && jl_held(jh.held - 1u)) {   /* a scene key held + OCT-: clear it (asks) */
-        oct_as_mod(1u);
-        jh.used = 1;
-        scene_clear_ui(jh.held - 1u, 0);
     }
-    if (jh.held && !jl_held(jh.held - 1u)) {           /* the scene key let go: it launches, unless it did something held */
+    if (jh.held && !sh.open && !jh.used && !jw.held && jl_held(jh.held - 1u) && fm1_ms - jh.t0 >= SH_HOLD_MS) {
+        sh.open = 1;                                    /* (round 10: held: the sheet) */
+        sh.s = (uint8_t)(jh.held - 1u);
+        jam_sheet = 1;
+        ui.force = 1;
+    }
+    if (sh.open && !ui.confirm) {                       /* the sheet's white keys */
+        static const uint8_t OP[4] = {SH_DUP, SH_CLR, SH_X2, SH_H2};
+        for (i = 0; i < 4u; i++)
+            if ((keys >> sh_wkey(i)) & 1u)
+                sheet_do(OP[i]);
+    }
+    if (jh.held && !jl_held(jh.held - 1u)) {           /* the scene key let go: it launches, unless held to the sheet */
         uint32_t sc = jh.held - 1u;
         jh.held = 0;
-        if (!jh.used && !jw.held && !ui.confirm)
+        if (sh.open) {
+            sh.open = 0;
+            jam_sheet = 0;
+            ui.force = 1;
+        } else if (!jh.used && !jw.held && !ui.confirm) {
             jl_launch(sc);
+        }
     }
 }
 /* every main loop pass (tilt_scene_poll): the log, and a chain asked for from live */
 static void jl_poll(void)
 {
     const track_t *t = &trk[jl_clock()];
+    sheet_poll();                                       /* (round 10: the scene sheet's action at the loop's end) */
     {   /* the loop a cued scene waits for: the longest track's (seq.c scene_tick) */
         uint32_t k, c = 0, best = 0;
         for (k = 0; k < NTRK; k++) {

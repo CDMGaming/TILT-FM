@@ -1696,6 +1696,8 @@ static void ui_input(void)
     }
     if (save == BT_HOLD && chain_busy())
         ui_message("STOP TO UNDO");
+    else if (save == BT_HOLD && sheet_undo_ready())          /* (round 10: the scene sheet's action the last) */
+        sheet_undo();
     else if (save == BT_HOLD)                                /* SAVE held: undo the last sound load */
         undo_swap();
     else if (save == BT_TAP && !ui.confirm && tu_on())   /* TFM-UI: SONGS */
@@ -1721,6 +1723,8 @@ static void ui_input(void)
                 scene_copy_ui(ui.confirm_trk >> 3, ui.confirm_trk & 7u, 1);
             } else if (kind == CF_SCENE_CLR) {
                 scene_clear_ui(ui.confirm_trk & 7u, 1);
+            } else if (kind == CF_SHEET_CLR) {          /* (round 10: JAM's scene sheet) */
+                sheet_clear_do(ui.confirm_trk & 7u);
             } else if (kind == CF_SONG_OVR) {           /* (round 2, SONGS: the NAME screen, then the song is saved) */
                 name_open(NK_SONG_SAVE, ui.confirm_trk % NSONG);
             } else if (kind == CF_SONG_COPY) {

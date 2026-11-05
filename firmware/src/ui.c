@@ -282,7 +282,7 @@ static struct {
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
        CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
        CF_SCENE_DROP, CF_SCENE_OVR, CF_SCENE_CLR,
-       CF_SONG_OVR, CF_SONG_COPY, CF_SONG_CLR };       /* (round 2: SONGS: save over a song, copy over one, clear one) */   /* (TILT-FM: the SCENE layer's copy, clear) */                                 /* (TILT-FM: the music in no scene, edited, leaves: tilt.c) */
+       CF_SONG_OVR, CF_SONG_COPY, CF_SONG_CLR, CF_SHEET_CLR };   /* (round 10: JAM's scene sheet's CLEAR, tfm_live.c) */       /* (round 2: SONGS: save over a song, copy over one, clear one) */   /* (TILT-FM: the SCENE layer's copy, clear) */                                 /* (TILT-FM: the music in no scene, edited, leaves: tilt.c) */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot; a pattern over the user's steps;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
@@ -554,6 +554,9 @@ static void prf_mutate(void);
 static void prf_pick(uint32_t k);
 static int32_t dj_shown(uint32_t k, uint32_t knob);
 static int dj_any(void);
+static int sheet_undo_ready(void);                     /* (round 10: JAM's scene sheet, tfm_live.c) */
+static void sheet_undo(void);
+static void sheet_clear_do(uint32_t s);
 static void prf_poll(void);
 static int prf_fill_key(void);
 static int prf_on(void);
@@ -1026,7 +1029,8 @@ static int seq_is_empty(const track_t *t)
  * takes the copy too (UNDO_MOT: SAVE held puts the track's motion back, the sound and the steps stay; motion_undo_take).
  * A sound load keeps the track's motion on the parameters every engine has (load_end, motion.c motion_sound_loaded);
  * a pattern load drops it all (the steps it was on are gone) */
-enum { UNDO_SOUND = 1, UNDO_PAT = 2, UNDO_MOT = 4, UNDO_DJ = 8 };   /* (UNDO_DJ: TFM round 9, the DJ's reset) */
+enum { UNDO_SOUND = 1, UNDO_PAT = 2, UNDO_MOT = 4, UNDO_DJ = 8 };
+static uint32_t undo_gen;                        /* round 10: counts the undo copies (the scene sheet's undo is the last one) */   /* (UNDO_DJ: TFM round 9, the DJ's reset) */
 static struct {
     uint8_t trk;                 /* track + 1, 0 = nothing to undo */
     uint8_t keep;                /* the track is as the last load left it (undo.after): a next load keeps the copy */
@@ -1157,6 +1161,7 @@ static void load_begin(track_t *t, uint32_t what)
         return;
     }
     undo.trk = (uint8_t)(i + 1u);
+    undo_gen++;                                  /* (round 10: a newer copy than the scene sheet's) */
     undo.what = (uint8_t)what;
     undo.eng = t->eng_req;
     undo.preset = t->preset;
@@ -1215,6 +1220,7 @@ static void edit_undo_take(track_t *t, uint32_t tag, uint32_t what)
         return;
     undo_mot_tag = tag;
     undo.trk = (uint8_t)(i + 1u);
+    undo_gen++;                                  /* (round 10: a newer copy than the scene sheet's) */
     undo.what = (uint8_t)what;
     undo.eng = t->eng_req;
     undo.preset = t->preset;

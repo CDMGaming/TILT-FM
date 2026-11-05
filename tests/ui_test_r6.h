@@ -1302,3 +1302,106 @@ static int test_r9_key_level(void)
     bad += check("round 9 item 5: no step in level between adjacent keys F3..G5 (every melodic instrument, every named preset, within R9_KEY_LU; TFM_KT a smooth knee)", ok);
     return bad;
 }
+
+/* ===================================================================================== round 10 (tfm-spec/ROUND-10.md) === */
+#define R10(c) do { if (!(c)) { ok = 0; printf("  R10 line %d\n", __LINE__); } } while (0)
+static void r10_hold(uint32_t idx) { uint32_t q; r5_down(idx); for (q = 0; q < SH_HOLD_MS / 16u + 3u; q++) frame(); }   /* a scene key held: the sheet */
+static void r10_wkey(uint32_t p)                        /* a tap of white key place p (F3 = 0) */
+{
+    uint32_t k = key_at(0, p);
+    fm1_in.notes |= 1u << k; host_notes |= 1u << k; frame(); events_block(32); frame();
+    fm1_in.notes &= ~(1u << k); host_notes &= ~(1u << k); frame(); events_block(32); frame();
+}
+static int r10_motion_at(const motion_store_t *m, uint32_t k, uint32_t step, uint32_t id, int v)
+{
+    uint32_t i;
+    for (i = 0; i < m->count; i++)
+        if (m->event[i].place == (k << 6 | step) && MOTION_ID(&m->event[i]) == id && m->event[i].value == v)
+            return 1;
+    return 0;
+}
+/* item 1: JAM's scene sheet */
+static int test_r10_sheet(void)
+{
+    static project_t q;
+    int bad = 0, ok = 1;
+    uint32_t i, n0;
+    ui_power_on();
+    tu_off = 0;
+    r5_scenes();                                        /* A..D: T1 one note (A 32 steps, B..D 16) */
+    tilt_scene_go(1, 1);
+    motion_set_event(&trk[0], 3, P_LEVEL, 80);           /* (B: an automation record at step 4) */
+    tilt_scene_go(0, 1);                                /* (B stored as it was edited) */
+    R10(scn_get(scn_g(1), &q) && r10_motion_at(&q.motion, 0, 3, P_LEVEL, 80));
+    tu_goto(TU_JAM);
+    frames(32);
+    /* a tap launches; a hold opens the sheet (every key silent) and launches nothing */
+    r5_key(2);
+    R10(scene_cur() == 2u);
+    tilt_scene_go(0, 1);
+    r10_hold(2);
+    R10(sheet_open() && sheet_scene() == 2u && jam_sheet && kb_map(&trk[0], key_at(0, 6)) == KB_SILENT);
+    frames(4);
+    R10(str_eq(tu_ft.k[0], "F3") && str_eq(tu_ft.a[0], "DUP") && str_eq(tu_ft.a[3], "/2"));
+    r10_wkey(6);                                        /* (C4 .. G5: nothing) */
+    r5_up(2);
+    R10(!sheet_open() && !jam_sheet && scene_cur() == 0u && !project_used(4));
+    /* DUP: B into the next empty one (E), cued: stopped, the music there; hold SAVE: the copy goes, the music back on B */
+    r10_hold(1); r10_wkey(0); r5_up(1);
+    R10(project_used(4) && scene_cur() == 4u && trk[0].step[0].note[0] == 67u);
+    hold(B_SAVE); frames(4);
+    R10(!project_used(4) && scene_cur() == 1u);
+    /* wrapping: E..H used, C empty: G's copy goes to C; then none free */
+    tilt_scene_go(0, 1);
+    for (i = 4; i < 8u; i++) R10(scene_copy(0, i) == 0);
+    R10(scene_clear(2) == 0);
+    r10_hold(6); r10_wkey(0); r5_up(6);
+    R10(project_used(2) && scene_cur() == 2u);
+    tilt_scene_go(0, 1);
+    r10_hold(5); r10_wkey(0); r5_up(5);
+    R10(msg_is("NO EMPTY SCENE") && scene_cur() == 0u);
+    /* CLEAR asks; OCT+: D cleared; hold SAVE: back */
+    r10_hold(3); r10_wkey(1);
+    R10(ui.confirm == CF_SHEET_CLR && project_used(3));
+    press(B_OCTUP); frames(2);
+    r5_up(3);
+    R10(!ui.confirm && !project_used(3) && scene_cur() == 0u);
+    hold(B_SAVE); frames(4);
+    R10(project_used(3));
+    /* x2 and /2 of a stored scene with notes and automation, each undone */
+    r10_hold(1); r10_wkey(2); r5_up(1);
+    R10(scn_get(scn_g(1), &q) && q.t[0].p[P_SLEN] == 32 && q.t[0].step[16].note[0] == q.t[0].step[0].note[0] &&
+        r10_motion_at(&q.motion, 0, 3, P_LEVEL, 80) && r10_motion_at(&q.motion, 0, 19, P_LEVEL, 80));
+    hold(B_SAVE); frames(4);
+    R10(scn_get(scn_g(1), &q) && q.t[0].p[P_SLEN] == 16 && !r10_motion_at(&q.motion, 0, 19, P_LEVEL, 80));
+    r10_hold(1); r10_wkey(3); r5_up(1);
+    R10(scn_get(scn_g(1), &q) && q.t[0].p[P_SLEN] == 8 && q.t[0].step[0].note[0] == 67u && r10_motion_at(&q.motion, 0, 3, P_LEVEL, 80));
+    hold(B_SAVE); frames(4);
+    R10(scn_get(scn_g(1), &q) && q.t[0].p[P_SLEN] == 16);
+    /* the scene now, stopped: at once on the music; undone */
+    r10_hold(0); r10_wkey(2); r5_up(0);
+    R10(trk[0].p[P_SLEN] == 64 && trk[0].step[32].note[0] == trk[0].step[0].note[0]);
+    hold(B_SAVE); frames(4);
+    R10(trk[0].p[P_SLEN] == 32);
+    /* playing: every store through the RAM path (no flash); the scene playing changes at its loop's end */
+    seq_start();
+    for (i = 0; i < 8u; i++) { int32_t o[2 * CTL]; mix_block(o, CTL); }
+    frames(2);
+    n0 = scn_store_n - scn_ram_n;
+    r10_hold(1); r10_wkey(2); r5_up(1);
+    R10(scn_get(scn_g(1), &q) && q.t[0].p[P_SLEN] == 32);
+    r10_hold(5); r10_wkey(1); press(B_OCTUP); frames(2); r5_up(5);
+    R10(!project_used(5));
+    hold(B_SAVE); frames(4);
+    R10(project_used(5));
+    r10_hold(0); r10_wkey(2); r5_up(0);
+    R10(trk[0].p[P_SLEN] == 32 && sheet_pending());
+    frames(4);
+    R10(tu_hd.l2 && str_eq(tu_hd.l2, "AT LOOP END"));
+    for (i = 0; i < 20000u && sheet_pending(); i++) { int32_t o[2 * CTL]; mix_block(o, CTL); if (!(i & 63u)) frame(); }
+    R10(!sheet_pending() && trk[0].p[P_SLEN] == 64 && song.playing);
+    R10(scn_store_n - scn_ram_n == n0);
+    press(B_PLAY); events_block(32); frames(4);
+    bad += check("round 10 item 1: JAM's scene sheet (a tap launches, a hold opens it and launches nothing, DUP to the next empty wrapping / NO EMPTY SCENE, CLEAR asks, x2 and /2 with notes and automation, each undone by holding SAVE, playing: RAM only and the scene playing at its loop's end)", ok);
+    return bad;
+}

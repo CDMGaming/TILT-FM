@@ -971,10 +971,16 @@ static int scn_get(uint32_t g, project_t *q)          /* scene g decoded into q:
     const project_store_t *s = scn_raw(g);
     return s && proj_import(q, s, sizeof *s);
 }
+#if !FELUCCA_FLASH
+static uint32_t scn_store_n, scn_ram_n;                /* (host tests: every store, and those through scn_store_ram) */
+#endif
 /* scene g stored (v: a packed project) or erased (v 0). Flash: the A/B record, committed last, so a power cut leaves
  * the scene as it was or as it is; never called while playing (the erase silences the audio). 0 done */
 static int scn_store(uint32_t g, const project_store_t *v)
 {
+#if !FELUCCA_FLASH
+    scn_store_n++;
+#endif
     if (g >= SCN_N)
         return 2;
 #if FELUCCA_FLASH
@@ -1001,9 +1007,13 @@ static int scn_store(uint32_t g, const project_store_t *v)
     return 0;
 }
 /* stored while playing: RAM only (a flash write would silence the audio), flash when the transport stops (scene_flush).
- * Up to three scenes wait; 1 = no room. No flash: stored at once */
+ * Up to three scenes wait; 1 = no room. No flash: stored at once. v 0 (round 10): erased, the same way (its image all
+ * zero: no scene reads it, scene_flush erases the record) */
 static int scn_store_ram(uint32_t g, const project_store_t *v)
 {
+#if !FELUCCA_FLASH
+    scn_ram_n++;
+#endif
 #if FELUCCA_FLASH
     if (flash_ok) {
         uint32_t i, f = 3u;
@@ -1013,9 +1023,12 @@ static int scn_store_ram(uint32_t g, const project_store_t *v)
         }
         if (f == 3u)
             return 1;
-        memcpy(&proj_slot[1u + f], v, sizeof proj_slot[0]);
+        if (v)
+            memcpy(&proj_slot[1u + f], v, sizeof proj_slot[0]);
+        else
+            memset(&proj_slot[1u + f], 0, sizeof proj_slot[0]);
         scn_pend_g[f] = (uint8_t)g;
-        scn_used |= 1u << g;
+        scn_used = v ? scn_used | 1u << g : scn_used & ~(1u << g);
         scn_inf[g].ok = 0;
         return 0;
     }
@@ -1940,7 +1953,7 @@ static void scene_flush(void)
         return;
 #if FELUCCA_FLASH
     for (i = 0; i < 3u && flash_ok; i++)
-        if (scn_pend_g[i] != 0xFFu && scn_store(scn_pend_g[i], &proj_slot[1u + i]))
+        if (scn_pend_g[i] != 0xFFu && scn_store(scn_pend_g[i], proj_slot[1u + i].align ? &proj_slot[1u + i] : 0))
             ui_message("SAVE ERROR");
 #else
     (void)i;
@@ -2203,5 +2216,276 @@ static int proj_slot_info(uint32_t slot, uint32_t *len, uint32_t *parts)
     *len = c->len;
     *parts = c->parts;
     return 1;
+}
+static uint32_t proj_slot_l48(uint32_t slot)            /* round 10 (the scene sheet): its longest track, 48ths of a beat */
+{
+    const scn_inf_t *c = scn_inf_get(scn_g(slot));
+    uint32_t k, l = 0;
+    for (k = 0; k < NTRK; k++)
+        if (c->len48[k] > l)
+            l = c->len48[k];
+    return l;
+}
+#endif
+
+#ifndef PROJ_HOST
+/* ---- round 10: JAM's SCENE SHEET's actions (tfm_live.c: the sheet, its keys), here with the scenes' storage ---- */
+/* track k's steps st and length *lp, its automation in m: x2 (dbl) or /2 */
+static void sh_len(step_t *st, int16_t *lp, motion_store_t *m, uint32_t k, int dbl)
+{
+    uint32_t len = (uint32_t)clamp(*lp, 1, NSTEP), n = dbl ? (len * 2u > NSTEP ? NSTEP : len * 2u) : (len / 2u ? len / 2u : 1u), i, c;
+    for (i = c = 0; i < m->count && i < MOTION_MAX; i++)   /* (past the length: none, then no copy lands on one) */
+        if ((m->event[i].place >> 6) != k || (m->event[i].place & 63u) < (dbl ? len : n))
+            m->event[c++] = m->event[i];
+    memset(m->event + c, 0, (MOTION_MAX - c) * sizeof m->event[0]);
+    m->count = (uint8_t)c;
+    if (dbl) {
+        for (i = len; i < n; i++)
+            st[i] = st[i - len];
+        for (i = 0; i < c; i++) {
+            motion_event_t e = m->event[i];
+            if ((e.place >> 6) != k || (e.place & 63u) + len >= n || m->count >= MOTION_MAX)
+                continue;
+            e.place = (uint8_t)(k << 6 | ((e.place & 63u) + len));
+            m->event[m->count++] = e;
+        }
+    } else {
+        for (i = n; i < NSTEP; i++)
+            step_clear(&st[i]);
+    }
+    *lp = (int16_t)n;
+}
+/* scene s's image v (0: empty) stored: playing to RAM (flash at the stop), stopped as SAVE > PROJECT writes it */
+static int sh_store_raw(uint32_t s, const project_store_t *v)
+{
+    s &= NSCN - 1u;
+    if (!transport_busy())
+        return scene_slot_write(s, v);
+    if (scn_store_ram(scn_g(s), v)) {
+        ui_message("STOP TO SAVE");
+        return 1;
+    }
+    tsc.pend |= (uint8_t)(1u << s);
+    return 0;
+}
+static int sh_store(uint32_t s, project_t *p)
+{
+    proj_wire_gen++;
+    if (!proj_pack(&proj_wire, p)) {
+        ui_message("SAVE FORMAT ERROR");
+        return 2;
+    }
+    return sh_store_raw(s, &proj_wire);
+}
+static void sh_say(uint32_t s, const char *w)
+{
+    char b[24] = "A ";
+    b[0] = (char)('A' + (s & (NSCN - 1u)));
+    str_cpy(b + 2, w, sizeof b - 2);
+    ui_message(b);
+    ui.force = 1;
+}
+static void sh_undo_set(uint32_t op, uint32_t s, uint32_t d, uint32_t live)
+{
+    sh.uk = (uint8_t)op;
+    sh.us = (uint8_t)s;
+    sh.ud = (uint8_t)d;
+    sh.ulive = (uint8_t)live;
+    sh.ugen = undo_gen;
+}
+/* the music (the scene now): x2, /2 or CLEAR on its tracks, its steps, lengths and automation kept first for the undo */
+static void sh_live(uint32_t op)
+{
+    project_t *p = &proj_scratch;
+    uint32_t k, f;
+    project_capture(p);
+    if (!proj_pack(&scene_ubuf.s, p))
+        memset(&scene_ubuf.s, 0, sizeof scene_ubuf.s);
+    scene_ubuf.slot = (uint8_t)(scene_cur() & (NSCN - 1u));
+    scene_ubuf.on = 1;
+    f = motion_guard();
+    for (k = 0; k < NTRK; k++) {
+        motion_restore(&trk[k]);
+        if (op == SH_CLR) {
+            track_defaults_steps(&trk[k]);
+        } else {
+            sh_len(trk[k].step, &trk[k].p[P_SLEN], &motion, k, op == SH_X2);
+            motion_rebase(&trk[k]);
+        }
+    }
+    motion_unguard(f);
+    sh_undo_set(op, scene_cur(), 0, 1);
+    sh_say(scene_cur(), op == SH_CLR ? "CLEARED" : op == SH_X2 ? "x2" : "/2");
+}
+static void sh_dup(uint32_t s)
+{
+    project_t *p = &proj_scratch;
+    uint32_t i, d = 0, cur = scene_cur();
+    for (i = 1; i < NSCN; i++) {
+        d = (s + i) & (NSCN - 1u);
+        if (d != cur && !project_used(d))
+            break;
+    }
+    if (i == NSCN) {
+        ui_message("NO EMPTY SCENE");
+        return;
+    }
+    scene_keep(d);
+    if (s == cur)
+        project_capture(p);
+    else if (!scn_get(scn_g(s), p)) {
+        sh_say(s, "IS EMPTY");
+        return;
+    }
+    if (sh_store(d, p))
+        return;
+    tilt_scene_go(d, 1);                                /* (cued: playing at the bar's end, stopped at once) */
+    sh_undo_set(SH_DUP, s, d, 0);
+    {
+        char b[24] = "A > C: DUP";
+        b[0] = (char)('A' + s);
+        b[4] = (char)('A' + d);
+        ui_message(b);
+    }
+    ui.force = 1;
+}
+static void sheet_do(uint32_t op)
+{
+    project_t *p = &proj_scratch;
+    uint32_t s = sh.s, k;
+    jh.used = 1;
+    if (chain_busy()) {
+        ui_message("STOP TO EDIT");
+        return;
+    }
+    if (op == SH_DUP) {
+        sh_dup(s);
+        return;
+    }
+    if (s != scene_cur() && !project_used(s)) {
+        sh_say(s, "IS EMPTY");
+        return;
+    }
+    if (op == SH_CLR) {
+        confirm_open(CF_SHEET_CLR, s);
+        return;
+    }
+    if (s == scene_cur()) {
+        if (transport_busy()) {                         /* the scene playing: at its loop's end */
+            sh.pend = (uint8_t)op;
+            sh.ps = (uint8_t)s;
+            sh.pidx = trk[jl_clock()].seq_idx;
+            ui_message("AT LOOP END");
+            ui.force = 1;
+        } else {
+            sh_live(op);
+        }
+        return;
+    }
+    scene_keep(s);
+    if (!scn_get(scn_g(s), p))
+        return;
+    for (k = 0; k < NTRK; k++)
+        sh_len(p->t[k].step, &p->t[k].p[P_SLEN], &p->motion, k, op == SH_X2);
+    if (sh_store(s, p)) {
+        scene_ubuf.on = 0;
+        return;
+    }
+    sh_undo_set(op, s, 0, 0);
+    sh_say(s, op == SH_X2 ? "x2" : "/2");
+}
+static void sheet_clear_do(uint32_t s)                  /* CLEAR asked and confirmed */
+{
+    s &= NSCN - 1u;
+    if (chain_busy()) {
+        ui_message("STOP TO EDIT");
+    } else if (s == scene_cur()) {
+        if (transport_busy()) {
+            sh.pend = SH_CLR;
+            sh.ps = (uint8_t)s;
+            sh.pidx = trk[jl_clock()].seq_idx;
+            ui_message("AT LOOP END");
+        } else {
+            sh_live(SH_CLR);
+        }
+    } else {
+        scene_keep(s);
+        if (sh_store_raw(s, 0)) {
+            scene_ubuf.on = 0;
+            return;
+        }
+        sh_undo_set(SH_CLR, s, 0, 0);
+        sh_say(s, "CLEARED");
+    }
+    ui.force = 1;
+}
+static int sheet_undo_ready(void) { return sh.uk && sh.ugen == undo_gen; }
+static void sheet_undo(void)                            /* SAVE held right after an action: put back */
+{
+    project_t *p = &proj_scratch;
+    uint32_t k = sh.uk, i, f;
+    sh.uk = 0;
+    if (sh.ulive) {                                     /* the music's steps, lengths and automation as they were */
+        if (!scene_ubuf.on || !proj_import(p, &scene_ubuf.s, sizeof scene_ubuf.s)) {
+            ui_message("NOTHING TO UNDO");
+            return;
+        }
+        f = motion_guard();
+        for (i = 0; i < NTRK; i++) {
+            motion_restore(&trk[i]);
+            memcpy(trk[i].step, p->t[i].step, sizeof trk[i].step);
+            trk[i].p[P_SLEN] = p->t[i].p[P_SLEN];
+        }
+        motion = p->motion;
+        for (i = 0; i < NTRK; i++)
+            motion_rebase(&trk[i]);
+        motion_unguard(f);
+        scene_ubuf.on = 0;
+        sh_say(sh.us, "PUT BACK");
+        return;
+    }
+    if (k == SH_DUP) {                                  /* the copy goes again (the music back on its scene) */
+        if (scene_cur() == sh.ud) {
+            if (transport_busy()) {
+                sh.uk = (uint8_t)k;
+                ui_message("STOP TO UNDO");
+                return;
+            }
+            tilt_scene_go(sh.us, 1);
+        }
+        if (tsc.cue == sh.ud)
+            tilt_scene_uncue();
+        if (sh_store_raw(sh.ud, 0)) {
+            sh.uk = (uint8_t)k;
+            return;
+        }
+        scene_ubuf.on = 0;
+        sh_say(sh.ud, "GONE AGAIN");
+        return;
+    }
+    if (!scene_ubuf.on || sh_store_raw(sh.us, proj_import(p, &scene_ubuf.s, sizeof scene_ubuf.s) ? &scene_ubuf.s : 0))
+        return;
+    scene_ubuf.on = 0;
+    sh_say(sh.us, "PUT BACK");
+}
+static void sheet_poll(void)                            /* each pass: the action waiting for the loop's end */
+{
+    uint32_t ix;
+    if (!sh.pend)
+        return;
+    if (scene_cur() != sh.ps || chain_busy()) {         /* (the music left that scene: dropped) */
+        sh.pend = 0;
+        ui.force = 1;
+        return;
+    }
+    ix = trk[jl_clock()].seq_idx;
+    if (!transport_busy() || ix < sh.pidx) {
+        uint32_t op = sh.pend;
+        sh.pend = 0;
+        sh_live(op);
+        ui.force = 1;
+        return;
+    }
+    sh.pidx = ix;
 }
 #endif

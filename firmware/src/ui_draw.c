@@ -1521,6 +1521,7 @@ static void confirm_text(char *a, char *b)
         b[5] = (char)('A' + ((k >> 3) & 7u));
         break;
     case CF_SCENE_CLR:                               /* .. its clear */
+    case CF_SHEET_CLR:                               /* (round 10: JAM's scene sheet's, the same words) */
         str_cpy(a, "CLEAR C?", 24);
         a[6] = (char)('A' + (k & 7u));
         if (scene_in_song(k & 7u))
@@ -1608,7 +1609,7 @@ static void draw_confirm(void)
         GFX_HOOK_ALIGN(0, 0, DLG_W, 0, AL_H, "dialog detail centred");
         cv_text_flags(ink_in(&AF_M, f, DLG_W), 55, &AF_M, f, T_MID, T_SURF, 8u | (f[str_len(f) - 1u] == ELLIPSIS));
     }
-    if (ui.confirm == CF_SCENE_OVR || ui.confirm == CF_SCENE_CLR || ui.confirm == CF_SONG_OVR || ui.confirm == CF_SONG_COPY ||
+    if (ui.confirm == CF_SCENE_OVR || ui.confirm == CF_SCENE_CLR || ui.confirm == CF_SHEET_CLR || ui.confirm == CF_SONG_OVR || ui.confirm == CF_SONG_COPY ||
         ui.confirm == CF_SONG_CLR) {                  /* (TILT-FM: NO picked, YES raised) */
         int32_t x = 10 + HALF_UP(90 - kh_ink(KC_OCTDN, "NO"));
         cv_rrect(10, 80, 90, 26, 6, T_THEME, T_SURF);

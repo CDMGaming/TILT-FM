@@ -65,31 +65,23 @@ static int test_r5_live(void)
     r5_key(8); R5(tsc.cue == SCENE_NONE);
     transport_req = 2; events_block(32); frames(16);
     R5(!song.playing);
-    /* copy (round 6): hold a scene key, tap another: the held scene copied there, nothing launched; the copy plays A's music */
+    /* round 10: round 6's held combos are gone: a scene key held + another scene key copies nothing (the held one launches when
+     * let go, quickly), held + OCT- clears nothing (OCT- shifts the octave on JAM as alone) */
     tilt_scene_go(0, 1);
     R5(scene_cur() == 0u);
     {
         int8_t o0 = (int8_t)song.octave;
+        R5(!project_used(4));
         r5_down(1); r5_key(4); r5_up(1);
-        R5(project_used(4) && scene_cur() == 0u && tsc.cue == SCENE_NONE && !ui.confirm);
-        r5_key(4);                                                            /* (stopped: the key launches on release) */
-        R5(scene_cur() == 4u && trk[0].step[0].note[0] == 67u);
+        R5(!project_used(4) && scene_cur() == 1u && !ui.confirm);
         tilt_scene_go(0, 1);
-        /* into a scene with something: asks (Cancel the default), nothing changed */
-        r5_down(2); r5_key(4); r5_up(2);
-        R5(ui.confirm == CF_SCENE_OVR && scene_cur() == 0u);
-        ui.confirm = 0;
-        /* clear: hold a scene key + OCT-: asks first (Cancel the default), nothing gone, the octave stays, no launch */
-        r5_down(4); press(B_OCTDN); r5_up(4);
-        R5(ui.confirm == CF_SCENE_CLR && project_used(4) && scene_cur() == 0u && (int8_t)song.octave == o0);
-        ui.confirm = 0;
-        /* OCT+ / OCT- alone shift the octave on JAM again */
+        r5_down(2); press(B_OCTDN); r5_up(2);
+        R5(!ui.confirm && project_used(2) && (int8_t)song.octave == o0 - 1);
+        tilt_scene_go(0, 1);
         press(B_OCTUP); frames(16);
-        R5((int8_t)song.octave == o0 + 1);
-        press(B_OCTDN); frames(16);
         R5((int8_t)song.octave == o0);
     }
-    bad += check("round 5 item 1 / round 6 item 7: black keys launch scenes on release (queued to the loop's end, cancel, last wins, tap playing, FILL, hold + key copies, hold + OCT- clears and asks, OCT+/- octave on JAM, the key lights)", ok);
+    bad += check("round 5 item 1 / round 6 item 7: black keys launch scenes on release (queued to the loop's end, cancel, last wins, tap playing, FILL; round 10: the held combos copy and clear nothing, OCT+/- octave on JAM, the key lights)", ok);
     return bad;
 }
 static int test_r5_chain(void)

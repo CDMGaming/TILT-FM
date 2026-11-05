@@ -61,6 +61,12 @@ static uint8_t tq_bar;                                  /* (tfm_seq.c: the bar N
 static void tq_input(uint32_t notes, uint32_t busy);
 static void tq_oct(uint32_t pressed, uint32_t oct);
 static void jl_input(uint32_t keys, uint32_t btns);     /* (tfm_live.c) */
+static int sheet_open(void);                            /* (tfm_live.c: round 10, JAM's scene sheet) */
+static uint32_t sheet_scene(void);
+static int sheet_pending(void);
+static int sheet_held(void);
+static int proj_slot_info(uint32_t slot, uint32_t *len, uint32_t *parts);   /* (project.c) */
+static uint32_t proj_slot_l48(uint32_t slot);
 static struct { uint8_t held, n, sc[24]; } jw;          /* CHAIN (F#5 held): the taps */
 static int jl_held(uint32_t idx);
 static uint8_t prf_rate, prf_cap, prf_mut;              /* (tfm_live.c: PERFORM) */
@@ -764,9 +770,63 @@ static void tu_dj_panel(void)
         }
     }
 }
+/* round 10: a scene key held: its SHEET over the cabinets: the letter big, its length in bars, the tracks it uses (lit),
+ * the four actions with their keys (tfm_live.c) */
+static void tu_sheet_panel(void)
+{
+    static const char *const KA[4][3] = {{"F3", "DUP", "TO NEXT EMPTY"}, {"G3", "CLEAR", "ASKS FIRST"},
+                                         {"A3", "x2", "TWICE AS LONG"}, {"B3", "/2", "FIRST HALF"}};
+    uint32_t s = sheet_scene() & (NSCN - 1u), k, used = 0, l48 = 0, any;
+    uint16_t bg = RGB(26, 18, 8);
+    char b[16], l[2] = {(char)('A' + s), 0};
+    tu_cut(3, 82, 234, 93, TC_AMBER);
+    tu_cut(5, 84, 230, 89, bg);
+    if (s == tu_scene_cur()) {                          /* (the scene now: the music's tracks) */
+        any = 1;
+        for (k = 0; k < NTRK; k++) {
+            uint32_t n = (uint32_t)clamp(trk[k].p[P_SLEN], 1, NSTEP), i, w = len48_of(trk[k].p[P_SLEN], trk[k].p[P_SDIV]);
+            for (i = 0; i < n; i++)
+                if ((trk[k].step[i].time == ST_NOTE && trk[k].step[i].n) || trk[k].step[i].hit) {
+                    used |= 1u << k;
+                    break;
+                }
+            if (w > l48)
+                l48 = w;
+        }
+    } else {
+        uint32_t len;
+        any = (uint32_t)proj_slot_info(s, &len, &used);
+        l48 = any ? proj_slot_l48(s) : 0u;
+    }
+    dmd_str(16, 92, 6, l, TC_AMBER, DMD_DIM);
+    if (any) {
+        fmt_int(b, (int32_t)((l48 + 191u) / 192u));
+        str_cpy(b + str_len(b), (l48 + 191u) / 192u == 1u ? " BAR" : " BARS", 8);
+    } else {
+        str_cpy(b, "EMPTY", sizeof b);
+    }
+    tu_text(14, 146, &AF_TM, b, TC_TEXT, bg);
+    for (k = 0; k < NTRK; k++) {
+        char tn[3] = {'T', (char)('1' + k), 0};
+        uint16_t c = (used >> k) & 1u ? TU_TC[k] : tu_mix(bg, TU_TC[k], 30);
+        tu_rrect(13 + (int32_t)k * 21, 158, 19, 14, 3, c, bg);
+        tu_text_c(22 + (int32_t)k * 21, 165, &AF_TS, tn, (used >> k) & 1u ? TC_BG : tu_mix(bg, TC_TEXT, 45), c);
+    }
+    for (k = 0; k < 4u; k++) {
+        int32_t y = 97 + (int32_t)k * 21;
+        tu_text(104, y, &AF_TS, KA[k][0], TC_AMBER, bg);
+        tu_text(124, y, &AF_TM, KA[k][1], TC_TEXT, bg);
+        tu_text(160, y, &AF_TS, KA[k][2], TC_QUIET, bg);
+    }
+}
 static void tu_jam_body(void)                           /* y 79 .. 177: the four cabinets (hold ARP: the DJ knobs) */
 {
     uint32_t c;
+    if (sheet_open()) {
+        tu_rect(0, 79, TU_W, 98, TC_BG);
+        tu_sheet_panel();
+        return;
+    }
     if (prf_on()) {
         tu_rect(0, 79, TU_W, 98, TC_BG);
         tu_dj_panel();
@@ -873,7 +933,8 @@ static void tu_jam_draw(void)
         static char hl[24];
         str_cpy(hl, prf_on() ? "HOLD ARP \xB7 DJ" : jw.held ? "HOLD F#5 \xB7 CHAIN" : tn, sizeof hl);
         tu_head_nt = 1;                                 /* (round 8: no timer in JAM's header: the display shows it) */
-        tu_head(-1, hl, !prf_on() && dj_any() ? "DJ" : 0, 0, 1);   /* (round 9: DJ while any of the four is off neutral) */
+        tu_head(-1, hl, sheet_pending() ? "AT LOOP END" : !prf_on() && dj_any() ? "DJ" : 0, 0, 1);   /* (round 9: DJ while any of the
+                                                                                                * four is off neutral; round 10: the sheet's action waiting) */
     }
     for (i = 0; i < NTRK; i++)                          /* (the meters: tu_meter_poll, in dB) */
         tu.lvl[i] = (uint8_t)(tu.mlv[i] / 16u);
@@ -890,11 +951,13 @@ static void tu_jam_draw(void)
             sig = sig * 31u + (uint32_t)(dj_shown(i, 0) + 64) + (uint32_t)dj_shown(i, 1) * 3u + (uint32_t)dj_shown(i, 2) * 5u +
                   (uint32_t)dj_shown(i, 3) * 7u;
     }
-    sig = sig * 31u + song.sel * 6151u + (song.playing ? 977u : 0u);
+    sig = sig * 31u + song.sel * 6151u + (song.playing ? 977u : 0u) + (sheet_open() ? 1u + sheet_scene() * 7u + tu_used_mask() * 13u : 0u) * 1000003u;
     tu_zone(2, 79, 98, TC_BG, sig, tu_jam_body);
     tu_zone(3, 177, 38, TC_BG, cur * 977u + tu_used_mask() * 5u + (uint32_t)sng_cur * 131u + (tsc.cue < NSCN ? 1u + ((ui.frame >> 3) & 1u) + tsc.cue * 3u : 0u) +
             (chain.running ? 1u + chain.row * 17u : 0u) + (uint32_t)jw.held * 7919u + (uint32_t)jl_held(9) * 4001u + (prf_on() ? 3u + song.sel * 31u : 0u), tu_strip_draw);
-    if (prf_on())
+    if (sheet_held())                                   /* (round 10: a scene key held: the sheet's keys) */
+        tu_foot(4, "F3", "DUP", "G3", "CLEAR", "A3", "x2", "B3", "/2", 0, 0);
+    else if (prf_on())
         tu_foot(3, "WHITE", "ROLL", "OCT-", "RESET", "K1-K4", "THE MIX", 0, 0, 0, 0);
     else if (jw.held)
         tu_foot(3, "BLACK", "ADD SCENE", "OCT-", "UNDO TAP", "LET GO", "DONE", 0, 0, 0, 0);

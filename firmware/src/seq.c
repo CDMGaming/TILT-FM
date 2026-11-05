@@ -163,6 +163,7 @@ static uint32_t kb_pitch(const track_t *t, uint32_t k, int32_t oct)
 }
 
 static volatile uint8_t jam_silent;               /* round 5: JAM's black keys launch scenes (tfm_live.c): they play nothing */
+static volatile uint8_t jam_sheet;                /* round 10: JAM's scene sheet open: no key plays (its white keys act) */
 /* TFM round 8: a drum track plays on the WHITE keys only, the same on every screen: the first eight (F3 .. F4) its eight
  * lanes; round 9: the next eight (G4 .. G5) its PITCHED LANE (tfm_instr.c tfm_drum_plane: THUMP LAB's 808 kick, KITBOX's
  * and GARAGE's tom) up the song's scale, degrees 0 .. 7 from the lane's own pitch, live and recorded as the step's pitch
@@ -199,7 +200,7 @@ static __attribute__((noinline)) uint8_t dw_key_note(const track_t *t, uint32_t 
 static uint32_t kb_map(const track_t *t, uint32_t k)
 {
     int32_t n;
-    if (jam_silent && ((0x252A52Au >> k) & 1u))
+    if (jam_sheet || (jam_silent && ((0x252A52Au >> k) & 1u)))
         return KB_SILENT;
     if (tfm_dwhite && drum_track(t))
         return dw_key_note(t, k);
