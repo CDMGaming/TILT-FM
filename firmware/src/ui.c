@@ -479,7 +479,7 @@ static uint8_t tilt_ns_open;
 /* TILT-FM's own version (tools/build.py --release checks it); FELUCCA_VERSION stays the Felucca it is built on (the
  * web editor and the console still see that one) */
 #ifndef TILT_VERSION
-#define TILT_VERSION "0.2.1"
+#define TILT_VERSION "0.3.0"
 #endif
 #ifndef TILT_BUILD                                      /* round 7: which build is installed (tools/build.py: the package name's tag, r7-<sha>) */
 #define TILT_BUILD "dev"
