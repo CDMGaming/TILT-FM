@@ -405,10 +405,54 @@ static void tu_foot_draw(void)
     }
     tu_hint_line(TU_FY + 13, tu_pbg, tu_pq, tu_ft.n, tu_ft.k, tu_ft.a);
 }
+/* round 10: the footer is the help while a button is held on a TFM screen: what holding it does here (before its layer
+ * opens: the layers' maps have their own footers), at most three pairs. Held BT_SEEN_MS: layer_seen's bit 0 (LAYER_NONE's,
+ * never a layer's) remembers a hold was seen, and JAM's first-run line goes */
+#define BT_SEEN_MS 400u
+static const struct { uint8_t b; const char *k[3], *a[3]; } TU_HOLD[] = {
+    {B_SAVE, {"HOLD SAVE", 0, 0}, {"UNDO", 0, 0}},
+    {B_HOME, {"HOLD HOME", 0, 0}, {"MENU", 0, 0}},
+    {B_EDIT, {"HOLD EDIT", "WHITE", 0}, {"INSTRUMENTS", "PICK", 0}},
+    {B_ENV, {"F3", "G3", "A3"}, {"NEW SONG", "STUCK", "MUTATE"}},
+    {B_FX, {"HOLD FX", "WHITE", 0}, {"PUNCH-IN", "EFFECTS", 0}},
+    {B_GLO, {"HOLD GLO", "KEYS", 0}, {"LIVE", "MUTE SOLO FILL", 0}},
+    {B_SCL, {"HOLD SCL", "KEYS", 0}, {"ROOT", "PICK IT", 0}},
+    {B_SEQ, {"HOLD SEQ", 0, 0}, {"STEP TOOLS", 0, 0}},
+    {B_REC, {"HOLD REC", 0, 0}, {"CLICK, COUNT-IN", 0, 0}},
+    {B_LFO, {"HOLD LFO", "K1-K4", 0}, {"MOMENTARY", "BACK ON LET GO", 0}},
+    {B_ARP, {"HOLD ARP", "K1-K4", 0}, {"DJ", "THE MIX", 0}},
+    {B_OCTUP, {"HOLD OCT+", "K1", "K2"}, {"STEP SHEET", "MOVE", "COPY"}},   /* (NOTES, DRUMS) */
+    {B_OCTUP, {"HOLD OCT+", "K3", 0}, {"COPY BAR", "WHERE TO", 0}},         /* (BARS) */
+};
+static uint32_t tu_hold_ix(void)                        /* the held button's line here, 0 none (its index + 1) */
+{
+    uint32_t i;
+    if (ui.layer || ui.menu || ui.confirm)
+        return 0;
+    for (i = 0; i < sizeof TU_HOLD / sizeof TU_HOLD[0]; i++) {
+        if (!((fm1_in.buttons >> panel.btn[TU_HOLD[i].b]) & 1u))
+            continue;
+        if (TU_HOLD[i].b == B_OCTUP) {                  /* (OCT+: a hold only on NOTES, DRUMS and BARS) */
+            if (tu.scr == TU_BARS)
+                return sizeof TU_HOLD / sizeof TU_HOLD[0];
+            if (tu.scr != TU_NOTES && tu.scr != TU_DRUMS)
+                return 0;
+        }
+        return i + 1u;
+    }
+    return 0;
+}
 static void tu_foot(uint32_t n, const char *k0, const char *a0, const char *k1, const char *a1, const char *k2, const char *a2,
                     const char *k3, const char *a3, const char *k4, const char *a4)
 {
-    uint32_t i, sig = n * 7u;
+    uint32_t i, sig = n * 7u, h = tu_hold_ix();
+    if (h) {                                            /* (round 10: a button held: what its hold does) */
+        const char *const *k = TU_HOLD[h - 1u].k, *const *a = TU_HOLD[h - 1u].a;
+        n = k[2] ? 3u : k[1] ? 2u : 1u;
+        k0 = k[0]; a0 = a[0]; k1 = k[1]; a1 = a[1]; k2 = k[2]; a2 = a[2];
+        k3 = a3 = k4 = a4 = 0;
+        sig = n * 7u + h * 104729u;
+    }
     tu_ft.n = n;
     tu_ft.k[0] = k0; tu_ft.a[0] = a0; tu_ft.k[1] = k1; tu_ft.a[1] = a1; tu_ft.k[2] = k2; tu_ft.a[2] = a2;
     tu_ft.k[3] = k3; tu_ft.a[3] = a3; tu_ft.k[4] = k4; tu_ft.a[4] = a4;
@@ -957,6 +1001,8 @@ static void tu_jam_draw(void)
             (chain.running ? 1u + chain.row * 17u : 0u) + (uint32_t)jw.held * 7919u + (uint32_t)jl_held(9) * 4001u + (prf_on() ? 3u + song.sel * 31u : 0u), tu_strip_draw);
     if (sheet_held())                                   /* (round 10: a scene key held: the sheet's keys) */
         tu_foot(4, "F3", "DUP", "G3", "CLEAR", "A3", "x2", "B3", "/2", 0, 0);
+    else if (!(layer_seen & 1u) && !prf_on() && !jw.held)   /* (round 10: until a hold was seen, the first-run line) */
+        tu_foot(1, "HOLD A BUTTON:", "SEE WHAT IT DOES", 0, 0, 0, 0, 0, 0, 0, 0);
     else if (prf_on())
         tu_foot(3, "WHITE", "ROLL", "OCT-", "RESET", "K1-K4", "THE MIX", 0, 0, 0, 0);
     else if (jw.held)
@@ -1204,8 +1250,21 @@ static void tu_screen_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint
  * the knobs every screen shares, then the screen's */
 static void tu_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint32_t busy)
 {
+    static uint32_t hold_t;
     int32_t s;
     prf_poll();                                         /* (round 5: PERFORM's roll on while its layer is up) */
+    if (!(layer_seen & 1u)) {                           /* (round 10: a hold seen once: the first-run line goes for good) */
+        uint32_t i, any = 0;
+        for (i = 0; i < sizeof TU_HOLD / sizeof TU_HOLD[0]; i++)
+            any |= (fm1_in.buttons >> panel.btn[TU_HOLD[i].b]) & 1u;
+        if (!any)
+            hold_t = fm1_ms;
+        else if (fm1_ms - hold_t >= BT_SEEN_MS) {
+            layer_seen |= 1u;
+            settings_later();
+            ui.force = 1;
+        }
+    }
     if (br.on && !tu_card_on()) {                       /* (round 10: the sound card closes 2 s after the last detent) */
         br.on = 0;
         ui.force = 1;

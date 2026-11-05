@@ -50,6 +50,7 @@ static int test_r1_tempo(void)
     int32_t bpm;
     ui_power_on();
     tu_off = 0;
+    layer_seen |= 1u;                                   /* (round 10: past JAM's first-run line, a hold seen) */
     tu_goto(TU_JAM);
     frames(3);
     bpm = song.g[G_BPM];

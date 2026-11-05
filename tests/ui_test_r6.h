@@ -1458,3 +1458,69 @@ static int test_r10_browse(void)
     bad += check("round 10 item 2: PRESETS browse (a brush only shows the card, two within 1 s change, five then hold SAVE: the start, OCT- on the card: the start, the end of the list: the hint, MORPH 0 after a change, JAM and SOUND)", ok);
     return bad;
 }
+
+/* item 3: a button held on a TFM screen: the footer says what its hold does there (OCT+ only where it has one); JAM's
+ * first-run line until a hold, kept with the settings */
+static int test_r10_hold_foot(void)
+{
+    static const uint8_t SCR[] = {TU_JAM, TU_MIX, TU_SOUND, TU_NOTES, TU_DRUMS, TU_BARS, TU_SONG, TU_SONGS, TU_FX, TU_SPACE,
+                                  TU_ARP, TU_CLOCK, TU_MOTION};
+    int bad = 0, ok = 1;
+    uint32_t i, j, n = sizeof TU_HOLD / sizeof TU_HOLD[0];
+    ui_power_on();
+    tu_off = 0;
+    layer_seen |= 1u;
+    for (i = 0; i < sizeof SCR; i++) {
+        song.sel = SCR[i] == TU_DRUMS ? 3u : 0u;        /* (T4: the drums) */
+        tu_goto(SCR[i]);
+        frames(4);
+        for (j = 0; j + 1u < n; j++) {                  /* (the last line is OCT+'s on BARS) */
+            uint32_t want = j;
+            fm1_in.buttons = 1u << panel.btn[TU_HOLD[j].b];
+            if (TU_HOLD[j].b == B_OCTUP && SCR[i] == TU_BARS)
+                want = n - 1u;
+            ui.force = 1;
+            tu_draw();
+            if (TU_HOLD[j].b == B_OCTUP && SCR[i] != TU_NOTES && SCR[i] != TU_DRUMS && SCR[i] != TU_BARS)
+                R10(!str_eq(tu_ft.k[0], "HOLD OCT+"));  /* (OCT+ elsewhere: the octave, no hold) */
+            else if (tu.scr == SCR[i])
+                R10(tu_ft.n >= 1u && str_eq(tu_ft.k[0], TU_HOLD[want].k[0]) && str_eq(tu_ft.a[0], TU_HOLD[want].a[0]));
+            fm1_in.buttons = 0;
+        }
+        R10(tu.scr == SCR[i]);
+    }
+    for (j = 0; j < n; j++) {                           /* (every line fits the footer, as tu_hint_line lays it out) */
+        int32_t w = 0;
+        uint32_t q;
+        for (q = 0; q < 3u && TU_HOLD[j].k[q]; q++)
+            w += text_w(&AF_TS, TU_HOLD[j].k[q]) + 3 + text_w(&AF_TS, TU_HOLD[j].a[q]) + (q ? 8 : 0);
+        R10(w <= TU_W - 8);
+    }
+    R10(text_w(&AF_TS, "HOLD A BUTTON:") + 3 + text_w(&AF_TS, "SEE WHAT IT DOES") <= TU_W - 8);
+    /* the first-run line on JAM: until a hold, then gone for good (kept with the settings) */
+    song.sel = 0;
+    tu_goto(TU_JAM);
+    layer_seen &= (uint8_t)~1u;
+    ui.force = 1; tu_draw();
+    R10(str_eq(tu_ft.k[0], "HOLD A BUTTON:"));
+    btn_down(B_SAVE);
+    for (i = 0; i < BT_SEEN_MS / 16u + 4u; i++) frame();
+    btn_up(B_SAVE); frames(4);
+    R10(layer_seen & 1u);
+    ui.force = 1; tu_draw();
+    R10(!str_eq(tu_ft.k[0], "HOLD A BUTTON:"));
+    {
+        persist_t pp = {0};
+        pp.magic = PERSIST_MAGIC; pp.panel = panel;
+        settings_export(&pp);
+        ui_power_on();
+        tu_off = 0;
+        layer_seen = 0;
+        R10(settings_import(&pp, sizeof pp) && (layer_seen & 1u));
+        tu_goto(TU_JAM);
+        ui.force = 1; tu_draw();
+        R10(!str_eq(tu_ft.k[0], "HOLD A BUTTON:"));
+    }
+    bad += check("round 10 item 3: a button held on any TFM screen puts its hold in the footer (OCT+ only on NOTES, DRUMS, BARS); JAM's first-run line until a hold, gone for good after (kept with the settings)", ok);
+    return bad;
+}
