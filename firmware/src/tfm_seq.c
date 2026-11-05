@@ -926,10 +926,23 @@ static void tq_drums_body(void)                         /* y 22 .. 215 */
                 fmt_int(v, s->probability && s->probability <= 100u ? (int32_t)s->probability : 100);
                 str_cpy(v + str_len(v), "%", 2);
             }
-            tu_rrect(x, 153, 55, 24, 5, TC_DEEP, TC_BG);
-            tu_text_c(x + 27, 159, &AF_TS, ph ? "K2 PITCH" : LB[k], TU_TC[k], TC_DEEP);
-            tu_text_c(x + 27, 170, &AF_TL, v, TC_TEXT, TC_DEEP);
+            tu_rrect(x, 149, 55, 25, 5, TC_DEEP, TC_BG);   /* (round 10: 4 px up, the keys' strip under) */
+            tu_text_c(x + 27, 155, &AF_TS, ph ? "K2 PITCH" : LB[k], TU_TC[k], TC_DEEP);
+            tu_text_c(x + 27, 166, &AF_TL, v, TC_TEXT, TC_DEEP);
         }
+    }
+    {   /* round 10: the black keys as the grid uses them: F#3 .. A#4 the eight lanes (the lane lit), C#5 ACC, D#5 / F#5 the page */
+        const char *lab[11];
+        uint16_t col[11];
+        uint32_t i, nb = (len + 15u) / 16u;
+        for (i = 0; i < 8u; i++) {
+            lab[i] = drum_lane_abbr(t, i);
+            col[i] = TF_LC[i];
+        }
+        lab[8] = "ACC"; col[8] = TC_AMBER;
+        lab[9] = "PG-"; col[9] = TC_QUIET;
+        lab[10] = "PG+"; col[10] = TC_QUIET;
+        tu_keystrip(11, lab, col, 1u << (ui.lane & 7u) | (nb > 1u && tq_bar ? 1u << 9 : 0u) | (nb > 1u && tq_bar + 1u < nb ? 1u << 10 : 0u));
     }
     (void)b;
 }

@@ -259,8 +259,6 @@ static void tf_ell(int32_t cx, int32_t cy, int32_t rx, int32_t ry, uint16_t c)  
 }
 /* round 9: the drum faces are TILT's (tfm-spec/screens SoundThumpV3, SoundKitbox, SoundGarage; TILT's panels.ts "drums",
  * "garage"). The lanes in TILT's colours and short names; a hit lights its pad */
-static const uint16_t TF_LC[8] = {RGB(239, 90, 74), RGB(242, 154, 58), RGB(240, 207, 71), RGB(143, 209, 79),
-                                  RGB(71, 201, 168), RGB(79, 163, 234), RGB(163, 135, 239), RGB(238, 124, 184)};
 static const char *const TF_KEYN[8] = {"F3", "G3", "A3", "B3", "C4", "D4", "E4", "F4"};   /* (round 8: the eight lanes' keys) */
 static const char *tf_lane(const track_t *t, uint32_t l, int32_t w)   /* the lane's name, TILT's words, its short one under w px */
 {

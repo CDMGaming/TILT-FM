@@ -888,11 +888,37 @@ static void tu_lamp(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c)     
         tu_rect(x + w / 2 - hw, y + r, 2 * hw + (w & 1 ? 1 : 0) + (r >= pt ? 0 : 0), 1, c);
     }
 }
+/* the 11 black keys' places on the strip (grouped 3 2 3 2 1); round 6: a key name only under the first lamp of each group
+ * (all eleven touched at 19 px apart) */
+static const int16_t TU_SX[11] = {7, 26, 45, 69, 88, 110, 129, 148, 172, 192, 212};
+static const char *const TU_SKN[11] = {"F#3", 0, 0, "C#4", 0, "F#4", 0, 0, "C#5", 0, "F#5"};
+/* round 10: the strip on MIX and DRUMS (y 178 .. 215, JAM's places): black key s labelled lab[s] in col[s], lit (bit s of
+ * lit) or dim; past n, or with no label, a dark outline: that key does nothing there */
+static void tu_keystrip(uint32_t n, const char *const *lab, const uint16_t *col, uint32_t lit)
+{
+    uint32_t s;
+    for (s = 0; s < 11u; s++) {
+        int32_t x = TU_SX[s];
+        if (TU_SKN[s])
+            tu_text(x, 208, &AF_TS, TU_SKN[s], TC_QUIET, TC_BG);
+        if (s < n && lab[s]) {
+            int on = (lit >> s) & 1u;
+            uint16_t c = on ? col[s] : tu_mix(TC_BG, col[s], 32);
+            tu_cut(x, 180, 18, 20, c);
+            tu_text_c(x + 9, 190, &AF_TS, lab[s], on ? TC_BG : tu_mix(TC_BG, col[s], 85), c);
+        } else {
+            tu_rect(x, 180, 18, 1, RGB(42, 32, 18)); tu_rect(x, 199, 18, 1, RGB(42, 32, 18));
+            tu_rect(x, 180, 1, 20, RGB(42, 32, 18)); tu_rect(x + 17, 180, 1, 20, RGB(42, 32, 18));
+        }
+    }
+}
+/* the drum lanes' colours (TILT's: the DRUMS strip, round 9's drum faces) */
+static const uint16_t TF_LC[8] = {RGB(239, 90, 74), RGB(242, 154, 58), RGB(240, 207, 71), RGB(143, 209, 79),
+                                  RGB(71, 201, 168), RGB(79, 163, 234), RGB(163, 135, 239), RGB(238, 124, 184)};
 static void tu_strip_draw(void)                         /* y 177 .. 215: the 11 black keys as lamps, grouped 3 2 3 2 1 */
 {
-    static const int16_t X[11] = {7, 26, 45, 69, 88, 110, 129, 148, 172, 192, 212};
-    /* round 6: a key name only under the first lamp of each group (all eleven touched at 19 px apart) */
-    static const char *const KN[11] = {"F#3", 0, 0, "C#4", 0, "F#4", 0, 0, "C#5", 0, "F#5"};
+    const int16_t *const X = TU_SX;
+    const char *const *const KN = TU_SKN;
     uint32_t s, cur = chain.running && chain.config.row[chain.row].slot[0] < NSCN ? chain.config.row[chain.row].slot[0] : tu_scene_cur();
     uint32_t cue = tsc.cue < NSCN ? tsc.cue : 0xFFu, blink = (ui.frame >> 3) & 1u;
     if (prf_on()) {                                     /* round 8, DJ: F#3 .. C#4 pick T1 .. T4 (the selected lit) */
@@ -1022,7 +1048,7 @@ static void tu_mix_body(void)                           /* y 22 .. 126 and 126 .
     uint32_t c;
     for (c = 0; c < NTRK; c++) {
         const track_t *t = &trk[c];
-        int32_t cx = 36 + 56 * (int32_t)c, top = 70, h = 115, lvl = tu_lvl_pct(t), fh, mh;
+        int32_t cx = 36 + 56 * (int32_t)c, top = 64, h = 82, lvl = tu_lvl_pct(t), fh, mh;   /* (round 10: shorter, the keys' strip under) */
         int mute = t->p[P_MUTE] != 0;
         char b[8];
         uint16_t col = mute ? RGB(58, 50, 38) : TU_TC[c];
@@ -1039,9 +1065,16 @@ static void tu_mix_body(void)                           /* y 22 .. 126 and 126 .
         if (mh > 0)
             tu_rect(cx - 8, top + h - mh - 1, 17, 2, TC_TEXT);
         fmt_int(b, lvl);
-        tu_text_c(cx, 198, &AF_TL, b, mute ? RGB(122, 110, 92) : TC_TEXT, TC_BG);
+        tu_text_c(cx, 157, &AF_TL, b, mute ? RGB(122, 110, 92) : TC_TEXT, TC_BG);
         if (mute)
-            tu_text_c(cx, 210, &AF_TS, "MUTED", TC_QUIET, TC_BG);
+            tu_text_c(cx, 170, &AF_TS, "MUTED", TC_QUIET, TC_BG);
+    }
+    {   /* round 10: the black keys: F#3 .. C#4 mute T1 .. T4 (lit: playing), the others nothing here */
+        static const char *const LB[4] = {"T1", "T2", "T3", "T4"};
+        uint32_t lit = 0;
+        for (c = 0; c < NTRK; c++)
+            lit |= (uint32_t)(trk[c].p[P_MUTE] == 0) << c;
+        tu_keystrip(4, LB, TU_TC, lit);
     }
 }
 static void tu_mix_draw(void)
