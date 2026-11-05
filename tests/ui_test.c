@@ -10942,6 +10942,7 @@ static int test_tfm_ui_sound(void)
     m0 = tfm_macro_get(&trk[0], 4);
     turn(EN_K1, 6); ok &= tfm_macro_get(&trk[0], 4) == m0;                /* (page 1: K1 is not macro 5) */
     snd = tfm_snd_of(&trk[0]);
+    turn(EN_PRESET, 1); ok &= tfm_snd_of(&trk[0]) == snd;   /* (round 10: the first detent shows the sound card only) */
     turn(EN_PRESET, 1); ok &= tfm_snd_of(&trk[0]) == snd + 1u && tfm_ins_of(&trk[0]) == TI_SQUELCH;
     turn(EN_PRESET, -1); ok &= tfm_snd_of(&trk[0]) == snd;
     turn(EN_ALGO, 1); ok &= song.sel == 1u && tfm_ins_of(&trk[song.sel]) == TI_WHEEL;   /* the face is WHEELHOUSE's */
@@ -11392,6 +11393,7 @@ int main(void)
     bad += test_r9_drum_keys();
     bad += test_r9_key_level();
     bad += test_r10_sheet();
+    bad += test_r10_browse();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

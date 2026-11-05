@@ -757,16 +757,49 @@ static void tu_sound_draw(void)
     tu_pq = TC_QUIET;
 }
 /* PRESETS: the track's next sound (its instrument's list: the named presets, then the older ones) */
+/* PRESETS (round 10: browse safely while the loop plays; tfm_ui.c: the SOUND CARD). The first detent only shows the card (a
+ * brush does nothing); from a second within BR_ARM_MS each detent loads the next or previous sound live (MORPH back to 0,
+ * as before). The first change takes ONE undo copy of the track (UNDO_SOUND; the loads after it nested, so they keep it):
+ * hold SAVE afterwards, or OCT- while the card shows, gives the sound the browse started from. At either end of the list:
+ * the card's hint, no change. No TFM instrument: Felucca's presets (presets_turn: a browse keeps its first copy too) */
 static void tu_sound_step(int32_t s)
 {
     track_t *t = &trk[song.sel];
-    uint32_t i = tfm_ins_of(t);
+    uint32_t i = tfm_ins_of(t), now = fm1_ms;
+    int32_t nx;
+    if (!tu_card_on() || br.trk != song.sel) {          /* the first detent: the card only */
+        br.on = 1;
+        br.t = now;
+        br.took = 0;
+        br.end = 0;
+        br.trk = (uint8_t)song.sel;
+        ui.force = 1;
+        return;
+    }
+    if (!br.took && now - br.t > BR_ARM_MS) {           /* (too slow for a second: a first again) */
+        br.t = now;
+        return;
+    }
+    br.t = now;
+    ui.force = 1;
     if (i == TI_NONE) {
+        br.took = 1;
         presets_turn(s);
         return;
     }
-    tfm_load(t, i, (uint32_t)clamp((int32_t)tfm_snd_of(t) + (s > 0 ? 1 : -1), 0, (int32_t)TFM_INS[i].nsnd - 1));
-    ui.force = 1;
+    nx = (int32_t)tfm_snd_of(t) + (s > 0 ? 1 : -1);
+    if (nx < 0 || nx >= (int32_t)TFM_INS[i].nsnd) {
+        br.end = 1;
+        return;
+    }
+    br.end = 0;
+    if (!br.took) {
+        edit_undo_take(t, 0, UNDO_SOUND);
+        br.took = 1;
+    }
+    undo_depth++;                                       /* (the load's own copy: none, this browse's stays) */
+    tfm_load(t, i, (uint32_t)nx);
+    undo_depth--;
 }
 static void tu_sound_input(uint32_t busy)
 {

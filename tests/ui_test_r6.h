@@ -1405,3 +1405,56 @@ static int test_r10_sheet(void)
     bad += check("round 10 item 1: JAM's scene sheet (a tap launches, a hold opens it and launches nothing, DUP to the next empty wrapping / NO EMPTY SCENE, CLEAR asks, x2 and /2 with notes and automation, each undone by holding SAVE, playing: RAM only and the scene playing at its loop's end)", ok);
     return bad;
 }
+
+/* item 2: PRESETS browse: a brush shows the card only; two within 1 s change; one undo per browse (hold SAVE, or OCT- on the
+ * card); the end of the list says HOLD EDIT; MORPH back to 0 */
+static int test_r10_browse(void)
+{
+    int bad = 0, ok = 1;
+    track_t *t = &trk[0];
+    uint8_t p0;
+    int8_t o0;
+    uint32_t i, last;
+    ui_power_on();
+    tu_off = 0;
+    song.sel = 0;
+    tfm_load(t, TI_SQUELCH, 0);
+    tu_goto(TU_JAM);
+    frames(16);
+    p0 = t->preset;
+    o0 = (int8_t)song.octave;
+    tfm_macro_set(t, 0, 60);
+    turn(EN_PRESET, 1);                                 /* a brush: the card, no change */
+    R10(t->preset == p0 && tu_card_on() && tu_hd.l != 0);
+    frames(2);
+    R10(str_eq(tu_ft.k[0], "PRESETS"));
+    for (i = 0; i < 160u && tu_card_on(); i++) frame();   /* (it closes ~2 s after) */
+    R10(!tu_card_on() && t->preset == p0);
+    turn(EN_PRESET, 1); turn(EN_PRESET, 1);             /* two within 1 s: the next sound */
+    R10(tfm_snd_of(t) == 1u && tfm_macro_get(t, 0) == 0);
+    turn(EN_PRESET, 1); turn(EN_PRESET, 1); turn(EN_PRESET, -1);   /* five detents in all */
+    R10(tfm_snd_of(t) == 2u);
+    hold(B_SAVE); frames(4);                            /* one undo: the sound it started from */
+    R10(t->preset == p0);
+    for (i = 0; i < 160u && tu_card_on(); i++) frame();
+    turn(EN_PRESET, 1); turn(EN_PRESET, 1); turn(EN_PRESET, 1);
+    R10(tfm_snd_of(t) == 2u);
+    press(B_OCTDN); frames(2);                          /* OCT- on the card: back at once, the card closed, no octave */
+    R10(t->preset == p0 && !tu_card_on() && (int8_t)song.octave == o0);
+    last = TFM_INS[TI_SQUELCH].nsnd - 1u;               /* the end of the list: the hint, no change */
+    tfm_load(t, TI_SQUELCH, last);
+    frames(2);
+    turn(EN_PRESET, 1); turn(EN_PRESET, 1);
+    R10(tfm_snd_of(t) == last && br.end);
+    for (i = 0; i < 160u && tu_card_on(); i++) frame();
+    tfm_load(t, TI_SQUELCH, 0);
+    tu_goto(TU_SOUND); frames(8);                       /* SOUND browses the same way */
+    turn(EN_PRESET, 1);
+    R10(tfm_snd_of(t) == 0u);
+    turn(EN_PRESET, 1);
+    R10(tfm_snd_of(t) == 1u);
+    for (i = 0; i < 160u && tu_card_on(); i++) frame();
+    tu_goto(TU_JAM);
+    bad += check("round 10 item 2: PRESETS browse (a brush only shows the card, two within 1 s change, five then hold SAVE: the start, OCT- on the card: the start, the end of the list: the hint, MORPH 0 after a change, JAM and SOUND)", ok);
+    return bad;
+}

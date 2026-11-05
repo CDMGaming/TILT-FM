@@ -1014,6 +1014,57 @@ static void tu_mix_draw(void)
 }
 
 /* ================================================================== routing =================================== */
+/* round 10: PRESETS browse (tfm_faces.c tu_sound_step): the SOUND CARD over the screen while browsing: the instrument's name
+ * in its colour, the sound's big, a dot per sound (the current lit), at either end "HOLD EDIT: OTHER INSTRUMENTS". The first
+ * detent only shows it; sounds change from a second within BR_ARM_MS; it closes BR_SHOW_MS after the last detent. A track
+ * with no TFM instrument: Felucca's preset, its name only. While it shows the screen under it is not drawn */
+#define BR_ARM_MS 1000u
+#define BR_SHOW_MS 2000u
+static struct { uint32_t t; uint8_t on, took, end, trk; } br;
+static int tu_card_on(void) { return br.on && fm1_ms - br.t < BR_SHOW_MS; }
+static void tu_card_draw(void)
+{
+    const track_t *t = &trk[br.trk % NTRK];
+    uint32_t i = tfm_ins_of(t), k, n;
+    uint16_t bg = i != TI_NONE ? TFM_INS[i].col[0] : TC_BG, ac = i != TI_NONE ? TFM_INS[i].col[2] : TC_AMBER;
+    char b[24];
+    tu_rect(0, TU_HY, TU_W, TU_FY - TU_HY, TC_BG);
+    tu_cut(8, 40, 224, 150, ac);
+    tu_cut(10, 42, 220, 146, bg);
+    if (i != TI_NONE) {
+        tu_text_c(120, 58, &AF_TM, TFM_INS[i].name, ac, bg);
+        str_cpy(b, TFM_INS[i].snd[tfm_snd_of(t) % TFM_INS[i].nsnd].name, sizeof b);
+    } else {
+        const engine_t *e = ENGINES[t->eng_req % NENGINES];
+        tu_text_c(120, 58, &AF_TM, e->name, ac, bg);
+        str_cpy(b, e->npresets ? e->presets[t->preset % e->npresets].name : "-", sizeof b);
+    }
+    if (text_w(&AF_TX, b) <= 208)
+        tu_text_c(120, 92, &AF_TX, b, TC_TEXT, bg);
+    else
+        tu_text_fit(16, 92, &AF_TL, b, TC_TEXT, bg, 208);
+    if (i != TI_NONE) {                                 /* a dot per sound, the current one lit */
+        n = TFM_INS[i].nsnd;
+        for (k = 0; k < n; k++) {
+            int32_t x = 120 - (int32_t)(n - 1u) * 6 + (int32_t)k * 12;
+            tu_disc(x, 126, k == tfm_snd_of(t) ? 4 : 3, k == tfm_snd_of(t) ? ac : tu_mix(bg, TC_TEXT, 30));
+        }
+        fmt_int(b, (int32_t)tfm_snd_of(t) + 1);
+        str_cpy(b + str_len(b), " of ", 6);
+        fmt_int(b + str_len(b), (int32_t)n);
+        tu_text_c(120, 144, &AF_TS, b, TC_QUIET, bg);
+    }
+    if (br.end)
+        tu_text_c(120, 168, &AF_TS, "HOLD EDIT: OTHER INSTRUMENTS", TC_AMBER, bg);
+}
+static void tu_card_frame(void)
+{
+    const track_t *t = &trk[br.trk % NTRK];
+    uint32_t sig = 0xCA4Du + t->preset * 131u + t->eng_req * 7u + br.trk * 977u + br.end * 3u + t->user * 65537u;
+    tu_zone(2, TU_HY, 98, TC_BG, sig, tu_card_draw);    /* (one drawing, two zones: a canvas holds ~120 rows) */
+    tu_zone(3, TU_HY + 98, TU_FY - TU_HY - 98, TC_BG, sig, tu_card_draw);
+    tu_foot(2, "PRESETS", "SOUNDS", "OCT-", "BACK", 0, 0, 0, 0, 0, 0);
+}
 static void tu_draw_screen(void);
 /* round 6: the level meters in dB (as Felucca's own, ui_graph.c meter_px): the track's peak read and reset once a frame,
  * 8 log2 of it over -48..0 dBFS on 14 LEDs (green to -12, yellow to -3, red above), up at once, down over about 300 ms, a peak
@@ -1077,7 +1128,7 @@ static void tu_black_mute(uint32_t notes)               /* MIX: the black keys, 
 static int tu_song_on(void) { return tu.scr == TU_SONG; }
 static int tu_oct_ok(void)                              /* OCT+ is OK and OCT- BACK here (no octave) */
 {
-    return !tu_classic() && !ui.menu && (tu.scr == TU_SONG || tu.scr == TU_SONGS || tu.scr == TU_NOTES || tu.scr == TU_BARS);   /* (round 6: OCT+ / OCT- shift the octave on JAM again) */
+    return !tu_classic() && !ui.menu && (tu_card_on() || tu.scr == TU_SONG || tu.scr == TU_SONGS || tu.scr == TU_NOTES || tu.scr == TU_BARS);   /* (round 6: OCT+ / OCT- shift the octave on JAM again) */
 }
 static void tu_deep(void)                               /* SOUND > DEEP: Felucca's own pages for this track */
 {
@@ -1155,6 +1206,17 @@ static void tu_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint32_t bu
 {
     int32_t s;
     prf_poll();                                         /* (round 5: PERFORM's roll on while its layer is up) */
+    if (br.on && !tu_card_on()) {                       /* (round 10: the sound card closes 2 s after the last detent) */
+        br.on = 0;
+        ui.force = 1;
+    }
+    if (tu_card_on() && oct) {                          /* .. OCT- on it: the sound the browse started from, at once */
+        if ((oct & 1u) && br.took && undo.trk == br.trk + 1u)
+            undo_swap();
+        br.on = 0;
+        ui.force = 1;
+        oct = 0;
+    }
     if (!busy && (s = panel_enc(EN_ALGO)) != 0) {       /* ALGORITHM: the track, everywhere */
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
         tq_adapt();
@@ -1257,6 +1319,10 @@ static void tu_draw_screen(void)
     tu_pbg = TC_BG;
     tu_pline = TC_SURF;
     tu_pq = TC_QUIET;
+    if (tu_card_on()) {                                 /* (round 10: the sound card over the screen) */
+        tu_card_frame();
+        return;
+    }
     switch (tu.scr) {
     case TU_MIX:
         tu_mix_draw();
