@@ -177,12 +177,17 @@ static void tb_block(const track_t *t, uint32_t k, uint32_t bar, int32_t x, int3
             tb_dot(dx, y + 3 + (int32_t)((hi - s->note[0]) * 17u / (hi - lo + 1u)), l > 1u ? (int32_t)(l * 35u / b) : 2, dim);
         }
     }
-    if (past) {                                         /* the arrow of a repeat */
-        int32_t cx = x + 20, cy = y + 13;
-        tu_ring(cx, cy, 5, 4, tu_mix(TC_BG, col, 80));
-        tu_rect(cx + 1, cy - 6, 4, 3, RGB(18, 14, 8));
-        tu_rect(cx + 3, cy - 6, 1, 3, tu_mix(TC_BG, col, 80));
-        tu_rect(cx + 2, cy - 5, 3, 1, tu_mix(TC_BG, col, 80));
+    if (past) {                                         /* the repeat mark (round 11: LOOP ARROWS, tfm-spec/screens/BarsRepeat.dc.html
+                                                         * option B): a fixed 15 x 11 map centred in the block, over the dimmed
+                                                         * notes, their pixels under it cleared first so it never merges */
+        static const uint16_t RPT[11] = {0x0020, 0x0030, 0x3FF8, 0x4030, 0x4021, 0x4001, 0x4201, 0x0601, 0x0FFE, 0x0600, 0x0200};   /* (bit 14: the left column) */
+        int32_t mx = x + (41 - 15) / 2, my = y + (26 - 11) / 2, r, c;
+        uint16_t mc = tu_mix(TC_BG, col, 80);
+        tu_rect(mx, my, 15, 11, k == song.sel ? RGB(30, 22, 12) : TC_BG);   /* (the row's ground: tb_body) */
+        for (r = 0; r < 11; r++)
+            for (c = 0; c < 15; c++)
+                if ((RPT[r] >> (14 - c)) & 1u)
+                    tu_rect(mx + c, my + r, 1, 1, mc);
     }
 }
 static void tb_body(void)                               /* y 22 .. 215 */
