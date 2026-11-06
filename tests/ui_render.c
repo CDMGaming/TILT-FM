@@ -1897,17 +1897,17 @@ static void draw(int s)
     }
     if (s == S_SPLASH) {                          /* the power-on splash (main.c, before the UI): its lines, the version
                                                    * shown FELUCCA_VERSION (run_tests.sh: src/felucca.c's) */
-        static const char WANT[] = "TILT-FM " TILT_BUILD " / Felucca " FELUCCA_VERSION "|H\xFCgelton Instruments";   /* (round 10: the build) */
+        static const char WANT[] = "FREE PLAY|TILT-FM " TILT_BUILD " \xB7 FELUCCA " FELUCCA_VERSION "|H\xDCGELTON INSTRUMENTS";   /* (round 10) */
         splash_seen[0] = 0;
         in_splash = 1;
         draw_splash();
         in_splash = 0;
-        {   /* TILT-FM: the dot matrix. The first T's top-left dot lit (amber), the gap after it unlit (dim), a dot's cut
-             * corner and the screen's corner black (host_screen holds the panel's byte order: swap16) */
-            const uint32_t x = SPL_X0 + 3u, y = SPL_Y0 + 3u;
-            const uint16_t lit = swap16(host_screen[y * 240u + x]), unlit = swap16(host_screen[y * 240u + x + 5u * SPL_PITCH]),
-                           cut = swap16(host_screen[SPL_Y0 * 240u + SPL_X0]), corner = swap16(host_screen[0]);
-            if (lit != SPL_AMBER || unlit != SPL_AMBER_DIM || cut != 0 || corner != 0) {
+        {   /* TILT-FM round 10 (the DMD splash): the first T's top-left dot lit (amber), the dot under its right neighbour unlit
+             * (dim), a dot's cut corner not lit, the screen's corner the background (host_screen: the panel's byte order) */
+            const uint32_t x = SPLA_X0 + 3u, y = SPLA_Y0 + 3u;
+            const uint16_t lit = swap16(host_screen[y * 240u + x]), unlit = swap16(host_screen[(y + SPLA_PITCH) * 240u + x + SPLA_PITCH]),
+                           cut = swap16(host_screen[SPLA_Y0 * 240u + SPLA_X0]), corner = swap16(host_screen[0]);
+            if (lit != SPL_AMBER || unlit != SPL_AMBER_DIM || cut == SPL_AMBER || corner != SPL_BG) {
                 if (rep) fprintf(rep, "FIND %-26s the TILT dot matrix is not drawn as expected (lit %04x, unlit %04x, cut %04x, "
                                  "corner %04x)\n", cur_name, lit, unlit, cut, corner);
                 nfind++;

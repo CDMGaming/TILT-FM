@@ -1382,32 +1382,114 @@ static void draw_columns(void)
 #define SPL_AMBER 0xFD80u                           /* #FFB000 (RGB565) */
 #define SPL_AMBER_DIM 0x28E0u                       /* #2A1C00: the unlit dots */
 #define SPL_AMBER_MID 0xA380u                       /* #A07000: the credit */
-#define SPL_DOT 7u
+#define SPL_DOT 7u                                  /* (the old splash's dots: tilt.c's dot words still use them) */
 #define SPL_PITCH 9u
 #define SPL_COLS 23u
 #define SPL_X0 ((240u - (SPL_COLS * SPL_PITCH - (SPL_PITCH - SPL_DOT))) / 2u)
 #define SPL_Y0 70u
+#define SPLA_X0 29u                                 /* round 10's splash: TILT's top-left dot, 8 px pitch, 6 px dots */
+#define SPLA_Y0 30u
+#define SPLA_PITCH 8u
 static const uint8_t SPLASH_TILT[4][7] = {          /* rows, top first; bit 4 the left column */
     {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04},     /* T */
     {0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E},     /* I */
     {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F},     /* L */
     {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04},     /* T */
 };
-static void draw_splash(void)
+/* TFM round 10: the splash is option A, "DMD" (tfm-spec/screens/SplashA.dc.html, drawn 2x): the whole screen a dim amber dot
+ * field (3 px pitch, as a pinball DMD) in a thin frame; TILT in the 5x7 dots (8 px pitch, 6 px round-ish dots, lit SPL_AMBER,
+ * unlit SPL_AMBER_DIM, top 30); -FM- under it at half size (4 px pitch, 3 px dots, lighter amber, top 98); a ball with its
+ * trail (four dotted discs growing left to right, the last bright) and two dotted flippers angled down to a centre drain
+ * gap; FREE PLAY (Silkscreen, pale amber) and the two credit lines (Felucca is GPL-3.0: its credit stays on screen). Fixed
+ * colours outside the palettes, lcd_fill dots, no bitmaps. The drawing's credits are 6 px at 1x: here 12 px (AF_S), so the
+ * text sits a few px higher than drawn (FREE PLAY 186, the credits 207 and 222) */
+#define SPL_FIELD RGB(36, 19, 7)                    /* #241307: the DMD's dots */
+#define SPL_BG RGB(7, 4, 3)                         /* #070403 */
+#define SPL_FM RGB(255, 178, 90)                    /* #FFB25A: -FM- lit */
+#define SPL_FLIP RGB(255, 138, 30)                  /* #FF8A1E */
+static const uint8_t SPLASH_FM[4][7] = {            /* - F M -, as SPLASH_TILT */
+    {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00},
+    {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10},
+    {0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11},
+    {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00},
+};
+static uint16_t spl_mix(uint32_t c, uint32_t op)    /* #FFC27A over the background, op/100 */
+{
+    uint32_t r = (7u * (100u - op) + 255u * op) / 100u, g = (4u * (100u - op) + 194u * op) / 100u, b = (3u * (100u - op) + 122u * op) / 100u;
+    (void)c;
+    return (uint16_t)RGB(r, g, b);
+}
+/* four letters of 5x7 dots, 23 columns: dot d px, pitch p, the top-left at x0 y0; d >= 5: corners cut (two fills) */
+static void spl_dots(const uint8_t g[4][7], uint32_t x0, uint32_t y0, uint32_t p, uint32_t d, uint16_t lit, uint16_t dim)
 {
     uint32_t col, row;
-    lcd_fill(0, 0, 240, 240, 0);
     for (col = 0; col < SPL_COLS; col++) {
-        uint32_t ch = col / 6u, cx = col % 6u;      /* letter, its column (5: the gap) */
+        uint32_t ch = col / 6u, cx = col % 6u;
         for (row = 0; row < 7u; row++) {
-            uint32_t x = SPL_X0 + col * SPL_PITCH, y = SPL_Y0 + row * SPL_PITCH;
-            uint16_t c = cx < 5u && (SPLASH_TILT[ch][row] >> (4u - cx)) & 1u ? SPL_AMBER : SPL_AMBER_DIM;
-            lcd_fill(x + 1u, y, SPL_DOT - 2u, SPL_DOT, c);
-            lcd_fill(x, y + 1u, SPL_DOT, SPL_DOT - 2u, c);
+            uint32_t x = x0 + col * p, y = y0 + row * p;
+            uint16_t c = cx < 5u && (g[ch][row] >> (4u - cx)) & 1u ? lit : dim;
+            if (cx == 5u)
+                continue;                           /* (the gap between letters: the field shows) */
+            if (d >= 5u) {
+                lcd_fill(x + 1u, y, d - 2u, d, c);
+                lcd_fill(x, y + 1u, d, d - 2u, c);
+            } else {
+                lcd_fill(x, y, d, d, c);
+            }
         }
     }
-    draw_text_line(0, 176, 240, &AF_S, "TILT-FM " TILT_BUILD " / Felucca " FELUCCA_VERSION, SPL_AMBER_MID, 0, 1);   /* (round 10: the build) */
-    draw_text_line(0, 196, 240, &AF_S, "H\xFCgelton Instruments", SPL_AMBER_MID, 0, 1);
+}
+static void spl_disc(int32_t cx2, int32_t cy2, int32_t r2, uint16_t c)   /* a dotted disc, centre and radius in half px */
+{
+    int32_t x, y;
+    for (y = (cy2 - r2) / 2; y <= (cy2 + r2) / 2; y++)
+        for (x = (cx2 - r2) / 2; x <= (cx2 + r2) / 2; x++) {
+            int32_t dx = 2 * x + 1 - cx2, dy = 2 * y + 1 - cy2;
+            if (!((x + y) & 1) && dx * dx + dy * dy <= r2 * r2)
+                lcd_fill((uint32_t)x, (uint32_t)y, 1, 1, c);
+        }
+}
+static void spl_flipper(int32_t ox, int32_t oy, int32_t dir)   /* a dotted 52 x 10 capsule from (ox, oy), 18 degrees down */
+{
+    int32_t u, v;
+    for (u = 0; u <= 52; u++)
+        for (v = -5; v <= 5; v++) {
+            int32_t e = u < 5 ? 5 - u : u > 47 ? u - 47 : 0, x, y;
+            if (e * e + v * v > 25)
+                continue;
+            x = ox + dir * (u * 243 - v * 79) / 256;   /* (along: cos 18 = 243/256, across: sin 18 = 79/256) */
+            y = oy + (u * 79 + v * 243) / 256;
+            if (!((x + y) & 1))
+                lcd_fill((uint32_t)x, (uint32_t)y, 1, 1, SPL_FLIP);
+        }
+}
+static void spl_line(uint32_t y, const aafont_t *f, const char *t, uint16_t c)   /* centred, on a band as wide as its text */
+{
+    uint32_t w = (uint32_t)text_w(f, t) + 4u;
+    draw_text_line((240u - w) / 2u, y, w, f, t, c, SPL_BG, 1);
+}
+static void draw_splash(void)
+{
+    uint32_t x, y;
+    lcd_fill(0, 0, 240, 240, SPL_BG);
+    for (y = 1; y < 240u; y += 3u)                  /* the DMD's dot field */
+        for (x = 1; x < 240u; x += 3u)
+            lcd_fill(x, y, 2, 2, SPL_FIELD);
+    lcd_fill(8, 5, 224, 1, RGB(42, 21, 8));         /* the frame (inset 5, its corners cut) */
+    lcd_fill(8, 234, 224, 1, RGB(42, 21, 8));
+    lcd_fill(5, 8, 1, 224, RGB(42, 21, 8));
+    lcd_fill(234, 8, 1, 224, RGB(42, 21, 8));
+    spl_dots(SPLASH_TILT, SPLA_X0, SPLA_Y0, SPLA_PITCH, 6, SPL_AMBER, SPL_AMBER_DIM);
+    spl_dots(SPLASH_FM, 74, 98, 4, 3, SPL_FM, SPL_AMBER_DIM);
+    spl_disc(139, 307, 7, spl_mix(0, 25));           /* the ball's trail, growing, the last bright */
+    spl_disc(185, 297, 9, spl_mix(0, 40));
+    spl_disc(234, 290, 12, spl_mix(0, 60));
+    spl_disc(293, 289, 17, spl_mix(0, 100));
+    spl_flipper(59, 174, 1);
+    spl_flipper(181, 174, -1);
+    spl_line(186, &AF_PS, "FREE PLAY", RGB(255, 217, 160));
+    spl_line(207, &AF_S, "TILT-FM " TILT_BUILD " \xB7 FELUCCA " FELUCCA_VERSION, SPL_AMBER_MID);
+    spl_line(222, &AF_S, "H\xDCGELTON INSTRUMENTS", SPL_AMBER_MID);
     lcd_sync();
 }
 
