@@ -963,11 +963,12 @@ static void tq_drums_head(void)
         tu_text_r(231, 10, &AF_TM, mt, mc, TC_BG);
     }
     (void)r; (void)b;                                   /* (the bar is the grid's own 16 columns; no room beside the mode) */
+    tsl_draw(TC_BG);                                    /* (round 11: SELECT's readout over the mode for a second) */
 }
 static void tq_drums_draw(void)
 {
     uint32_t sig = ui.cursor * 31u + song.sel * 7u + tq_len(TSEL) * 977u + steps_hash(TSEL) + tq_bar * 7919u + (ui.lane & 7u) * 131u +
-                   tq_mode_sig() * 40503u + tu_rec_sig() * 6007u;
+                   tq_mode_sig() * 40503u + tu_rec_sig() * 6007u + tsl_sig() * 19u;
     if (song.playing)
         sig += TSEL->seq_idx * 131071u;
     tu_zone(0, 0, TU_HY, TC_BG, sig, tq_drums_head);
@@ -1046,7 +1047,7 @@ static void tq_input(uint32_t notes, uint32_t busy)
             cursor_set(ni < tq_len(TSEL) ? ni : tq_len(TSEL) - 1u);
             tq_bar = (uint8_t)(ui.cursor / 16u);
         }
-        sel = panel_enc(EN_SELECT);
+        sel = tu.scr == TU_NOTES ? panel_enc(EN_SELECT) : 0;   /* (round 11: DRUMS gives SELECT to SETUP's choice) */
         if (sel != 0 && tu.scr == TU_NOTES) {           /* the roll up / down by pitch (rows), not steps */
             tq_note_rows(TSEL, &(int32_t){0});
             for (k = 0; k < (uint32_t)(sel > 0 ? sel : -sel); k++)

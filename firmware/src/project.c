@@ -687,7 +687,7 @@ static int proj_motion_ids(motion_store_t *m, uint32_t np)
     uint32_t i;
     for (i = 0; i < m->count && i < MOTION_MAX; i++) {
         uint32_t id = MOTION_ID(&m->event[i]);
-        if (id >= np && !(np == P_COUNT && id >= MO_DJ && id < MO_DJ + DJ_N))   /* (TFM round 9: the DJ's, after today's */
+        if (id >= np && !(np == P_COUNT && id >= MO_DJ && id <= MO_MW))   /* (TFM round 9: the DJ's, round 11 MOD's, after today's */
             return 0;                                                          /* track ids: only in a store of today's) */
         if (np < P_COUNT && id >= np - 8u)
             m->event[i].param = (uint8_t)((m->event[i].param & MOTION_LOCK) | (id + P_COUNT - np));

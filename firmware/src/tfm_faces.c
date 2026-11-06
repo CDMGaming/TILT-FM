@@ -730,7 +730,7 @@ static void tu_head_sound(void)
         x = 231 - w;
         for (j = 0; j < 4u; j++)
             x = tu_text(x, 10, &AF_TS, W[j], (j == 1u && tu.page == 0u) || (j == 3u && tu.page == 1u) ? fc.acc : TC_QUIET, hb) + 4;
-    }
+    }    tsl_draw(hb);                                       /* (round 11: SELECT's readout) */
 }
 static void tu_sound_draw(void)
 {
@@ -738,6 +738,7 @@ static void tu_sound_draw(void)
     tu_face_pal(i == TI_NONE ? 0 : &TFM_INS[i]);
     tu_toy_poll(k);
     sig = i * 977u + k * 31u + (uint32_t)tu.page * 7919u + tfm_snd_of(&trk[k]) * 131u + (tm.on ? tm.left : 0u) + tu_rec_sig() * 6007u;
+    sig += tsl_sig() * 19u;
     for (m = 0; m < 8u && i != TI_NONE; m++)
         sig = sig * 31u + (uint32_t)tfm_macro_get(&trk[k], m);
     tu_zone(0, 0, TU_HY, fc.bg, sig, tu_head_sound);

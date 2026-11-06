@@ -361,13 +361,18 @@ static int32_t dj_shown(uint32_t k, uint32_t knob) { (void)k; return dj_now(knob
 static int dj_any(void) { return dj_now(0) || dj_now(1) || dj_now(2) || dj_now(3); }
 /* knob i to v: with REC on while playing a motion record on the selected track at the step it plays (as motion_capture), and
  * it sounds from now (until that lane's pass starts again or the transport stops: the song's value stays); else the song's */
+static uint32_t mo_live_idx(const track_t *t)          /* the step a move recorded now lands on (as motion_capture) */
+{
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), period = div_samples((uint32_t)t->p[P_SDIV]), idx = t->seq_idx % len;
+    if (t->seq_pos < 0x7FFFFFFFu && t->seq_pos > step_samples(t, period, idx) / 2u)
+        idx = (idx + 1u) % len;
+    return idx;
+}
 static void dj_set(uint32_t i, int32_t v)
 {
     track_t *t = TSEL;
     if (song.playing && rec_on(t)) {
-        uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), period = div_samples((uint32_t)t->p[P_SDIV]), idx = t->seq_idx % len;
-        if (t->seq_pos < 0x7FFFFFFFu && t->seq_pos > step_samples(t, period, idx) / 2u)
-            idx = (idx + 1u) % len;
+        uint32_t idx = mo_live_idx(t);
         dj_mv[i] = (int8_t)v;
         dj_mown[i] = (uint8_t)trk_index(t);
         dj_mb |= (uint8_t)(1u << i);
@@ -540,4 +545,107 @@ static uint32_t prf_mid(void)                          /* the other tracks' keys
         if (i != song.sel && jl_key(i) >= 0)
             m |= 1u << jl_key(i);
     return m;
+}
+
+/* ================================================================== SELECT, round 11 ============================== */
+/* SELECT on JAM, MIX, SOUND and DRUMS turns what SETUP's SELECT row picks (tfm_dice.c SA_*; GLO + SELECT: its second row,
+ * ui_input.c). FILTER ECHO SPACE are the DJ's on the master (hold ARP + K1 K2 K3: dj_set, so JAM's DJ marker shows them;
+ * not the FX layer's FILTER, perform.c perf_k[0], a momentary macro of its own), MORPH the selected track's macro 1, LEVEL
+ * its level, MOD its mod wheel and CC1 out (Felucca's MODW path, ui_input.c sel_play), SCENE the next / previous stored
+ * scene cued as its key's tap cues it, SWING the song's, TEMPO the tempo. With REC on while playing the first six record
+ * as motion as their knobs do (MOD as MO_MW); SCENE, SWING and TEMPO do not. The header shows the name and value ~1 s */
+static void sa_say(uint32_t c, const char *v)
+{
+    tsl.n = SA_NAME[c % SA_N];
+    str_cpy(tsl.v, v, sizeof tsl.v);
+    tsl.t = fm1_ms;
+    ui.force = 1;
+}
+static void sa_scene(int32_t d, char *v)
+{
+    uint32_t cur = scene_cur(), used = tu_used_mask(), base, i, s = 0;
+    if (cur < NSCN)
+        used |= 1u << cur;
+    base = tsc.cue < NSCN ? tsc.cue : cur < NSCN ? cur : (d > 0 ? NSCN - 1u : 0u);
+    for (i = 1; i <= NSCN; i++) {
+        s = (base + NSCN + (d > 0 ? i : NSCN - i)) % NSCN;
+        if ((used >> s) & 1u)
+            break;
+    }
+    if (i > NSCN || s == base) {                        /* (no other scene stored) */
+        str_cpy(v, used ? "ONLY ONE" : "NONE", 10);
+        return;
+    }
+    if (s == cur && tsc.cue < NSCN)                     /* (back to the scene playing: the cue goes) */
+        tilt_scene_uncue();
+    else
+        jl_launch(s);
+    v[0] = (char)('A' + s);
+    v[1] = 0;
+}
+static void sa_turn(uint32_t glo, int32_t s)
+{
+    uint32_t c = sa_get(glo);
+    track_t *t = TSEL;
+    const char *u = "";
+    char v[12];
+    v[0] = 0;
+    switch (c) {
+    case SA_FILTER: case SA_ECHO: case SA_SPACE: {
+        uint32_t k = c - SA_FILTER;
+        int32_t a = accel(EN_SELECT, s, 127);
+        if (!k)                                         /* (FILTER: half the speed, -63..63, as hold ARP's K1) */
+            a = a > 0 ? (a + 1) / 2 : a / 2 ? a / 2 : -1;
+        dj_set(k, clamp(dj_now(k) + a, DJ_DESC[k].min, DJ_DESC[k].max));
+        fmt_int(v, dj_now(k));
+        if (!k && dj_now(0) > 0) {
+            v[0] = '+';
+            fmt_int(v + 1, dj_now(0));
+        }
+        break;
+    }
+    case SA_MORPH:
+        if (tfm_ins_of(t) == TI_NONE) {
+            str_cpy(v, "--", 4);
+            break;
+        }
+        tfm_macro_turn_k(t, 0, 0, s);                   /* (macro 1 is MORPH on every instrument) */
+        tfm_macro_text(t, 0, v, &u);
+        break;
+    case SA_LEVEL: {
+        const param_desc_t *d = track_desc(t, P_LEVEL);
+        t->p[P_LEVEL] = (int16_t)param_turn(d, t->p[P_LEVEL], accel(EN_SELECT, s, d->max - d->min));
+        motion_capture(t, P_LEVEL, t->p[P_LEVEL]);
+        ml_knob(t, P_LEVEL);
+        param_format(d, t->p[P_LEVEL], v, &u);
+        break;
+    }
+    case SA_MOD:
+        t->mw = (uint8_t)clamp((int32_t)t->mw + accel(EN_SELECT, s, 127), 0, 127);
+        fm1_irq_off();                                  /* (the out ring is the audio ISR's) */
+        midi_out_event(0x0Bu | (0xB0u | trk_midi_ch(song.sel)) << 8 | 1u << 16 | (uint32_t)t->mw << 24);
+        fm1_irq_on();
+        if (song.playing && rec_on(t))
+            (void)motion_set_event(t, mo_live_idx(t), MO_MW, (int16_t)t->mw);
+        fmt_int(v, t->mw);
+        break;
+    case SA_SCENE:
+        sa_scene(s, v);
+        break;
+    case SA_SWING:
+        song.g[G_SWING] = (int16_t)clamp(song.g[G_SWING] + accel(EN_SELECT, s, 100), GP[G_SWING].min, GP[G_SWING].max);
+        fmt_int(v, song.g[G_SWING]);
+        str_cpy(v + str_len(v), "%", 2);
+        break;
+    case SA_TEMPO:
+        song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_SELECT, s, 200), GP[G_BPM].min, GP[G_BPM].max);
+        ui.bpm_t = 40;
+        fmt_int(v, song.g[G_BPM]);
+        break;
+    default:
+        return;                                         /* (OFF: nothing) */
+    }
+    if (u[0] && str_len(v) + str_len(u) < sizeof v - 1u)
+        str_cpy(v + str_len(v), u, sizeof v - str_len(v));
+    sa_say(c, v);
 }

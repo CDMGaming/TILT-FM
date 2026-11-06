@@ -334,6 +334,21 @@ static void tu_timer_text(char *b)
     if (tm.on)
         tm_text(b);
 }
+/* round 11: SELECT's readout (tfm_live.c sa_turn): its choice's name and value on the header's right for about a second */
+#define TSL_MS 1000u
+static struct { const char *n; char v[12]; uint32_t t; } tsl;
+static int tsl_on(void) { return tsl.n && fm1_ms - tsl.t < TSL_MS; }
+static uint32_t tsl_sig(void) { return tsl_on() ? str_hash(5u, tsl.n) + str_hash(6u, tsl.v) * 3u + 1u : 0u; }
+static void tsl_draw(uint16_t bg)
+{
+    int32_t w;
+    if (!tsl_on())
+        return;
+    w = text_w(&AF_TS, tsl.n) + 5 + text_w(&AF_TM, tsl.v);
+    tu_rect(231 - w - 6, 1, w + 9, TU_HY - 3, bg);
+    tu_text(231 - w, 10, &AF_TS, tsl.n, TC_AMBER, bg);
+    tu_text_r(231, 10, &AF_TM, tsl.v, TC_TEXT, bg);
+}
 /* the header: left (what, where), centre (the TIMER), right (the tempo or the page) */
 static struct { const char *l, *l2, *r; int badge; int play; uint32_t sig; uint8_t nt; } tu_hd;
 /* round 8: JAM's header has no timer (its display shows it); set before tu_head, which takes it and clears it */
@@ -363,6 +378,7 @@ static void tu_head_draw(void)
     } else if (tu_hd.r) {
         tu_text_r(231, 10, &AF_TS, tu_hd.r, TC_QUIET, TC_BG);
     }
+    tsl_draw(tu_pbg);
 }
 static void tu_head(int badge, const char *l, const char *l2, const char *r, int play)
 {
@@ -379,7 +395,7 @@ static void tu_head(int badge, const char *l, const char *l2, const char *r, int
         t[0] = 0;
     tu_hd.sig = str_hash(1u, l ? l : "") * 31u + str_hash(2u, l2 ? l2 : "") + str_hash(3u, r ? r : "") * 7u +
                 str_hash(4u, t) * 13u + (uint32_t)(badge + 1) * 977u + (uint32_t)(song.g[G_BPM]) * 4099u +
-                (uint32_t)(tu_hd.play + 1) * 65537u + (tm.on ? tm_level() * 131071u : 0u) + tu_rec_sig() * 40503u;
+                (uint32_t)(tu_hd.play + 1) * 65537u + (tm.on ? tm_level() * 131071u : 0u) + tu_rec_sig() * 40503u + tsl_sig() * 19u;
     tu_zone(0, 0, TU_HY, tu_pbg, tu_hd.sig + tu_pbg * 7u, tu_head_draw);
 }
 /* the footer: `KEY ACTION` hints centred, the key amber; a message (ui.msg) replaces them while it shows */
@@ -1319,6 +1335,8 @@ static void tu_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint32_t bu
     if (!busy && tu.scr != TU_SOUND && tu.scr != TU_NOTES && tu.scr != TU_DRUMS && tu.scr != TU_SONG && tu.scr != TU_BARS && (s = panel_enc(EN_PRESET)) != 0)
         tu_sound_step(s);                               /* PRESETS: the track's sound, everywhere it is not a list */
     tu_screen_input(pressed, notes, oct, busy);
+    if (!busy && (tu.scr == TU_JAM || tu.scr == TU_MIX || tu.scr == TU_SOUND || tu.scr == TU_DRUMS) && (s = panel_enc(EN_SELECT)) != 0)
+        sa_turn(0, s);                                  /* (round 11: SELECT, what SETUP's SELECT row picks; lists keep it) */
     enc_drop();                                         /* (the knobs nobody took) */
     ui_notices();
 }

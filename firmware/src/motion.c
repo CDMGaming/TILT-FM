@@ -35,7 +35,7 @@ static int motion_param(uint32_t id)
 {
     /* Sound only: transport, routing, voice allocation and discrete engine
      * changes never become automation. FX sends and continuous mix are safe. */
-    return (id >= MO_DJ && id < MO_DJ + DJ_N) || (id < P_COUNT && (id <= P_REL || (id >= P_ED_FLT && id <= P_LD_AMP) ||
+    return (id >= MO_DJ && id <= MO_MW) || (id < P_COUNT && (id <= P_REL || (id >= P_ED_FLT && id <= P_LD_AMP) ||
         (id >= P_DIST && id <= P_REV) || id == P_GLIDE || id == P_PAN ||
         id == P_DETUNE || (id >= P_FM1_ATK && id <= P_FM4_LEVEL) || (id >= P_LN0 && id <= P_LN7) ||
         id == P_SPRD || (id >= P_ITYPE && id <= P_IMIX) || id >= P_E0));   /* (TFM round 9: the DJ's, MO_DJ) */   /* (not the chord keys, nor 1.2's LFO SYNC TRIG
@@ -284,6 +284,10 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
         const motion_event_t *e = &m->event[i];
         uint32_t id = MOTION_ID(e);
         if (e->place != (k << 6 | step) || ((e->param & MOTION_LOCK) && !play)) continue;
+        if (id == MO_MW) {                              /* TFM round 11: SELECT = MOD's moves, the mod wheel */
+            t->mw = (uint8_t)clamp(e->value, 0, 127);
+            continue;
+        }
         if (id >= P_COUNT) {                            /* TFM round 9: the DJ's (perform.c dj_now) */
             id = (id - P_COUNT) % DJ_N;
             dj_mv[id] = (int8_t)clamp(e->value, DJ_DESC[id].min, DJ_DESC[id].max);

@@ -100,7 +100,7 @@ static uint32_t mtab_rows(uint32_t t)                  /* .. and how many it has
     uint32_t i, n = 0;
     for (i = 0; i < MI_COUNT; i++)
         n += MI_TAB[i] == t;
-    return n;
+    return n - (t == MTAB_CONTROL && !tu_classic());   /* (round 11: SELECT, CONTROL's last, is SETUP's in TFM) */
 }
 /* STYLE (ui_style, gfx.c ST_*): FLAT the filled cards; LINE black areas divided by 1 px rules (#50, #57: the 0.9 look)
  * (1.0.2: PIXEL retired, a saved PIXEL reads as LINE) */

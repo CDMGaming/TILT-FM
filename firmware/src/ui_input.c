@@ -1846,6 +1846,8 @@ static void ui_input(void)
         ml_oct(oct);
     }
     if (tu_on()) {                                      /* TFM-UI: the screen's keys and knobs (tfm_ui.c) */
+        if (glo && sel)                                 /* (round 11: GLO + SELECT, SETUP's second SELECT row) */
+            sa_turn(1, sel);
         tu_input(pressed, notes, oct, lay | kq);
         return;
     }

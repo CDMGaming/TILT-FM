@@ -226,10 +226,16 @@ static const param_desc_t GP[G_COUNT] = {
 _Static_assert(MO_DJ + DJ_N <= 128u, "the DJ's motion ids under MOTION_LOCK");
 static const param_desc_t DJ_DESC[DJ_N] = {PD("DJ FILT", F_INT, -63, 63, 0), PD("DJ ECHO", F_INT, 0, 127, 0),
                                            PD("DJ SPACE", F_INT, 0, 127, 0), PD("DJ DIRT", F_INT, 0, 127, 0)};
+/* TFM round 11: SELECT = MOD (tfm_live.c sa_turn) records the selected track's mod wheel (track_t mw, MIDI CC1's) as motion,
+ * the id after the DJ's (motion.c: it sets mw as it plays) */
+#define MO_MW (MO_DJ + DJ_N)
+_Static_assert(MO_MW < 128u, "MOD's motion id under MOTION_LOCK");
+static const param_desc_t MO_MW_DESC = PD("MODW", F_INT, 0, 127, 0);
+#define MO_DESC(id) ((id) == MO_MW ? &MO_MW_DESC : &DJ_DESC[((id) - P_COUNT) % DJ_N])
 static const param_desc_t *track_desc(const track_t *t, uint32_t id)
 {
     if (id >= P_COUNT)
-        return &DJ_DESC[(id - P_COUNT) % DJ_N];
+        return MO_DESC(id);
     if (id >= P_E0 && id <= P_E7) {                   /* the engine asked for (t->engine follows after a fade) */
         const engine_t *e = ENGINES[eng_idx(t->eng_req)];
         const param_desc_t *d = e->desc ? e->desc(t, id - P_E0) : 0;   /* a mode-dependent label / names */
@@ -246,7 +252,7 @@ static const param_desc_t *track_desc(const track_t *t, uint32_t id)
  * only; range and default are the same): what the editor protocol, user presets and projects use */
 static const param_desc_t *param_desc_of(uint32_t e, uint32_t id)
 {
-    return id >= P_COUNT ? &DJ_DESC[(id - P_COUNT) % DJ_N] : id >= P_E0 ? &ENGINES[e]->edit[id - P_E0] : &TP[id];
+    return id >= P_COUNT ? MO_DESC(id) : id >= P_E0 ? &ENGINES[e]->edit[id - P_E0] : &TP[id];
 }
 
 /* a retired F_ENUM value kept as an alias, so stored values stay valid: SAMPLE SET and GRAIN SRC 1, once
