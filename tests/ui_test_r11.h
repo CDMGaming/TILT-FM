@@ -219,3 +219,33 @@ static int test_r11_drum_level(void)
     ui_power_on();
     return bad;
 }
+
+/* item 5: the four hold screens in TFM's look (the drawing only: the layers' own tests check what they do) */
+static int test_r11_hold_screens(void)
+{
+    static const uint8_t B[4] = {B_FX, B_GLO, B_SCL, B_SEQ}, L[4] = {LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_SEQ};
+    static const char *const F[4] = {"WHITE", "BLACK", "KEYS", "WHITE"};
+    int bad = 0, ok = 1;
+    uint32_t i;
+    ui_power_on();
+    tu_off = 0;
+    layer_seen |= 1u;
+    tu_goto(TU_JAM); fm1_ms += 4000u; scrn.st = SCR_ON; scrn.idle = fm1_ms; frames(8);
+    for (i = 0; i < 4u; i++) {
+        btn_down(B[i]); frames(500);
+        R11(ui.layer == L[i] && tu_hold_on());
+        ui.force = 1; tu_hold_draw();                  /* (what ui_draw.c draws while it is up) */
+        if (!str_eq(tu_ft.k[0], F[i])) printf("  R11 hold %u footer [%s]\n", i, tu_ft.k[0] ? tu_ft.k[0] : "-");
+        R11(str_eq(tu_ft.k[0], F[i]));
+        btn_up(B[i]); frames(30); fm1_ms += 3000u; frames(4);
+        ui.layer = ui.ly = ui.lock = 0; frames(4);     /* (closed for the next: letting go is the layer's, tested with it) */
+    }
+    tu_off = 1;
+    btn_down(B_FX); frames(500);
+    R11(ui.layer == LAYER_FX && !tu_hold_on());       /* (CLASSIC: Felucca's own drawing) */
+    btn_up(B_FX); frames(30); fm1_ms += 3000u; frames(4);
+    tu_off = 0;
+    bad += check("round 11 hold screens: FX GLO SCL SEQ held draw TFM's (their footers), CLASSIC keeps Felucca's", ok);
+    ui_power_on();
+    return bad;
+}

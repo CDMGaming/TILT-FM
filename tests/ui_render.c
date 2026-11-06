@@ -785,7 +785,8 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_UI_SND0, S_UI_SND1, S_UI_SND2, S_UI_SND3, S_UI_SND4, S_UI_SND5, S_UI_SND6, S_UI_SND7, S_UI_SND8, S_UI_SND9, S_UI_SND10,
        S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_UI_SONG, S_UI_SONGS,
        S_UI_FX, S_UI_SPACE, S_UI_ARP, S_UI_CLOCK, S_UI_CLOCK2, S_UI_MOTION, S_SONG_OVR, S_SONG_COPY, S_SONG_CLR, S_SONGS_COPY,
-       S_UI_SND_NONE, S_UI_JAM_NONE, S_UI_SND12, S_UI_SND13, S_UI_JAM_SHEET, S_UI_CARD, S_UI_JAM_FIRST, S_COUNT };
+       S_UI_SND_NONE, S_UI_JAM_NONE, S_UI_SND12, S_UI_SND13, S_UI_JAM_SHEET, S_UI_CARD, S_UI_JAM_FIRST,
+       S_UI_HOLD_FX, S_UI_HOLD_FXL, S_UI_HOLD_GLO, S_UI_HOLD_SCL, S_UI_HOLD_SEQ, S_UI_HOLD_EU, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -826,7 +827,8 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "ui_jam", "ui_jam_chain", "ui_jam_write", "ui_perform", "ui_mix", "ui_start", "ui_start_rolled", "ui_start_spin", "ui_setup", "ui_time",
     "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
     "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_bars", "ui_notes", "ui_drums", "ui_sheet", "ui_song", "ui_songs",
-    "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion", "ui_song_overwrite", "ui_song_copy", "ui_song_clear", "ui_songs_copy", "ui_snd_none", "ui_jam_none", "ui_snd_kitbox", "ui_snd_garage", "ui_jam_sheet", "ui_sound_card", "ui_jam_first"};
+    "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion", "ui_song_overwrite", "ui_song_copy", "ui_song_clear", "ui_songs_copy", "ui_snd_none", "ui_jam_none", "ui_snd_kitbox", "ui_snd_garage", "ui_jam_sheet", "ui_sound_card", "ui_jam_first",
+    "ui_hold_fx", "ui_hold_fx_latch", "ui_hold_glo", "ui_hold_scl", "ui_hold_seq", "ui_hold_euclid"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1004,6 +1006,7 @@ static void setup(int s)
     state();
     memset(drum_mute, 0, sizeof drum_mute);          /* (1.4.1: no DRUM lane muted) */
     scene_armed = 0; tsc.cue = SCENE_NONE; tsc.pend = 0;   /* (TILT-FM: no scene cued or unflushed) */
+    perf_held = perf_latched = 0; perf_latch_on = 0; perf_solo = 0; eu.on = 0;   /* (round 11's hold screens set them) */
     switch (s) {
     case S_HOME: song.octave = 2; song.rec = 1; usb.config = 1; break;
     case S_HOME_IDLE: song.playing = 0; song.batt_raw = 570; ui.hot_col = 1; ui.hot_t = 30; break;
@@ -1423,6 +1426,24 @@ static void setup(int s)
     case S_TFM_MACROS: song.playing = 0; tfm_load(TSEL, TI_SQUELCH, 2); go_page(GR_MACRO); break;
     case S_TFM_MACROS2: song.playing = 0; tfm_load(TSEL, TI_WOBBLER, 0); go_page(GR_MACRO); ui.page++; break;
     case S_TFM_PRESETS: song.playing = 0; tfm_load(TSEL, TI_SQUELCH, 1); go_page(GR_BROWSE); break;
+    case S_UI_HOLD_FX: case S_UI_HOLD_FXL: case S_UI_HOLD_GLO: case S_UI_HOLD_SCL: case S_UI_HOLD_SEQ: case S_UI_HOLD_EU: {
+        /* round 11: the hold screens in TFM's look (tfm_hold.c), over JAM, the band of the drawings */
+        static const uint8_t L[6] = {LAYER_FX, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_SEQ, LAYER_SEQ};
+        tu_off = 0; tu_goto(TU_JAM);
+        tfm_load(&trk[0], TI_THUMP, 0); tfm_load(&trk[1], TI_KITBOX, 0); tfm_load(&trk[2], TI_SQUELCH, 0); tfm_load(&trk[3], TI_HAZE, 0);
+        trk[0].p[P_LEVEL] = 78; trk[1].p[P_LEVEL] = 55; trk[2].p[P_LEVEL] = 89; trk[3].p[P_LEVEL] = 70;
+        song.playing = 1; song.g[G_BPM] = 118; song.sel = 0;
+        if (s == S_UI_HOLD_FX) { perf_held = 1u << 1; perf_k[0] = -40; perf_k[2] = 20; }        /* 1/16 held, LP 40, THROW 20 */
+        if (s == S_UI_HOLD_FXL) { perf_latch_on = 1; perf_latched = 1u << 1 | 1u << 4; }           /* FX LATCH: 1/16 and LPF latched */
+        if (s == S_UI_HOLD_GLO) { perf_solo = 1u << 2; trk[3].p[P_MUTE] = 1; }                     /* T3 SOLO, T4 MUTED */
+        if (s == S_UI_HOLD_SCL) { song.sel = 2; trk[2].p[P_ROOT] = 2; trk[2].p[P_SCALE] = 2; }     /* D MINOR on T3 */
+        if (s == S_UI_HOLD_SEQ || s == S_UI_HOLD_EU) ui.lane = 1;                                   /* (THUMP LAB's lane 2) */
+        if (s == S_UI_HOLD_EU) { eu.on = 1; eu.hits = 5; eu.steps = 16; eu.rot = 0; eu.trk = 0; }
+        ui.layer = ui.ly = ui.lock = L[s - S_UI_HOLD_FX];
+        layer_seen |= 1u;
+        ui.force = 1;
+        break;
+    }
     case S_UI_JAM: case S_UI_JAM_CHAIN: case S_UI_JAM_WRITE: case S_UI_PERFORM: case S_UI_MIX: case S_UI_JAM_NONE: case S_UI_JAM_SHEET: case S_UI_CARD: case S_UI_JAM_FIRST:   /* TFM-UI: JAM (home), MIX (HOME again) over a playing song */
         tu_off = 0; tu_goto(s == S_UI_MIX ? TU_MIX : TU_JAM);
         tfm_load(&trk[0], TI_THUMP, 0); tfm_load(&trk[1], TI_THUMP, 1); tfm_load(&trk[2], TI_SQUELCH, 0); tfm_load(&trk[3], TI_HAZE, 0);

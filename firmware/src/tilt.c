@@ -1643,3 +1643,4 @@ static void st_draw(void)
 #include "tfm_song.c"                                      /* TFM-UI: SCENES, SONG, SONGS */
 #include "tfm_pages.c"                                     /* TFM-UI: FX, SPACE, ARP, CLOCK, MOTION */
 #include "tfm_live.c"                                      /* TFM-UI round 5: JAM's live arranging */
+#include "tfm_hold.c"                                      /* TFM-UI round 11: hold FX GLO SCL SEQ in TFM's look */

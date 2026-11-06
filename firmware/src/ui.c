@@ -138,6 +138,8 @@ static int tu_on(void);
 static int tu_classic(void);
 static void tu_picker_key(uint32_t p);
 static void tu_picker_draw(void);
+static int tu_hold_on(void);                           /* (round 11: tfm_hold.c) */
+static void tu_hold_draw(void);
 static int tu_oct_ok(void);
 static void sa_turn(uint32_t glo, int32_t s);      /* (TFM round 11: SELECT, tfm_live.c) */
 static int tu_song_on(void);

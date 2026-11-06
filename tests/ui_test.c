@@ -11448,6 +11448,7 @@ int main(void)
     bad += test_r10_undo_delete();
     bad += test_r11_select();
     bad += test_r11_drum_level();
+    bad += test_r11_hold_screens();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4
