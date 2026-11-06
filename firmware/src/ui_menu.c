@@ -154,6 +154,11 @@ static int32_t menu_scroll_max(void)
 }
 
 static void menu_dots(void);
+#ifdef TILT_BUILD
+#define TILT_HOME_WORD 0
+#else
+#define TILT_HOME_WORD "CLOSE"
+#endif
 /* the menu's header (0..24): its icon and title, the REC mark, the way back (the tabs: HOME CLOSE before the dots) */
 static void menu_head(void)
 {
@@ -162,6 +167,10 @@ static void menu_head(void)
     cv_icon_mid(8, H_HEAD / 2, 16, ui.menu >= 2 ? ICON_X_INFO : ICON_X_COG, T_THEME, T_BG);   /* (as draw_head's) */
     GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
     cv_text(30, HEAD_MY, &AF_M, ui.menu == 3 ? "INFO" : ui.menu == 2 ? "ABOUT / CREDITS" : "MENU", T_TEXT);
+#ifdef TILT_BUILD
+    if (ui.menu == 1)                                 /* (TILT-FM round 10: which build this is, by the title) */
+        cv_text(30 + text_w(&AF_M, "MENU") + 5, HEAD_MY + 1, &AF_TS, TILT_BUILD, T_MID);   /* (11 px: r10-<sha> before the REC mark) */
+#endif
     if (ui.menu >= 2) {                               /* the way back at the right, the REC mark before it (then */
         const char *w = song.rec ? 0 : "BACK";        /* the keycap goes without its word: no room for both) */
         int32_t x = 232 - kh_w(KC_OCTDN, w);
@@ -169,9 +178,10 @@ static void menu_head(void)
         cv_key_hint(x, HALF_UP(H_HEAD - KC_H), KC_OCTDN, w, 1, T_BG);
         draw_rec_mark(x - 20, T_BG);
     } else {
-        int32_t x = 232 - (12 + (int32_t)(MTAB_COUNT - 1u) * 8) - 8 - kh_w(KC_HOME, "CLOSE");   /* (menu_dots' left) */
+        const char *w = TILT_HOME_WORD;               /* (TILT-FM round 10: HOME's keycap alone, the build has its room) */
+        int32_t x = 232 - (12 + (int32_t)(MTAB_COUNT - 1u) * 8) - 8 - kh_w(KC_HOME, w);   /* (menu_dots' left) */
         GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
-        cv_key_hint(x, HALF_UP(H_HEAD - KC_H), KC_HOME, "CLOSE", 1, T_BG);
+        cv_key_hint(x, HALF_UP(H_HEAD - KC_H), KC_HOME, w, 1, T_BG);
         draw_rec_mark(x - 20, T_BG);
         menu_dots();
     }

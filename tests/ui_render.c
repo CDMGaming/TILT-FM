@@ -1897,7 +1897,7 @@ static void draw(int s)
     }
     if (s == S_SPLASH) {                          /* the power-on splash (main.c, before the UI): its lines, the version
                                                    * shown FELUCCA_VERSION (run_tests.sh: src/felucca.c's) */
-        static const char WANT[] = "TILT-FM " TILT_VERSION " / Felucca " FELUCCA_VERSION "|H\xFCgelton Instruments";
+        static const char WANT[] = "TILT-FM " TILT_BUILD " / Felucca " FELUCCA_VERSION "|H\xFCgelton Instruments";   /* (round 10: the build) */
         splash_seen[0] = 0;
         in_splash = 1;
         draw_splash();
