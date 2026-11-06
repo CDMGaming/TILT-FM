@@ -9,7 +9,7 @@
  *   TEMPO          low, high (0: 90 .. 130)         TIMER   the default minutes' step (0 OFF, 5, 10, 15, 20) */
 #define CFG(i) (favorites.factory[13][16 + (i)])
 enum { CF_RULE = 0, CF_KEY = 4, CF_SCALE = 5, CF_LO = 6, CF_HI = 7, CF_TIMER = 8, CF_NEW = 9, CF_CAP = 10,   /* (round 8: CAPTURE 0..2: 1 2 4 bars) */
-       CF_SEL = 11, CF_GSEL = 12 };            /* (round 11: SELECT and GLO + SELECT, 0 = the default, else the choice + 1) */
+       CF_SEL = 11, CF_GSEL = 12, CF_MUT = 13 };   /* (round 12: MUTATE's mode 0..2 PATTERN SOUND BOTH, until now not saved) */            /* (round 11: SELECT and GLO + SELECT, 0 = the default, else the choice + 1) */
 /* round 11: what SELECT turns on JAM, MIX, SOUND and DRUMS (tfm_live.c sa_turn), and SELECT turned with GLO held. The
  * player's setting, saved with the settings (CFG: no size change); 0 (every older setting) is the default */
 enum { SA_OFF, SA_FILTER, SA_ECHO, SA_SPACE, SA_MORPH, SA_LEVEL, SA_MOD, SA_SCENE, SA_SWING, SA_TEMPO, SA_N };
@@ -19,6 +19,7 @@ static uint32_t sa_get(uint32_t glo)
     uint32_t v = CFG(glo ? CF_GSEL : CF_SEL);
     return v && v <= SA_N ? v - 1u : glo ? SA_SCENE : SA_FILTER;
 }
+static uint32_t prf_mut_now(void) { return CFG(CF_MUT) % 3u; }   /* (round 12: MUTATE's mode, SETUP's row = hold ENV's K2) */
 static void sa_put(uint32_t glo, uint32_t c) { CFG(glo ? CF_GSEL : CF_SEL) = (uint8_t)(c % SA_N + 1u); }
 static int tfm_newsong_keep(void) { return CFG(CF_NEW) == 1u; }   /* round 3: 0 FRESH (default), 1 KEEP SCENES */
 static const uint8_t TM_LIST[5] = {0, 5, 10, 15, 20};
@@ -554,7 +555,7 @@ static void tu_time_draw(void)
 
 /* ================================================================== DICE ====================================== */
 static uint8_t tu_su_top;                               /* SETUP: the first row of the window of four */
-#define TU_SU_N 12u                                     /* (round 11: the rows; ten shown, the window scrolls) */
+#define TU_SU_N 13u                                     /* (round 11: the rows; ten shown, the window scrolls) */
 #define TU_SU_SHOWN 10u
 static void tu_dice_tiles(void)                         /* y 22 .. 76: KEY, SCALE, TEMPO */
 {
@@ -670,6 +671,9 @@ static void tu_su_row_text(uint32_t r, char *b)
         }
     } else if (r == 8u) {
         str_cpy(b, tfm_newsong_keep() ? "KEEP SCENES" : "FRESH", 14);
+    } else if (r == 12u) {                              /* (round 12: MUTATE's mode, as hold ENV's K2) */
+        static const char *const MN[3] = {"PATTERN", "SOUND", "BOTH"};
+        str_cpy(b, MN[CFG(CF_MUT) % 3u], 8);
     } else if (r >= 10u) {                              /* (round 11: SELECT, GLO + SELECT) */
         str_cpy(b, SA_NAME[sa_get(r - 10u)], 8);
     } else {                                            /* (round 8: JAM's C#5 CAPTURE takes the last 1, 2 or 4 bars) */
@@ -679,7 +683,7 @@ static void tu_su_row_text(uint32_t r, char *b)
 static void tu_su_rows(void)
 {
     static const char *const LBL[TU_SU_N] = {"T1", "T2", "T3", "T4", "KEY", "SCALE", "TEMPO", "TIMER", "NEW SONG", "CAPTURE",
-                                             "SELECT", "GLO + SELECT"};
+                                             "SELECT", "GLO + SELECT", "MUTATE"};
     uint32_t r, vf = tu_su_top + 4u > TU_SU_SHOWN ? tu_su_top + 4u - TU_SU_SHOWN : 0u;   /* (round 11: the window of ten
                                                      * shown follows the lit four) */
     for (r = vf; r < vf + TU_SU_SHOWN; r++) {           /* (round 8: ten rows, 17 apart) */
@@ -756,6 +760,8 @@ static void tu_su_step(uint32_t row, int32_t s)
         CFG(CF_NEW) = (uint8_t)clamp((int32_t)CFG(CF_NEW) + d, 0, 1);
     } else if (row == 9u) {
         CFG(CF_CAP) = (uint8_t)clamp((int32_t)(CFG(CF_CAP) % 3u) + d, 0, 2);
+    } else if (row == 12u) {                            /* (round 12: MUTATE's mode) */
+        CFG(CF_MUT) = (uint8_t)clamp((int32_t)(CFG(CF_MUT) % 3u) + d, 0, 2);
     } else if (row == 10u || row == 11u) {              /* (round 11: SELECT, GLO + SELECT) */
         sa_put(row - 10u, (uint32_t)clamp((int32_t)sa_get(row - 10u) + d, 0, SA_N - 1));
     }

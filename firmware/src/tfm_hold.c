@@ -8,15 +8,39 @@
 static int tu_hold_on(void)
 {
     uint32_t l = ui.layer;
-    return !tu_classic() && tu_on() && (l == LAYER_FX || l == LAYER_GLO || l == LAYER_SCL || l == LAYER_SEQ);
+    return !tu_classic() && tu_on() && (l == LAYER_FX || l == LAYER_GLO || l == LAYER_SCL || l == LAYER_SEQ || l == LAYER_TILT);
 }
 static uint16_t th_acc(uint32_t l)
 {
     return l == LAYER_FX ? RGB(255, 112, 80) : l == LAYER_GLO ? RGB(170, 236, 90) : l == LAYER_SCL ? RGB(80, 214, 236) : TC_AMBER;
 }
+#define TH_ENV RGB(255, 140, 60)                        /* (round 12: hold ENV's orange) */
+static const char *th_scr_name(void)                    /* the screen under hold ENV (its header names it) */
+{
+    static const char *const N[] = {"JAM", "MIX", "SOUND", "BARS", "NOTES", "DRUMS", "SONG", "SONGS", "FX", "CHAR", "SPACE",
+                                    "ARP", "CLOCK", "CLOCK", "MOTION", "DEEP"};
+    return tu.scr < NELEM(N) ? N[tu.scr] : "";
+}
 static void th_head(void)
 {
     uint32_t l = ui.layer;
+    if (l == LAYER_TILT) {                              /* round 12: the track and the screen behind, its name in orange */
+        char b[24] = "T1 ", t[8];
+        int32_t x, w;
+        b[1] = (char)('1' + song.sel % NTRK);
+        str_cpy(b + 3, tu_inst_name(TSEL), sizeof b - 3);
+        tu_rect(0, 0, TU_W, TU_HY, TC_BG);
+        tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
+        tu_rec_dots(TC_BG);
+        x = tu_text(TU_DX, 10, &AF_TM, b, TC_TEXT, TC_BG) + 4;
+        tu_text(x, 11, &AF_TS, "\xB7 ", TH_ENV, TC_BG);
+        tu_text(x + text_w(&AF_TS, "\xB7 "), 11, &AF_TS, th_scr_name(), TH_ENV, TC_BG);
+        fmt_int(t, song.g[G_BPM]);
+        w = text_w(&AF_TM, t);
+        tu_text(231 - w, 10, &AF_TM, t, TC_TEXT, TC_BG);
+        tu_play_icon(231 - w - 11, 10, song.playing, TC_TEXT);
+        return;
+    }
     static const char *const W[4] = {"HOLD FX", "HOLD GLO", "HOLD SCL", "HOLD SEQ"};
     static const char *const S[4] = {"\xB7 PUNCH-IN", "\xB7 LIVE", "\xB7 ROOT", "\xB7 STEP TOOLS"};
     uint32_t i = l == LAYER_FX ? 0u : l == LAYER_GLO ? 1u : l == LAYER_SCL ? 2u : 3u;
@@ -316,6 +340,35 @@ static void th_seq(void)
     }
 }
 
+/* ---- ENV (round 12, HoldEnv.dc.html): a small sheet, the screen behind dimmed; F3 MUTATE (its mode chips, K2), G3 STUCK ---- */
+static void th_env(void)
+{
+    static const char *const MN[3] = {"PATTERN", "SOUND", "BOTH"};
+    uint32_t i, m = prf_mut_now();
+    int busy = chain_busy();
+    char q[24] = "QUICK HELP FOR T1";
+    q[16] = (char)('1' + song.sel % NTRK);
+    tu_rrect(5, 25, 230, 48, 6, RGB(32, 25, 15), TC_BG);   /* (the screen behind, dimmed to its frame) */
+    tu_rrect(7, 27, 226, 44, 5, RGB(16, 12, 7), RGB(32, 25, 15));
+    tu_rrect(5, 80, 230, 91, 6, TH_ENV, TC_BG);
+    tu_rrect(7, 82, 226, 87, 5, TH_PBG, TH_ENV);
+    tu_text(15, 93, &AF_TM, "HOLD ENV", TH_ENV, TH_PBG);
+    tu_text(78, 94, &AF_TS, q, TC_QUIET, TH_PBG);
+    tu_text(15, 115, &AF_TM, "F3", TC_AMBER, TH_PBG);
+    tu_text(35, 115, &AF_TM, "MUTATE", busy ? TC_DIM : TC_TEXT, TH_PBG);
+    tu_text(90, 116, &AF_TS, busy ? "STOP TO EDIT" : "CHANGE IT A LITTLE", TC_QUIET, TH_PBG);
+    for (i = 0; i < 3u; i++) {                          /* the mode chips: K2 */
+        int32_t x = 35 + (int32_t)i * 48;
+        uint16_t c = i == m ? TH_ENV : RGB(44, 32, 20);
+        tu_rrect(x, 126, 44, 14, 3, c, TH_PBG);
+        tu_text_c(x + 22, 133, &AF_TS, MN[i], i == m ? TC_BG : TC_MID, c);
+    }
+    tu_text(186, 133, &AF_TS, "K2 MODE", TC_QUIET, TH_PBG);
+    tu_text(15, 155, &AF_TM, "G3", TC_AMBER, TH_PBG);
+    tu_text(35, 155, &AF_TM, "STUCK", busy ? TC_DIM : TC_TEXT, TH_PBG);
+    tu_text(90, 156, &AF_TS, "COOK IT, OR START ONE", TC_QUIET, TH_PBG);
+    tu_text_c(120, 184, &AF_TS, "NEW SONG: TAP ENV \xB7 TIMER, MUTATE MODE: ON SETUP", TC_QUIET, TC_BG);
+}
 static void th_body(void)
 {
     tu_rect(0, TU_HY, TU_W, TU_FY - TU_HY, TC_BG);
@@ -323,6 +376,7 @@ static void th_body(void)
     case LAYER_FX: th_fx(); break;
     case LAYER_GLO: th_glo(); break;
     case LAYER_SCL: th_scl(); break;
+    case LAYER_TILT: th_env(); break;
     default: th_seq(); break;
     }
 }
@@ -341,6 +395,8 @@ static uint32_t th_sig(void)
         s += perf_solo * 7u + (uint32_t)ui.ml.on * 13u + (lys.fill ? 17u : 0u);
         for (i = 0; i < NTRK; i++)
             s = s * 31u + (uint32_t)trk[i].p[P_LEVEL] + (trk[i].p[P_MUTE] ? 101u : 0u);
+    } else if (l == LAYER_TILT) {
+        s += prf_mut_now() * 7u + (uint32_t)chain_busy() * 3u + (uint32_t)tu.scr * 101u;
     } else if (l == LAYER_SCL) {
         s += (uint32_t)t->p[P_ROOT] * 3u + (uint32_t)t->p[P_SCALE] * 37u + (uint32_t)t->p[P_CHRD] * 401u + (uint32_t)t->p[P_VOIC] * 4001u;
     } else {
@@ -361,6 +417,8 @@ static void tu_hold_draw(void)
         tu_foot(3, "BLACK", "MUTE", "WHITE", "SOLO", "K1-K4", "LEVELS", 0, 0, 0, 0);
     else if (l == LAYER_SCL)
         tu_foot(3, "KEYS", "ROOT", "K2", "SCALE", "LET GO", "DONE", 0, 0, 0, 0);
+    else if (l == LAYER_TILT)
+        tu_foot(3, "F3", "MUTATE", "G3", "STUCK", "K2", "MODE", 0, 0, 0, 0);
     else
         tu_foot(3, "WHITE", "TOOL", "BLACK", "LANE", "K1-K4", "PATTERN", 0, 0, 0, 0);
     ui.force = 0;

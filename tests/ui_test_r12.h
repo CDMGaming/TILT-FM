@@ -68,3 +68,67 @@ static int test_r12_char(void)
     ui_power_on();
     return bad;
 }
+
+/* item 2: hold ENV, a small sheet: F3 MUTATE (K2 its mode, SETUP's row the same value), G3 STUCK */
+static uint32_t r12_notes(const track_t *t)
+{
+    uint32_t n, q = 0;
+    for (n = 0; n < NSTEP; n++)
+        q += t->step[n].time == ST_NOTE && t->step[n].n;
+    return q;
+}
+static void r12_lkey(uint32_t place) { uint32_t k = key_at(0, place); r9_key(k, 1); frames(2); r9_key(k, 0); frames(2); }
+static int test_r12_env(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t q, tmin;
+    char b[28];
+    track_t *t;
+    ui_power_on();
+    tu_off = 0;
+    layer_seen |= 1u;
+    song.sel = 2;
+    t = TSEL;
+    tfm_load(t, TI_SQUELCH, 0);
+    for (q = 0; q < NSTEP; q++) step_clear(&t->step[q]);
+    t->p[P_SLEN] = 16;
+    CFG(CF_MUT) = 0;
+    tu_goto(TU_JAM); fm1_ms += 4000u; scrn.st = SCR_ON; scrn.idle = fm1_ms; frames(8);
+    btn_down(B_ENV); frames(500);
+    R12(ui.layer == LAYER_TILT && tu_hold_on());
+    ui.force = 1; tu_hold_draw();
+    R12(str_eq(tu_ft.k[0], "F3") && str_eq(tu_ft.a[0], "MUTATE") && str_eq(tu_ft.a[1], "STUCK") && str_eq(tu_ft.a[2], "MODE"));
+    r12_lkey(0);                                        /* F3: MUTATE (PATTERN) */
+    R12(r12_notes(t) > 0u);
+    undo_swap();
+    R12(r12_notes(t) == 0u);                            /* (one undo) */
+    r12_lkey(1);                                        /* G3: STUCK on an empty track: it starts one */
+    R12(r12_notes(t) > 0u);
+    undo_swap();
+    R12(r12_notes(t) == 0u);
+    tmin = tilt_timer_min;
+    r12_lkey(2); r12_lkey(3);                           /* A3, B3: nothing now (MUTATE moved to F3, TIMER to SETUP) */
+    turn(EN_K1, 3); frames(2);                          /* K1: nothing (the TIMER is SETUP's) */
+    R12(r12_notes(t) == 0u && tilt_timer_min == tmin && tilt_ns_open == 0u);
+    turn(EN_K2, 1); frames(2);                          /* K2: the mode, PATTERN -> SOUND */
+    R12(prf_mut_now() == 1u && CFG(CF_MUT) == 1u);
+    tu_su_row_text(12, b);
+    R12(str_eq(b, "SOUND"));                            /* (SETUP's MUTATE row: the same value) */
+    turn(EN_K2, 1); frames(2);
+    R12(prf_mut_now() == 2u);
+    btn_up(B_ENV); frames(30); fm1_ms += 3000u; frames(4);
+    ui.layer = ui.ly = ui.lock = 0; frames(4);
+    CFG(CF_MUT) = 0; frames(2);                         /* SETUP's row changed: the hold's mode follows */
+    R12(prf_mut_now() == 0u);
+    bad += check("round 12 hold ENV: F3 MUTATE, G3 STUCK (one undo each), K2 the mode = SETUP's MUTATE row, A3 B3 K1 nothing, the footer F3 MUTATE G3 STUCK K2 MODE", ok);
+
+    ok = 1;                                             /* CLASSIC keeps Felucca's map: A3 MUTATE */
+    tu_off = 1;
+    for (q = 0; q < NSTEP; q++) step_clear(&t->step[q]);
+    tilt_key(key_at(0, 2), TT_MUTATE);
+    R12(r12_notes(t) > 0u && !tu_hold_on());
+    tu_off = 0;
+    bad += check("round 12 hold ENV: CLASSIC keeps Felucca's map (A3 MUTATE)", ok);
+    ui_power_on();
+    return bad;
+}

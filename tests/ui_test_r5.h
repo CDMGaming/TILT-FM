@@ -250,9 +250,9 @@ static int test_r5_perform(void)
     R5(q == 1u);                                         /* 1 bar */
     /* MUTATE: the pattern re-rolled in key, one undo */
     for (q = 0; q < NSTEP; q++) step_clear(&t->step[q]);
-    t->p[P_SLEN] = 16; prf_mut = 0;
+    t->p[P_SLEN] = 16; CFG(CF_MUT) = 0;
     t->p[P_ROOT] = 2; t->p[P_SCALE] = 1;
-    tilt_key(key_at(0, 2), TT_MUTATE);                   /* (round 8: hold ENV, A3) */
+    tilt_key(key_at(0, 0), 0u);                          /* (round 12: hold ENV, F3) */
     q = 0;
     for (n = 0; n < NSTEP; n++)
         if (t->step[n].time == ST_NOTE && t->step[n].n) {
@@ -264,10 +264,10 @@ static int test_r5_perform(void)
     q = 0;
     for (n = 0; n < NSTEP; n++) q += t->step[n].time == ST_NOTE && t->step[n].n;
     R5(q == 0u);
-    prf_mut = 1;
+    CFG(CF_MUT) = 1;
     {
         uint32_t snd = tfm_snd_of(t);
-        tilt_key(key_at(0, 2), TT_MUTATE); tilt_key(key_at(0, 2), TT_MUTATE);
+        tilt_key(key_at(0, 0), 0u); tilt_key(key_at(0, 0), 0u);
         R5(tfm_ins_of(t) == TI_SQUELCH && (tfm_snd_of(t) != snd || fm1_ms != 0u));
     }
     bad += check("round 5 item 4 / round 8 item 1: hold ARP (roll rates 1/8..1/32, a ratchet when REC, F#3..C#4 pick the track) and its old keys moved: CAPTURE on JAM's C#5 1 / 2 / 4 bars from SETUP with REC off, MUTATE on hold ENV's A3 in key, undo; was PERFORM ", ok);

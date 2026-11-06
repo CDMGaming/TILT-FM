@@ -612,7 +612,7 @@ static int test_r7_instruments(void)
         R7(chain_config.count == 2u);
     }
     /* MUTATE SOUND keeps the instrument */
-    song.sel = 2; prf_mut = 1u;
+    song.sel = 2; CFG(CF_MUT) = 1;
     prf_mutate();
     R7(tfm_ins_of(&trk[2]) == TI_CHORDETTE && trk[2].preset >= TFM_PRE0);
     bad += check("round 7 item 1: instruments stay after a SONG chain with SOUNDS SCENE, a chain from JAM, a power cycle (pack, restore) and MUTATE SOUND (every track keeps its instrument byte; SOUND keeps its face)", ok);

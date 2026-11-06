@@ -787,7 +787,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_UI_FX, S_UI_SPACE, S_UI_ARP, S_UI_CLOCK, S_UI_CLOCK2, S_UI_MOTION, S_SONG_OVR, S_SONG_COPY, S_SONG_CLR, S_SONGS_COPY,
        S_UI_SND_NONE, S_UI_JAM_NONE, S_UI_SND12, S_UI_SND13, S_UI_JAM_SHEET, S_UI_CARD, S_UI_JAM_FIRST,
        S_UI_HOLD_FX, S_UI_HOLD_FXL, S_UI_HOLD_GLO, S_UI_HOLD_SCL, S_UI_HOLD_SEQ, S_UI_HOLD_EU,
-       S_UI_CHAR, S_UI_CHAR_OFF, S_UI_CHAR_CRUSH, S_COUNT };
+       S_UI_CHAR, S_UI_CHAR_OFF, S_UI_CHAR_CRUSH, S_UI_HOLD_ENV, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -830,7 +830,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_bars", "ui_notes", "ui_drums", "ui_sheet", "ui_song", "ui_songs",
     "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion", "ui_song_overwrite", "ui_song_copy", "ui_song_clear", "ui_songs_copy", "ui_snd_none", "ui_jam_none", "ui_snd_kitbox", "ui_snd_garage", "ui_jam_sheet", "ui_sound_card", "ui_jam_first",
     "ui_hold_fx", "ui_hold_fx_latch", "ui_hold_glo", "ui_hold_scl", "ui_hold_seq", "ui_hold_euclid",
-    "ui_char", "ui_char_off", "ui_char_crush"};
+    "ui_char", "ui_char_off", "ui_char_crush", "ui_hold_env"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1446,6 +1446,14 @@ static void setup(int s)
         ui.force = 1;
         break;
     }
+    case S_UI_HOLD_ENV:                                 /* round 12: hold ENV's sheet over JAM (HoldEnv.dc.html) */
+        tu_off = 0; tu_goto(TU_JAM);
+        tfm_load(&trk[0], TI_THUMP, 0); song.sel = 0; song.playing = 1; song.g[G_BPM] = 118;
+        CFG(CF_MUT) = 0;
+        ui.layer = ui.ly = ui.lock = LAYER_TILT;
+        layer_seen |= 1u;
+        ui.force = 1;
+        break;
     case S_UI_JAM: case S_UI_JAM_CHAIN: case S_UI_JAM_WRITE: case S_UI_PERFORM: case S_UI_MIX: case S_UI_JAM_NONE: case S_UI_JAM_SHEET: case S_UI_CARD: case S_UI_JAM_FIRST:   /* TFM-UI: JAM (home), MIX (HOME again) over a playing song */
         tu_off = 0; tu_goto(s == S_UI_MIX ? TU_MIX : TU_JAM);
         tfm_load(&trk[0], TI_THUMP, 0); tfm_load(&trk[1], TI_THUMP, 1); tfm_load(&trk[2], TI_SQUELCH, 0); tfm_load(&trk[3], TI_HAZE, 0);

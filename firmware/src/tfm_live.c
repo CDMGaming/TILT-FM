@@ -494,6 +494,7 @@ static void prf_capture(void)
 }
 static void prf_mutate(void)
 {
+    prf_mut = (uint8_t)prf_mut_now();                   /* (round 12: the saved mode) */
     track_t *t = TSEL;
     uint32_t i = tfm_ins_of(t);
     if (chain_busy()) {
@@ -528,8 +529,17 @@ static void prf_knob(uint32_t k, int32_t s)            /* K1 FILTER, K2 ECHO, K3
     dj_set(k, clamp(v, DJ_DESC[k].min, DJ_DESC[k].max));
     ui.force = 1;
 }
+static void prf_mut_set(uint32_t m)                     /* round 12: MUTATE's mode, kept in the setup (CFG byte 13) */
+{
+    prf_mut = (uint8_t)(m % 3u);
+    if (CFG(CF_MUT) != prf_mut) {
+        CFG(CF_MUT) = prf_mut;
+        settings_later();
+    }
+}
 static void prf_poll(void)                             /* every pass: the roll while the layer is up */
 {
+    prf_mut = (uint8_t)(CFG(CF_MUT) % 3u);              /* (round 12: SETUP's row or hold ENV's K2, the same value) */
     perf_roll_on = (uint8_t)prf_on();
     perf_roll_rate = prf_rate;
     prf_cap = (uint8_t)(CFG(CF_CAP) % 3u);

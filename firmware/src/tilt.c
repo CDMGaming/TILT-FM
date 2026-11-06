@@ -1090,10 +1090,19 @@ static void tilt_scene_poll(void)
     settings_save();
 }
 
+static void prf_mut_set(uint32_t m);                   /* (tfm_live.c: MUTATE's mode, saved: round 12) */
+static uint32_t prf_mut_now(void);                      /* (tfm_dice.c) */
 static void tilt_key(uint32_t k, uint32_t p)
 {
     if (key_black(k))
         return;
+    if (!tu_classic()) {                                /* round 12, TFM: F3 MUTATE, G3 STUCK (NEW SONG: a tap of ENV; TIMER: SETUP) */
+        if (p == 0u && !chain_busy())
+            prf_mutate();
+        else if (p == 1u && !chain_busy())
+            tilt_stuck();
+        return;
+    }
     if (p == TT_NEW)
         tilt_ns_show();
     else if (p == TT_STUCK)
@@ -1106,21 +1115,23 @@ static void tilt_key(uint32_t k, uint32_t p)
 static void tilt_knob(uint32_t k, int32_t s)            /* KNOB 1: the TIMER; KNOB 2: MUTATE's mode (round 8) */
 {
     if (k == 1u && s) {
-        prf_mut = (uint8_t)clamp((int32_t)prf_mut + (s > 0 ? 1 : -1), 0, 2);
+        prf_mut_set((uint32_t)clamp((int32_t)prf_mut_now() + (s > 0 ? 1 : -1), 0, 2));
         ui.force = 1;
     }
-    if (k == 0u && s)
+    if (k == 0u && s && tu_classic())                  /* (round 12: TFM's TIMER is SETUP's) */
         tilt_timer_set(TM_STEPS[(uint32_t)clamp((int32_t)tm_step_of(tilt_timer_min) + (s > 0 ? 1 : -1), 0,
                                                 (int32_t)sizeof TM_STEPS - 1)]);
 }
 static uint32_t tilt_can(uint32_t k, uint32_t p)
 {
+    if (!tu_classic())                                  /* (round 12: F3 MUTATE, G3 STUCK) */
+        return !key_black(k) && p < 2u && !chain_busy();
     return !key_black(k) && (((p == TT_NEW || p == TT_STUCK || p == TT_MUTATE) && !chain_busy()) || p == TT_TIMER);
 }
-static uint32_t tilt_on(uint32_t k, uint32_t p) { return !key_black(k) && p == TT_TIMER && tilt_timer_min; }
+static uint32_t tilt_on(uint32_t k, uint32_t p) { return tu_classic() && !key_black(k) && p == TT_TIMER && tilt_timer_min; }
 static uint32_t tilt_sig(void)
 {
-    return (tilt_used(TSEL) != 0u) * 31u + (uint32_t)chain_busy() * 3u + song.sel * 977u + tilt_timer_min * 7919u + prf_mut * 65537u;
+    return (tilt_used(TSEL) != 0u) * 31u + (uint32_t)chain_busy() * 3u + song.sel * 977u + tilt_timer_min * 7919u + prf_mut_now() * 65537u;
 }
 static void tilt_cards(void)
 {
@@ -1131,7 +1142,7 @@ static void tilt_cards(void)
                 (int32_t)tm_step_of(tilt_timer_min) * 250, ICON_TIME);
     {
         static const char *const MN[3] = {"PATTERN", "SOUND", "BOTH"};
-        draw_column(1, "MUTATE", MN[prf_mut % 3u], "", VAL(1u), (int32_t)(prf_mut % 3u) * 500, ICON_PROB);
+        draw_column(1, "MUTATE", MN[prf_mut_now()], "", VAL(1u), (int32_t)prf_mut_now() * 500, ICON_PROB);
     }
     for (c = 2; c < 4u; c++)
         draw_column(c, "", "", "", T_THEME, -1, ICON_NONE);

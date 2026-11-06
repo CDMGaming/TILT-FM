@@ -431,7 +431,7 @@ static const struct { uint8_t b; const char *k[3], *a[3]; } TU_HOLD[] = {
     {B_SAVE, {"HOLD SAVE", 0, 0}, {"UNDO", 0, 0}},
     {B_HOME, {"HOLD HOME", 0, 0}, {"MENU", 0, 0}},
     {B_EDIT, {"HOLD EDIT", "WHITE", 0}, {"INSTRUMENTS", "PICK", 0}},
-    {B_ENV, {"F3", "G3", "A3"}, {"NEW SONG", "STUCK", "MUTATE"}},
+    {B_ENV, {"F3", "G3", "K2"}, {"MUTATE", "STUCK", "MODE"}},   /* (round 12) */
     {B_FX, {"HOLD FX", "WHITE", 0}, {"PUNCH-IN", "EFFECTS", 0}},
     {B_GLO, {"HOLD GLO", "KEYS", 0}, {"LIVE", "MUTE SOLO FILL", 0}},
     {B_SCL, {"HOLD SCL", "KEYS", 0}, {"ROOT", "PICK IT", 0}},
