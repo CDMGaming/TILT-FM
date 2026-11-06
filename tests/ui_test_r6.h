@@ -1463,7 +1463,7 @@ static int test_r10_browse(void)
  * first-run line until a hold, kept with the settings */
 static int test_r10_hold_foot(void)
 {
-    static const uint8_t SCR[] = {TU_JAM, TU_MIX, TU_SOUND, TU_NOTES, TU_DRUMS, TU_BARS, TU_SONG, TU_SONGS, TU_FX, TU_SPACE,
+    static const uint8_t SCR[] = {TU_JAM, TU_MIX, TU_SOUND, TU_NOTES, TU_DRUMS, TU_BARS, TU_SONG, TU_SONGS, TU_FX, TU_CHAR, TU_SPACE,
                                   TU_ARP, TU_CLOCK, TU_MOTION};
     int bad = 0, ok = 1;
     uint32_t i, j, n = sizeof TU_HOLD / sizeof TU_HOLD[0];

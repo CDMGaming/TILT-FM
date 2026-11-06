@@ -11122,6 +11122,7 @@ static int test_tfm_ui_pages(void)
     trk[0].p[P_ITYPE] = 0; turn(EN_K3, 1); ok &= trk[0].p[P_ITYPE] == 1;       /* CHARACTER: OFF -> DRIVE */
     turn(EN_K3, 1); ok &= trk[0].p[P_ITYPE] == 5;                               /* -> CRUSH */
     v = trk[0].p[P_IMIX]; turn(EN_K4, 4); ok &= trk[0].p[P_IMIX] != v;
+    stap(B_FX); ok &= tu.scr == TU_CHAR;                                         /* (round 12: CHARACTER between) */
     stap(B_FX); ok &= tu.scr == TU_SPACE;
     v = song.g[G_RSIZE]; turn(EN_K2, 4); ok &= song.g[G_RSIZE] != v;
     turn(EN_K1, 1); ok &= song.g[G_RTYPE] == 1 || song.g[G_RTYPE] == 2 || song.g[G_RTYPE] == 0;
@@ -11174,6 +11175,7 @@ static int tfm_only(void)
 #include "ui_test_r5.h"
 #include "ui_test_r6.h"
 #include "ui_test_r11.h"
+#include "ui_test_r12.h"
 static int test_tfm_ui_acceptance(void)
 {
     int bad = 0, ok;
@@ -11449,6 +11451,7 @@ int main(void)
     bad += test_r11_select();
     bad += test_r11_drum_level();
     bad += test_r11_hold_screens();
+    bad += test_r12_char();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

@@ -6,6 +6,8 @@
 static struct {
     const char *cap, *chip[6];
     char big[16], hl[24], hr[24], kl[4][10], kv[4][12];
+    const char *line;                                   /* (round 11: CHARACTER's line where the chips go) */
+    uint8_t pages;                                      /* (FX: the header's TRACK . CHAR . SPACE, the page lit + 1; 0 none) */
     uint16_t col;
     uint16_t frac[4];
     uint8_t nchip, sel, trk, hot;                       /* hot: the knob shown highlighted (0xFF: none) */
@@ -43,7 +45,9 @@ static void ro_body(void)                               /* y 22 .. 215 */
     tu_rrect(8, 30, 224, 75, 8, TC_DEEP, TC_BG);
     tu_text(18, 41, &AF_TS, ro.cap, TC_QUIET, TC_DEEP);
     tu_text(18, 58, &AF_PM, ro.big, ro.col, TC_DEEP);
-    {   /* the chips: padded to fit the card (six of them need less) */
+    if (ro.line)
+        tu_text(18, 85, &AF_TS, ro.line, TC_QUIET, TC_DEEP);
+    else {   /* the chips: padded to fit the card (six of them need less) */
         int32_t sum = 0, pad = 10;
         for (i = 0; i < ro.nchip; i++)
             sum += text_w(&AF_TS, ro.chip[i]);
@@ -93,6 +97,19 @@ static void ro_head(void)
     tu_timer_text(t);
     if (t[0])
         tu_text_c(150, 10, &AF_PS, t, TC_AMBER, TC_BG);
+    if (ro.pages) {                                     /* FX: TRACK . CHAR . SPACE, the page shown lit */
+        static const char *const PG[3] = {"TRACK", "CHAR", "SPACE"};
+        int32_t w = 0, k;
+        for (k = 0; k < 3; k++)
+            w += text_w(&AF_TS, PG[k]) + (k ? text_w(&AF_TS, " \xB7 ") : 0);
+        x = 231 - w;
+        for (k = 0; k < 3; k++) {
+            if (k)
+                x = tu_text(x, 10, &AF_TS, " \xB7 ", TC_DIM, TC_BG);
+            x = tu_text(x, 10, &AF_TS, PG[k], k + 1 == ro.pages ? TC_TEXT : TC_QUIET, TC_BG);
+        }
+        return;
+    }
     tu_text_r(231, 10, &AF_TS, ro.hr, TC_QUIET, TC_BG);
 }
 static void ro_draw(const char *k0, const char *a0, const char *k1, const char *a1, const char *k2, const char *a2)
@@ -145,7 +162,31 @@ static void tu_fx_fill(void)
         ro_pct(3, "AMOUNT", t->p[P_IMIX], 0, 127);
         str_cpy(ro.hl, tu_inst_name(t), 12);
         str_cpy(ro.hl + str_len(ro.hl), " \xB7 FX", 8);
-        str_cpy(ro.hr, "TRACK \xB7 SPACE", 16);
+        ro.pages = 1;
+    } else if (tu.scr == TU_CHAR) {                     /* round 12: the character's own three and AMOUNT */
+        static const uint16_t CC[6] = {RGB(120, 110, 96), RGB(255, 140, 60), RGB(214, 226, 92), RGB(96, 200, 255),
+                                       RGB(176, 136, 255), RGB(255, 107, 154)};
+        uint32_t c = fx_chip(t);
+        ro.cap = "CHARACTER";
+        str_cpy(ro.big, c == 1u && t->p[P_ITYPE] > 1 ? TP[P_ITYPE].names[t->p[P_ITYPE]] : FXC[c], 16);
+        ro.col = CC[c];
+        str_cpy(ro.hl, tu_inst_name(t), 12);
+        str_cpy(ro.hl + str_len(ro.hl), " \xB7 CHAR", 8);
+        ro.pages = 2;
+        if (!c) {
+            ro.line = "PICK A CHARACTER ON TRACK FX (K3)";
+            for (i = 0; i < 4u; i++) {
+                str_cpy(ro.kl[i], "--", 10);
+                str_cpy(ro.kv[i], "--", 12);
+            }
+        } else {
+            ro.line = "K1-K3: THIS CHARACTER'S OWN \xB7 K4: HOW MUCH";
+            for (i = 0; i < 3u; i++) {
+                const param_desc_t *d = track_desc(t, P_IA + i);
+                ro_knob(i, str_eq(d->label, "FDBK") ? "FEEDBACK" : d->label, d, t->p[P_IA + i], 0);
+            }
+            ro_pct(3, "AMOUNT", t->p[P_IMIX], 0, 127);
+        }
     } else {
         static const char *const RT[3] = {"ROOM", "SPRING", "HALL"};
         ro.trk = 0xFF;
@@ -163,7 +204,7 @@ static void tu_fx_fill(void)
         ro_pct(2, "DELAY", song.g[G_DTIME], 0, 127);
         ro_pct(3, "FEEDBACK", song.g[G_DFDBK], 0, 127);
         str_cpy(ro.hl, "SPACE", 8);
-        str_cpy(ro.hr, "TRACK \xB7 SPACE", 16);
+        ro.pages = 3;
     }
 }
 static void tu_fx_input(uint32_t busy)
@@ -177,7 +218,14 @@ static void tu_fx_input(uint32_t busy)
         if ((s = panel_enc(EN_K1 + k)) == 0)
             continue;
         d = s > 0 ? 1 : -1;
-        if (tu.scr == TU_FX) {
+        if (tu.scr == TU_CHAR) {                        /* round 12: K1-K3 the character's own, K4 AMOUNT (OFF: nothing) */
+            uint32_t id = k < 3u ? P_IA + k : P_IMIX;
+            const param_desc_t *pd = track_desc(t, id);
+            if (!fx_chip(t))
+                continue;
+            t->p[id] = (int16_t)param_turn(pd, t->p[id], pd->fmt == F_ENUM || pd->names ? d : accel(EN_K1 + k, s, pd->max - pd->min));
+            motion_capture(t, id, t->p[id]);
+        } else if (tu.scr == TU_FX) {
             int16_t *vp = k == 0u ? &t->p[P_REV] : k == 1u ? &t->p[P_DLY] : &t->p[P_IMIX];
             if (k == 2u) {
                 uint32_t c = (uint32_t)clamp((int32_t)fx_chip(t) + d, 0, 5);
@@ -370,7 +418,7 @@ static void tu_pages_tap(uint32_t b)
 {
     track_t *t = TSEL;
     if (b == B_FX)
-        tu_goto(tu.scr == TU_FX ? TU_SPACE : TU_FX);
+        tu_goto(tu.scr == TU_FX ? TU_CHAR : tu.scr == TU_CHAR ? TU_SPACE : TU_FX);   /* (round 12: three pages) */
     else if (b == B_SCL) {
         if (tu.scr != TU_CLOCK && tu.scr != TU_CLOCK2)
             clock_hot = 0;                              /* (it opens on TEMPO) */
@@ -391,9 +439,9 @@ static void tu_pages_tap(uint32_t b)
 static void tu_pages_draw(void)
 {
     switch (tu.scr) {
-    case TU_FX: case TU_SPACE:
+    case TU_FX: case TU_CHAR: case TU_SPACE:
         tu_fx_fill();
-        ro_draw("FX", tu.scr == TU_FX ? "SPACE" : "TRACK FX", "HOLD FX", "PUNCH-IN", "ALGO", "TRACK");
+        ro_draw("FX", tu.scr == TU_FX ? "CHAR" : tu.scr == TU_CHAR ? "SPACE" : "TRACK FX", "HOLD FX", "PUNCH-IN", "ALGO", "TRACK");
         break;
     case TU_ARP:
         tu_arp_fill();
@@ -412,7 +460,7 @@ static void tu_pages_draw(void)
 static void tu_pages_input(uint32_t busy)
 {
     switch (tu.scr) {
-    case TU_FX: case TU_SPACE: tu_fx_input(busy); break;
+    case TU_FX: case TU_CHAR: case TU_SPACE: tu_fx_input(busy); break;
     case TU_ARP: tu_arp_input(busy); break;
     case TU_CLOCK: case TU_CLOCK2: tu_clock_input(busy); break;
     default: tu_motion_input(busy); break;

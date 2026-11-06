@@ -131,7 +131,7 @@ static void jam_turn(uint32_t k, int32_t s);
 #ifndef TU_OFF_DEFAULT
 #define TU_OFF_DEFAULT 0
 #endif
-enum { TU_JAM, TU_MIX, TU_SOUND, TU_BARS, TU_NOTES, TU_DRUMS, TU_SONG, TU_SONGS, TU_FX, TU_SPACE, TU_ARP,
+enum { TU_JAM, TU_MIX, TU_SOUND, TU_BARS, TU_NOTES, TU_DRUMS, TU_SONG, TU_SONGS, TU_FX, TU_CHAR, TU_SPACE, TU_ARP,
        TU_CLOCK, TU_CLOCK2, TU_MOTION, TU_DEEP, TU_N };
 static void tu_goto(uint32_t scr);
 static int tu_on(void);

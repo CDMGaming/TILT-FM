@@ -1269,7 +1269,7 @@ static void tu_screen_input(uint32_t pressed, uint32_t notes, uint32_t oct, uint
         if (tu.scr == TU_NOTES)
             tq_oct(pressed, oct);
         break;
-    case TU_FX: case TU_SPACE: case TU_ARP: case TU_CLOCK: case TU_CLOCK2: case TU_MOTION:
+    case TU_FX: case TU_CHAR: case TU_SPACE: case TU_ARP: case TU_CLOCK: case TU_CLOCK2: case TU_MOTION:
         tu_pages_input(busy);
         break;
     case TU_SONG:
@@ -1454,7 +1454,7 @@ static void tu_draw_screen(void)
     case TU_SONG:
         tu_song_draw();
         break;
-    case TU_FX: case TU_SPACE: case TU_ARP: case TU_CLOCK: case TU_CLOCK2: case TU_MOTION:
+    case TU_FX: case TU_CHAR: case TU_SPACE: case TU_ARP: case TU_CLOCK: case TU_CLOCK2: case TU_MOTION:
         tu_pages_draw();
         break;
     case TU_SONGS:
