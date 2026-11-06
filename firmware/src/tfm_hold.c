@@ -42,7 +42,7 @@ static void th_head(void)
         return;
     }
     static const char *const W[4] = {"HOLD FX", "HOLD GLO", "HOLD SCL", "HOLD SEQ"};
-    static const char *const S[4] = {"\xB7 PUNCH-IN", "\xB7 LIVE", "\xB7 ROOT", "\xB7 STEP TOOLS"};
+    static const char *const S[4] = {"\xB7 PUNCH-IN", "\xB7 LIVE", "\xB7 ROOT", "\xB7 PATTERN"};   /* (round 12: SEQ's PATTERN) */
     uint32_t i = l == LAYER_FX ? 0u : l == LAYER_GLO ? 1u : l == LAYER_SCL ? 2u : 3u;
     char b[8];
     int32_t x, w;
@@ -262,7 +262,7 @@ static void th_scl(void)
 }
 
 /* ---- SEQ: STEP TOOLS (amber) ---- */
-static void th_seq(void)
+static void th_seq_eu(void)
 {
     static const char *const TK[8][2] = {{"F3", "CLEAR"}, {"G3", "REVERSE"}, {"A3", "SHIFT <"}, {"B3", "SHIFT >"},
                                          {"C4", "RANDOM"}, {"D4", "COOK"}, {"E4", "BEAT"}, {"F4", "EUCLID"}};
@@ -340,6 +340,81 @@ static void th_seq(void)
     }
 }
 
+/* ---- SEQ v2 (round 12, HoldSeqV2.dc.html): the pattern big, the tools as keys. The keys and knobs are ui_layer.c's
+ * (tools_key, LY_SEQ) as before; EUCLID, while open, keeps round 11's frame (th_seq_eu) ---- */
+static void th_seq_card(uint32_t k, const char *lab, const char *val, const char *sub)
+{
+    int32_t x = 5 + (int32_t)k * 58;
+    int hot = ui.hot_t && ui.hot_col == k;              /* (the card being turned: lit) */
+    uint16_t bg = hot ? tu_mix(TC_DEEP, TU_TC[k], 22) : TC_DEEP;
+    char kb[4] = {' ', 'K', (char)('1' + k), 0};
+    int32_t w = text_w(&AF_TS, lab) + text_w(&AF_TS, kb);
+    tu_rrect(x, 26, 54, 48, 5, bg, TC_BG);
+    tu_rect(x + 3, 26, 48, 2, TU_TC[k]);                /* (its knob's colour on the top edge) */
+    tu_text(x + 27 - w / 2, 36, &AF_TS, lab, TU_TC[k], bg);
+    tu_text(x + 27 - w / 2 + text_w(&AF_TS, lab), 36, &AF_TS, kb, TC_QUIET, bg);
+    tu_text_c(x + 27, 52, str_len(val) > 3u ? &AF_TL : &AF_TX, val, TC_TEXT, bg);
+    if (sub)
+        tu_text_c(x + 27, 66, &AF_TS, sub, TC_QUIET, bg);
+}
+static void th_seq(void)
+{
+    static const char *const NT[16] = {"F3", "G3", "A3", "B3", "C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5", "F5", "G5"};
+    static const char *const JB[16] = {"CLEAR", "REV", "<", ">", "RAND", "COOK", "BEAT", "EUCL", "L.CLR", "L.REV", "L.FILL",
+                                       "L.RND", "\xD7" "2", "/2", "", ""};
+    uint16_t green = RGB(90, 210, 130), cyan = TC_CYAN;
+    track_t *t = TSEL;
+    int drum = drum_track(t);
+    uint32_t p, len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), keys = fm1_in.notes;
+    char v[12], b[12];
+    const char *u;
+    if (eu.on) {
+        th_seq_eu();
+        return;
+    }
+    fmt_int(v, (int32_t)len);
+    {   /* the length in bars (16 steps a bar at the track's division, as BARS counts them) */
+        uint32_t bars = (len + 15u) / 16u;
+        fmt_int(b, (int32_t)bars);
+        str_cpy(b + str_len(b), bars == 1u ? " BAR" : " BARS", 8);
+    }
+    th_seq_card(0, "LEN", v, b);
+    param_format(track_desc(t, P_SDIV), t->p[P_SDIV], v, &u);
+    th_seq_card(1, "DIV", v, 0);
+    fmt_int(v, t->p[P_SSWING]);
+    th_seq_card(2, "SWING", v, "%");
+    fmt_int(v, t->p[P_SGATE]);
+    th_seq_card(3, "GATE", v, "%");
+    tu_text(6, 80, &AF_TS, "D5 \xD7" "2 \xB7 E5 /2  DOUBLE OR HALVE THE PHRASE", TC_AMBER, TC_BG);
+    tu_text(4, 92, &AF_TS, "THE TRACK", TC_AMBER, TC_BG);
+    tu_text(4, 133, &AF_TS, drum ? "THE LANE (DRUMS)" : "THE LANE (DRUMS ONLY)", drum ? green : tu_mix(TC_BG, green, 45), TC_BG);
+    tu_text(119, 133, &AF_TS, "LENGTH", cyan, TC_BG);
+    for (p = 0; p < 16u; p++) {                         /* two rows of 8, keyboard order: the note small, the job big */
+        int32_t x = 3 + (int32_t)(p % 8u) * 29, y = p < 8u ? 100 : 141;
+        uint32_t k, down = 0;
+        uint16_t col = p < 8u ? TC_AMBER : p < 12u ? green : p < 14u ? cyan : RGB(46, 36, 22);
+        int dim = (p >= 8u && p < 12u && !drum) || p >= 14u;
+        int lit, flash = tl_act_p == p + 1u && fm1_ms - tl_act_t < 300u;
+        for (k = 0; k < 27u; k++)
+            if (((keys >> k) & 1u) && !key_black(k) && key_place(k) == p)
+                down = 1;
+        lit = !dim && (down || flash);
+        if (dim)
+            col = tu_mix(TC_BG, col, 35);
+        tu_rrect(x, y, 28, 26, 4, col, TC_BG);
+        if (!lit)
+            tu_rrect(x + 1, y + 1, 26, 24, 3, RGB(28, 22, 13), col);
+        tu_text_c(x + 14, y + 7, &AF_TS, NT[p], lit ? TC_BG : TC_QUIET, lit ? col : RGB(28, 22, 13));
+        if (JB[p][0])
+            tu_text_c(x + 14, y + 18, &AF_TS, JB[p], lit ? TC_BG : dim ? TC_DIM : TC_TEXT, lit ? col : RGB(28, 22, 13));
+    }
+    if (drum) {                                         /* the strip: the 8 lanes (the selected one lit), as round 11 */
+        static const char *const LN[8] = {"1", "2", "3", "4", "5", "6", "7", "8"};
+        tu_keystrip(8, LN, TF_LC, 1u << (ui.lane & 7u));
+    } else {
+        th_lines(0, "BLACK KEYS: LANES ON A DRUM TRACK");
+    }
+}
 /* ---- ENV (round 12, HoldEnv.dc.html): a small sheet, the screen behind dimmed; F3 MUTATE (its mode chips, K2), G3 STUCK ---- */
 static void th_env(void)
 {
@@ -401,7 +476,8 @@ static uint32_t th_sig(void)
         s += (uint32_t)t->p[P_ROOT] * 3u + (uint32_t)t->p[P_SCALE] * 37u + (uint32_t)t->p[P_CHRD] * 401u + (uint32_t)t->p[P_VOIC] * 4001u;
     } else {
         s += (uint32_t)t->p[P_SLEN] * 3u + (uint32_t)t->p[P_SDIV] * 37u + (uint32_t)t->p[P_SSWING] * 401u + (uint32_t)t->p[P_SGATE] * 4001u +
-             (ui.lane & 7u) * 13u + (eu.on ? 1u + eu.hits * 7u + eu.steps * 131u + eu.rot * 1009u : 0u);
+             (ui.lane & 7u) * 13u + (eu.on ? 1u + eu.hits * 7u + eu.steps * 131u + eu.rot * 1009u : 0u)
+             + fm1_in.notes * 3u + (tl_act_p && fm1_ms - tl_act_t < 300u ? tl_act_p * 977u : 0u) + (ui.hot_t ? ui.hot_col + 1u : 0u) * 7919u;
     }
     return s;
 }
@@ -419,7 +495,9 @@ static void tu_hold_draw(void)
         tu_foot(3, "KEYS", "ROOT", "K2", "SCALE", "LET GO", "DONE", 0, 0, 0, 0);
     else if (l == LAYER_TILT)
         tu_foot(3, "F3", "MUTATE", "G3", "STUCK", "K2", "MODE", 0, 0, 0, 0);
-    else
+    else if (eu.on)
         tu_foot(3, "WHITE", "TOOL", "BLACK", "LANE", "K1-K4", "PATTERN", 0, 0, 0, 0);
+    else
+        tu_foot(3, "WHITE", "TOOL", "BLACK", "LANE", "OCT-", "AS OPENED", 0, 0, 0, 0);   /* (round 12) */
     ui.force = 0;
 }

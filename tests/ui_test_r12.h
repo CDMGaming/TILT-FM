@@ -132,3 +132,30 @@ static int test_r12_env(void)
     ui_power_on();
     return bad;
 }
+
+/* item 3: hold SEQ v2 (the drawing; the tools are ui_layer.c's, their own tests unchanged) */
+static int test_r12_seq_v2(void)
+{
+    int bad = 0, ok = 1;
+    track_t *t;
+    ui_power_on();
+    tu_off = 0;
+    layer_seen |= 1u;
+    song.sel = 0;
+    t = TSEL;
+    tfm_load(t, TI_THUMP, 0);
+    t->p[P_SLEN] = 16;
+    tu_goto(TU_JAM); fm1_ms += 4000u; scrn.st = SCR_ON; scrn.idle = fm1_ms; frames(8);
+    btn_down(B_SEQ); frames(500);
+    R12(ui.layer == LAYER_SEQ && tu_hold_on());
+    ui.force = 1; tu_hold_draw();
+    R12(str_eq(tu_ft.k[2], "OCT-") && str_eq(tu_ft.a[2], "AS OPENED"));
+    tl_act_p = 0;
+    r12_lkey(12);                                       /* D5: x2 */
+    R12(t->p[P_SLEN] == 32 && tl_act_p == 13u && fm1_ms - tl_act_t < 300u);   /* (the tile flashes) */
+    btn_up(B_SEQ); frames(30); fm1_ms += 3000u; frames(4);
+    ui.layer = ui.ly = ui.lock = 0; frames(4);
+    bad += check("round 12 hold SEQ v2: footer WHITE TOOL . BLACK LANE . OCT- AS OPENED, D5 doubles the phrase and its tile flashes", ok);
+    ui_power_on();
+    return bad;
+}

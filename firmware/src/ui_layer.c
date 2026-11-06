@@ -436,6 +436,8 @@ static void tools_key(uint32_t p)
     }
     if (!(m = tl_do(TSEL, p, ui.lane)))
         return;
+    tl_act_p = (uint8_t)(p + 1u);                       /* (round 12: hold SEQ's tile flashes, tfm_hold.c) */
+    tl_act_t = fm1_ms;
     if (p == TL_COOK && lys.cook < 99u) {               /* "COOKED 3": the third since the layer opened */
         lys.cook++;
         fmt_int(n, lys.cook);
