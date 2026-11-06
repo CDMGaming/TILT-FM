@@ -706,6 +706,10 @@ static void tf_face(void)                               /* the whole body, y 22 
         break;
     }
 }
+/* round 11: SOUND's drum key held (tu_sound_input below) */
+static struct { uint8_t lane, took; } tdl;              /* the lane held + 1 (0 none); its undo copy taken */
+static int tdl_kit(const track_t *t) { uint32_t i = tfm_ins_of(t); return i == TI_THUMP || i == TI_KITBOX || i == TI_GARAGE; }
+static int tdl_on(void) { return tdl.lane != 0u; }
 static void tu_face_top(void) { tf_face(); }
 static void tu_face_dials(void) { tf_face(); }
 static void tu_head_sound(void)
@@ -740,15 +744,18 @@ static void tu_sound_draw(void)
     sig = i * 977u + k * 31u + (uint32_t)tu.page * 7919u + tfm_snd_of(&trk[k]) * 131u + (tm.on ? tm.left : 0u) + tu_rec_sig() * 6007u;
     sig += tsl_sig() * 19u;
     for (m = 0; m < 8u && i != TI_NONE; m++)
-        sig = sig * 31u + (uint32_t)tfm_macro_get(&trk[k], m);
+        sig = sig * 31u + (uint32_t)tfm_macro_get(&trk[k], m) + (uint32_t)trk[k].p[P_LN0 + m] * 7u;
+    sig += tdl.lane * 104729u;
     tu_zone(0, 0, TU_HY, fc.bg, sig, tu_head_sound);
     tu_zone(2, 22, 104, fc.bg, sig + (i != TI_NONE ? (ui.frame >> 1) * 7u : 0u), tu_face_top);
     tu_zone(3, 126, 89, fc.bg, sig + (i != TI_NONE ? (ui.frame >> 1) * 7u : 0u), tu_face_dials);
     tu_pbg = tu_mix(fc.bg, TC_BG, 70);
     tu_pline = tu_mix(fc.bg, fc.acc, 14);
     tu_pq = TC_QUIET;
-    if (i == TI_THUMP)
-        tu_foot(3, "KEYS", "PLAY PARTS", "EDIT", tu.page ? "PAGE 1" : "PAGE 2", "SEQ", "GRID", 0, 0, 0, 0);
+    if (tdl_on())                                       /* (round 11: a drum key held, K1 its level) */
+        tu_foot(2, "K1", "LEVEL", "LET GO", "DONE", 0, 0, 0, 0, 0, 0);
+    else if (i == TI_THUMP || i == TI_KITBOX || i == TI_GARAGE)
+        tu_foot(2, "HOLD A DRUM KEY:", "K1 ITS LEVEL", "EDIT", tu.page ? "PAGE 1" : "PAGE 2", 0, 0, 0, 0, 0, 0);
     else
         tu_foot(3, "EDIT", tu.page ? "PAGE 1" : "PAGE 2", "PRESETS", "SOUND", "HOME", "JAM", 0, 0, 0, 0);
     tu_pbg = TC_BG;
@@ -800,15 +807,54 @@ static void tu_sound_step(int32_t s)
     tfm_load(t, i, (uint32_t)nx);
     undo_depth--;
 }
+/* round 11: a drum's level from SOUND. On THUMP LAB, KITBOX and GARAGE a drum key held (the key that plays it: the white keys
+ * F3 .. F4, lanes 1-8) makes K1 that
+ * lane's level (P_LN0 + lane, 0..127 and the square law of DEEP > LANES; the sound's own value, saved and stored with it as
+ * the macros' are): its pad or column lights and its bar moves as it turns. The first turn of a hold takes one undo copy
+ * (UNDO_SOUND: hold SAVE after puts it back). Let go: the knobs are the macros again. The key sounds as it goes down, so a
+ * tap with no turn plays the drum; a turn makes it nothing more (no other knob moves while it is held) */
+static void tdl_poll(void)                              /* (every pass on SOUND) the drum key held, the lowest */
+{
+    uint32_t k, held = 0;
+    if (tu.scr == TU_SOUND && tdl_kit(TSEL) && !ui.layer && !ui.menu)
+        for (k = 0; k < 27u && !held; k++)              /* (the white keys F3 .. F4 play lanes 1-8: round 9) */
+            if (((fm1_in.notes >> k) & 1u) && !key_black(k) && key_place(k) < 8u)
+                held = key_place(k) + 1u;
+    if (held != tdl.lane) {
+        if (!held || !tdl.lane)
+            tdl.took = 0;                               /* (a new hold: its own undo copy) */
+        tdl.lane = (uint8_t)held;
+        ui.force = 1;
+    }
+    if (tdl.lane)
+        fs[song.sel].lane[tdl.lane - 1u] = 8;           /* (its pad or column lit) */
+}
 static void tu_sound_input(uint32_t busy)
 {
     track_t *t = &trk[song.sel];
     uint32_t k;
     int32_t s;
+    tdl_poll();
     if (busy)
         return;
     if ((s = panel_enc(EN_PRESET)) != 0)
         tu_sound_step(s);
+    if (tdl_on()) {                                     /* (round 11: K1 the held drum's level) */
+        if ((s = panel_enc(EN_K1)) != 0) {
+            uint32_t id = P_LN0 + tdl.lane - 1u;
+            const param_desc_t *d = track_desc(t, id);
+            if (!tdl.took) {
+                edit_undo_take(t, 0, UNDO_SOUND);
+                tdl.took = 1;
+            }
+            t->p[id] = (int16_t)param_turn(d, t->p[id], accel(EN_K1, s, d->max - d->min));
+            ui.hot_col = 0;
+            ui.force = 1;
+        }
+        for (k = 1; k < 4u; k++)
+            panel_enc(EN_K1 + k);
+        return;
+    }
     for (k = 0; k < 4u; k++)
         if ((s = panel_enc(EN_K1 + k)) != 0 && tfm_ins_of(t) != TI_NONE) {
             tfm_macro_turn_k(t, (uint32_t)tu.page * 4u + k, k, s);

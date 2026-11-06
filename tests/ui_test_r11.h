@@ -172,3 +172,50 @@ static int test_r11_select(void)
     return bad;
 }
 
+/* item 4: a drum's level from SOUND (hold its key, K1) */
+static int test_r11_drum_level(void)
+{
+    static const uint8_t INS[3] = {TI_THUMP, TI_KITBOX, TI_GARAGE};
+    int bad = 0, ok = 1;
+    uint32_t i, l;
+    for (i = 0; i < 3u; i++) {
+        track_t *t = &trk[0];
+        int16_t L[8];
+        int32_t M[8], m0;
+        uint32_t k = key_at(0, 2);                      /* A3: lane 3 */
+        ui_power_on();
+        tu_off = 0;
+        song.sel = 0;
+        tfm_load(t, INS[i], 0);
+        favorites.factory[15][31] |= 1u;                /* (a hold seen: no first-run line in the footer) */
+        t->p[P_LN0 + 2] = 100;
+        tu_goto(TU_SOUND);
+        fm1_ms += 4000u;                                /* (past the power-on splash; awake: the footer drawn) */
+        scrn.st = SCR_ON; scrn.idle = fm1_ms; ui.force = 1; frames(8);
+        for (l = 0; l < 8u; l++) { L[l] = t->p[P_LN0 + l]; M[l] = tfm_macro_get(t, l); }
+        ui.force = 1; tu_draw();                        /* (SOUND drawn now: right after power-on the frame may still be the splash's) */
+        R11(str_eq(tu_ft.k[0], "HOLD A DRUM KEY:") && str_eq(tu_ft.a[0], "K1 ITS LEVEL"));
+        r9_key(k, 1); frames(2);
+        R11(tdl_on() && tdl.lane == 3u && fs[0].lane[2] && str_eq(tu_ft.k[0], "K1") && str_eq(tu_ft.a[1], "DONE"));
+        R11(kb_note[k] != 0u);                          /* (it sounded as it went down) */
+        turn(EN_K1, -6); frames(2);
+        R11(t->p[P_LN0 + 2] < 100);
+        turn(EN_K2, 4); frames(2);                      /* (no other knob while held) */
+        for (l = 0; l < 8u; l++) {
+            R11(l == 2u || t->p[P_LN0 + l] == L[l]);    /* only that lane */
+            R11(tfm_macro_get(t, l) == M[l]);           /* the macros untouched */
+        }
+        r9_key(k, 0); frames(2);
+        R11(!tdl_on());
+        undo_swap(); frames(2);                         /* (hold SAVE: the hold's one copy) */
+        R11(t->p[P_LN0 + 2] == 100);
+        m0 = tfm_macro_get(t, 0);
+        turn(EN_K1, 4); frames(2);                      /* let go: K1 the macro again */
+        R11(tfm_macro_get(t, 0) != m0 && t->p[P_LN0 + 2] == 100);
+        r9_key(k, 1); r9_key(k, 0); frames(2);          /* a tap, no turn: it plays, nothing changes */
+        R11(kb_note[k] != 0u && t->p[P_LN0 + 2] == 100 && !tdl_on());
+    }
+    bad += check("round 11 drums: hold a drum key on SOUND, K1 its lane's level only (macros kept), one undo, let go K1 the macro, a tap plays", ok);
+    ui_power_on();
+    return bad;
+}
