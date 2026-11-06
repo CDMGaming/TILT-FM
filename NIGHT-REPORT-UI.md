@@ -332,3 +332,61 @@ Branch `tfm-ui`: `446cbbd` (1), `a61df7f` + `dcd7655` (2, then its budget), `151
 **Tests:** tests/ui_test_r6.h (round 9 section): `test_r9_knob_speed`, `test_r9_dj`, `test_r9_drum_faces`, `test_r9_drum_keys`, `test_r9_key_level`; round 8's kits / pitched-lane tests follow the new names and keys.
 
 **Suite (round 9):** tests=0 (ALL HOST TESTS PASSED), no FAIL lines, target_budget 0 (the audio ISR 9,016 against 8,285: +8.8 %, within the +10 %; it was 8,592 after item 2, and item 4's key setup is out of line to stay inside). The earlier runs caught the scene-load bug and the editor range (both fixed above). 0 lint findings, alignment 0 off. Final build 509,460 B, RAM 63,368 B, pool 365,756 B. Published as the installer preview (next/), the tested release at the root unchanged.
+
+## Round 10 (ROUND-10.md: easy to make, easy to find)
+
+Branch `tfm-ui`: `fbe50da` (1), `008004d` (2), `d7f75dd` (3), `cba3b09` (4), `f3faf7a` (5), `d5e4d38` + `d6ad1c5` (6), `1a8d9cf` (7), `514318d` (8), `efe5876` (the suite). Package `tilt-fm-ui-r10-<sha>.fwsc`. Nothing was run on an FM-1. Plan and review in `TILT-FM/tasks/todo.md`.
+
+**Budgets** (app image / RAM .data+.bss; pool 365,756 B, unchanged): round 9 final 509,460 / 63,368. Item 1: 513,452 / 63,416. Item 2: 515,032 / 63,464. Item 3: 515,976. Item 4: 516,512. Item 5: 516,312. Item 6: 516,320, then 516,176. Item 7: 516,816 (the splash +640). **Flash: 516,816 of the 581,564 B slot, 64,748 free. RAM: 63,464 of 67,584 B, 4,120 free (+96 this round). Audio ISR: 9,021 against its 8,285 budget, +8.9 % (limit +10 %; 9,016 after round 9).** Note: the round file called 4,216 B the *flash* headroom; that was round 9's RAM headroom. Flash had 72,104 B free and has 64,748 now. Nothing had to be left out.
+
+1. **JAM's scene sheet.**
+   - **Tap and hold:** tap a scene key and it launches, as before. Hold it ~400 ms and its sheet opens over the cabinets: the letter big, its bars, its tracks, and four actions. No key plays while the sheet is open.
+   - **The actions:**
+     - F3 DUP copies the scene to the next empty one (up from it, wrapping) and cues the copy. With none free: NO EMPTY SCENE.
+     - G3 CLEAR asks first.
+     - A3 x2 makes every track twice as long, copying its steps, notes and automation after themselves (64 steps at most).
+     - B3 /2 halves every track, keeping the first half.
+   - **Letting go:** the sheet closes and nothing launches. Round 6's held combos are gone, so two quick taps never copy.
+   - **Playing:** a stored scene changes now, through the RAM path. `scn_store_ram` can now queue an erase too, which `scene_flush` performs at the stop. So nothing erases or writes flash while playing; when three scenes already wait, STOP TO SAVE, as before. The scene playing changes at its loop's end: the header says AT LOOP END, and the action is dropped if the music leaves that scene.
+   - **Undo:** hold SAVE right after an action.
+     - DUP: the copy goes and the music returns to its scene.
+     - CLEAR, x2, /2: the scene as it was.
+     - It is one level, through `scene_ubuf`, the scene undo image the SCENE layer already kept in the pool. **No new RAM for a scene**: the whole item cost +48 B.
+     - An undo generation count makes SAVE undo the sheet only when it was the last action.
+     - **One gap:** undoing DUP while the copy is already the scene playing says STOP TO UNDO.
+   - **Scope:** DUP of the playing scene applies at once, since it doesn't change the playing scene; it cues the copy for the bar's end.
+   - Test `test_r10_sheet`. "No flash while playing" is checked through host counters: every scene store while playing went through the RAM path, which never writes flash on the device. Round 5's test now checks the old combos do nothing. Render `ui_jam_sheet`.
+2. **PRESETS browse.**
+   - The first detent only shows the SOUND CARD; sounds change from a second detent within ~1 s, then live, one sound per detent, with MORPH back to 0.
+   - The card shows the instrument's name in its colour, the sound big, a dot per sound and "n of N". At either end it says HOLD EDIT: OTHER INSTRUMENTS. It closes ~2 s after the last detent, and the screen under it isn't drawn meanwhile.
+   - **One undo per browse:** the first change takes the copy, and the loads after it run nested so they keep it. Hold SAVE, or OCT- on the card, gives the starting sound.
+   - Tracks with no TFM instrument step Felucca's presets with the same card.
+   - Test `test_r10_browse`. Render `ui_sound_card`.
+3. **Hold footers.** A button held on any TFM screen puts what its hold does in the footer (tu_foot, at most 3 pairs) until the hold engages. The layers' own maps already had footers.
+   - The lines: SAVE UNDO; HOME MENU; EDIT INSTRUMENTS; ENV F3 NEW SONG / G3 STUCK / A3 MUTATE; FX PUNCH-IN; GLO LIVE; SCL ROOT; SEQ STEP TOOLS; REC CLICK, COUNT-IN; LFO MOMENTARY; ARP DJ.
+   - OCT+: STEP SHEET on NOTES and DRUMS, COPY BAR on BARS, nothing elsewhere (there it's the octave).
+   - **First run:** JAM says HOLD A BUTTON: SEE WHAT IT DOES until a button has been held 400 ms. That is remembered in `layer_seen` bit 0, LAYER_NONE's never-used bit, saved with the settings with no size change. (`ui_prefs2`'s "free" bit 7 is actually 2ND CORE.)
+   - Test `test_r10_hold_foot`: 13 screens, every line within the footer's width, and the first-run bit across a settings export and import.
+4. **Black-key strips** on MIX and DRUMS, in JAM's places.
+   - MIX: T1-T4 mute (lit while playing); the other seven keys are dark.
+   - DRUMS: the eight lanes in TILT's colours (the cursor's lit), C#5 ACC, D#5 / F#5 PG- / PG+.
+   - **What moved:** MIX's faders are 82 px from y 64 (were 115 from 70), the level at 157 and MUTED at 170 (were 198 and 210). DRUMS' knob cards moved 4 px up (149 .. 174).
+   - Renders `ui_mix`, `ui_drums`.
+5. **Undo undoes the last action.** NOTES' delete and STEP's clear now take the step copy first. SONG's section delete keeps the chain as JAM's CHAIN does (`jw_undo`, now shared), and hold SAVE puts it back.
+   - Test `test_r10_undo_delete`: each gives the state just before the delete, not an older copy's. **All three checks failed on the old code** before the fix.
+6. **The build on screen.** TILT_VERSION is 0.3.0. TILT_BUILD shows on the splash and next to MENU in the menu header (11 px). To make room there, HOME's hint on the main menu page is its keycap alone (no CLOSE word). Lint passes at the real length (`r10-<sha>`, with the REC mark showing).
+7. **The DMD splash** (`_splash_vs_drawing.png` in tfm-spec/built: the drawing via headless Chrome, left; the render, right).
+   - Built as drawn: the dot field, TILT at 8 px pitch / 6 px dots from y 30, -FM- at 4 px / 3 px at 98, the ball's trail, two dotted flippers at 18° around the drain gap, FREE PLAY, and the two credits (Felucca's GPL credit kept).
+   - lcd_fill dots, no bitmaps; the web emulator calls the same function; the timing and kb_boot_hold are untouched.
+   - **Differences:**
+     - The drawing's credits are 6 px at 1x, under the 11 px rule, so they are 12 px and everything below the flippers sits a few px higher.
+     - FREE PLAY's glow is left out (a second draw offsets the text rather than glowing it).
+   - **Flash: +640 B.**
+8. **tfm-spec/HARDWARE-CHECK.md**: a one-page tick list for rounds 9 and 10, with a blank for each result.
+
+**Exit path** (tasks/lessons.md):
+- The editor's backup export is covered by the suite's web backup test (capture, validation, restore order).
+- **No copy of the official V15 is on this PC** (only the V16 download), so the "Return to official V15" path could not be run against a real file and no pinned copy exists yet. Please put your V15 `FM-1.fwsc` in the TILT-FM folder; I'll check its hash and keep it with its SHA-256.
+- M-VAVE's page still offers V16 (2026_10_21), unchanged since round 9.
+
+**Suite (round 10):** tests=0 (ALL HOST TESTS PASSED), no FAIL lines, target_budget 0. The first run caught persistence_test, which builds project.c without the TFM UI: the sheet's storage half is now built with the UI only (`efe5876`). 0 lint findings, alignment 0 off. Final build 516,816 B, RAM 63,464 B, pool 365,756 B. Published as the installer preview (next/), the tested release at the root unchanged.

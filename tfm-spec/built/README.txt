@@ -5,6 +5,9 @@ ui_clock2
 ui_drums
 ui_fx
 ui_jam
+ui_jam_first
+ui_sound_card
+ui_jam_sheet
 ui_mix
 ui_motion
 ui_notes
@@ -31,6 +34,8 @@ ui_song
 ui_songs
 ui_space
 ui_start
+ui_start_rolled
+ui_start_spin
 ui_start_rolled
 ui_start_spin
 ui_start_rolled
