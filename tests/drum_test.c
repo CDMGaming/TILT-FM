@@ -890,7 +890,10 @@ static void cost(void)
 }
 
 /* --------------------------------------------------------- the model kits --- */
-static const char *const KITN[DV_NKIT] = {"80", "10", "66", "55", "77", "DEEP", "TIGHT", "PERC"};
+static const char *const KITN[DV_NKIT] = {"80", "10", "66", "55", "77", "DEEP", "TIGHT", "PERC",
+                                          /* TILT-FM round 13: one kit per drum preset */
+                                          "WAREHOUSE", "BOOM BAP", "DISCO", "TRASH CAN", "ARCADE", "DENTED", "TIN ROOF", "BUCKET",
+                                          "STATIC", "PARKING LOT", "STUDIO", "BASEMENT", "PORCH", "CANTINA", "TIN SHED"};
 static const char *const LANEN[DV_NLANE] = {"KICK", "SNARE", "CLAP", "HATCL", "HATOP", "TOM", "RIM", "BELL"};
 #define KLEN (FS * 6u)
 
@@ -916,8 +919,62 @@ static const float KTGT[DV_NKIT][DV_NLANE][2] = {
      {0.500, 13024}, {0.200, 3480}, {0.010, 2421}, {0.220, 1590}},
     {{0.620, 1863}, {0.120, 4518}, {0.230, 5906}, {0.210, 9473},   /* PERC: 10 77 77 66 66 66 77 66 */
      {0.270, 9422}, {0.110, 1379}, {0.110, 3517}, {0.050, 1274}},
+    /* ROUND13-KTGT-BEGIN */
+    {{0.530, 908}, {0.130, 7462}, {0.150, 8282}, {0.080, 10679},   /* WAREHOUSE */
+     {0.420, 9844}, {0.560, 1541}, {0.020, 4240}, {2.010, 7424}},
+    {{1.330, 1453}, {0.220, 3754}, {0.120, 6253}, {0.060, 11681},   /* BOOM BAP */
+     {0.390, 10282}, {0.850, 1390}, {0.090, 5708}, {1.220, 7512}},
+    {{0.580, 1284}, {0.130, 8362}, {0.070, 8295}, {0.040, 11815},   /* DISCO */
+     {0.750, 11210}, {0.520, 1709}, {0.020, 4198}, {0.310, 2616}},
+    {{0.370, 1023}, {0.170, 7717}, {0.230, 10391}, {0.090, 12127},   /* TRASH CAN */
+     {0.640, 12006}, {0.530, 2672}, {0.020, 5358}, {1.100, 6943}},
+    {{0.360, 1408}, {0.190, 8913}, {0.040, 6760}, {0.030, 8378},   /* ARCADE */
+     {0.210, 8884}, {0.420, 3155}, {0.060, 4482}, {0.920, 9009}},
+    {{0.090, 619}, {0.060, 7991}, {0.040, 6672}, {0.040, 8753},   /* DENTED */
+     {0.080, 8837}, {0.090, 783}, {0.040, 5661}, {1.040, 4328}},
+    {{0.080, 774}, {0.040, 8587}, {0.020, 6418}, {0.040, 10103},   /* TIN ROOF */
+     {0.060, 10140}, {0.070, 2330}, {0.020, 6217}, {1.960, 7751}},
+    {{0.110, 362}, {0.070, 4077}, {0.050, 5739}, {0.040, 9615},   /* BUCKET */
+     {0.080, 9425}, {0.090, 671}, {0.020, 1443}, {0.490, 5513}},
+    {{0.060, 2302}, {0.030, 9666}, {0.030, 7237}, {0.030, 12072},   /* STATIC */
+     {0.040, 11885}, {0.060, 6757}, {0.020, 6437}, {1.710, 9216}},
+    {{0.100, 789}, {0.070, 7850}, {0.040, 6103}, {0.040, 10534},   /* PARKING LOT */
+     {0.080, 10641}, {0.080, 912}, {0.020, 4720}, {1.050, 7428}},
+    {{0.400, 1337}, {0.170, 5335}, {0.210, 6583}, {0.110, 11589},   /* STUDIO */
+     {0.570, 10941}, {0.700, 956}, {0.010, 2677}, {2.300, 6169}},
+    {{0.460, 1585}, {0.170, 4863}, {0.110, 6099}, {0.170, 9681},   /* BASEMENT */
+     {0.440, 9665}, {0.290, 2360}, {0.050, 2751}, {1.330, 9248}},
+    {{0.570, 1385}, {0.200, 2390}, {0.120, 6931}, {0.140, 9850},   /* PORCH */
+     {0.470, 9797}, {0.440, 2165}, {0.070, 3192}, {1.550, 7031}},
+    {{0.580, 1654}, {0.180, 6240}, {0.100, 5552}, {0.200, 8162},   /* CANTINA */
+     {0.460, 8177}, {0.390, 1873}, {0.080, 3508}, {0.460, 2138}},
+    {{0.440, 1011}, {0.260, 4746}, {0.180, 8154}, {0.050, 9596},   /* TIN SHED */
+     {0.620, 10022}, {0.430, 1839}, {0.150, 5065}, {0.780, 2832}},
+    /* ROUND13-KTGT-END */
 };
 static const float KLVL[DV_NLANE] = {-14.5f, -18.2f, -24.2f, -27.4f, -23.8f, -13.6f, -22.5f, -21.0f};
+/* TILT-FM round 13: the fifteen new kits' lanes: t-30 (s), centroid (Hz) and the level of 0..0.2 s (dBFS) as designed (measured:
+ * KTGT=1 prints the rows). Their levels are their own (a lane's peak is set against its kit's other lanes, not the STD kit's),
+ * the other checks are the old kits' */
+/* ROUND13-KLVN-BEGIN */
+static const float KLVN[15][DV_NLANE] = {
+    {-1.4f, -18.2f, -31.2f, -42.4f, -39.4f, -1.6f, -16.3f, -18.5f},   /* WAREHOUSE */
+    {-0.8f, -4.5f, -21.3f, -19.4f, -13.9f, -1.1f, -8.7f, -18.0f},   /* BOOM BAP */
+    {-1.3f, -13.7f, -32.7f, -47.9f, -32.9f, -1.8f, -17.2f, -9.4f},   /* DISCO */
+    {-1.5f, -8.3f, -13.2f, -11.3f, -3.3f, -0.7f, -14.1f, -9.4f},   /* TRASH CAN */
+    {-1.4f, -9.6f, -23.8f, -20.3f, -10.4f, -0.9f, -10.7f, -10.9f},   /* ARCADE */
+    {-8.0f, -13.1f, -20.0f, -30.4f, -27.1f, -8.9f, -12.4f, -18.7f},   /* DENTED */
+    {-8.3f, -14.2f, -21.8f, -29.4f, -23.9f, -9.3f, -15.9f, -16.3f},   /* TIN ROOF */
+    {-7.5f, -10.7f, -24.8f, -26.5f, -23.2f, -9.1f, -21.5f, -25.1f},   /* BUCKET */
+    {-9.3f, -16.7f, -21.5f, -32.4f, -30.9f, -9.7f, -16.1f, -21.9f},   /* STATIC */
+    {-7.3f, -12.2f, -20.8f, -24.3f, -20.9f, -9.5f, -16.3f, -19.9f},   /* PARKING LOT */
+    {-2.3f, -16.9f, -28.8f, -24.9f, -20.4f, -5.1f, -29.6f, -26.5f},   /* STUDIO */
+    {-2.0f, -13.0f, -33.6f, -30.0f, -27.7f, -9.6f, -24.6f, -28.0f},   /* BASEMENT */
+    {-1.3f, -6.3f, -28.1f, -31.2f, -27.1f, -5.9f, -23.2f, -27.6f},   /* PORCH */
+    {-1.4f, -7.5f, -32.4f, -24.2f, -19.4f, -5.3f, -23.0f, -26.3f},   /* CANTINA */
+    {-1.8f, -16.1f, -32.5f, -19.6f, -8.7f, -9.3f, -8.3f, -26.2f},   /* TIN SHED */
+};
+/* ROUND13-KLVN-END */
 
 /* every kit: every lane against its targets, DC, its end; DECAY / TUNE / TONE / SNAP each move it; the corners
  * (DECAY TONE SNAP 0 / 127, TUNE +-25 st, LEVEL 127, full accent) under full scale; a retrigger renders the same */
@@ -940,13 +997,13 @@ static void kits(void)
             t3 = t30(&B), ce = centroid100(&B), lv = rms_db(&B, 0, FS / 5u), dc = dc_share(&B);
             snprintf(line + strlen(line), sizeof line - strlen(line), " %s %.2f s %.0f Hz %.1f dB;", LANEN[l], t3, ce, lv);
             if (getenv("KTGT"))
-                printf("KTGT %u %u {%.3ff, %.0ff},\n", k, l, t3, ce);
+                printf("KTGT %u %u {%.3ff, %.0ff}, %.1f\n", k, l, t3, ce, lv);
             if (fabs(t3 - KTGT[k][l][0]) > KTGT[k][l][0] * 0.15 + 0.01)
                 snprintf(why + strlen(why), sizeof why - strlen(why), " t-30 %.3f (target %.3f);", t3, KTGT[k][l][0]);
             if (fabs(ce / KTGT[k][l][1] - 1) > 0.2)
                 snprintf(why + strlen(why), sizeof why - strlen(why), " centroid %.0f (target %.0f);", ce, KTGT[k][l][1]);
-            if (fabs(lv - KLVL[l]) > 1.5)
-                snprintf(why + strlen(why), sizeof why - strlen(why), " level %.1f (target %.1f);", lv, KLVL[l]);
+            if (fabs(lv - (k >= 8u ? KLVN[k - 8u][l] : KLVL[l])) > 1.5)
+                snprintf(why + strlen(why), sizeof why - strlen(why), " level %.1f (target %.1f);", lv, k >= 8u ? KLVN[k - 8u][l] : KLVL[l]);
             if (dc > 0.01)
                 snprintf(why + strlen(why), sizeof why - strlen(why), " DC %.2f %%;", dc * 100);
             if (!B.stop || B.stop > (uint32_t)((4 * t3 + 0.5) * FS))
@@ -1260,10 +1317,89 @@ static uint64_t seq_hash(const uint8_t (*ev)[3], uint32_t nev, uint32_t frames, 
  * the engine the same samples (either KICK); the knob steps STD 80 10 66 55 77 and never lands on 1..3; DESC names
  * them as the kit they play; a stored value (param_fit: projects, user presets) and a motion event land on that kit;
  * KIT moved by the matrix over its whole range plays only the six kits */
+/* TILT-FM round 13: projects saved before it play their kits as they did. The renders of KIT 0..11 (a beat that strikes every
+ * lane and the GM extras, either KICK) as they were before the fifteen kits and the wider kit types (tests/drum_test.c at
+ * c808a83: seq_hash, FNV of the mix, and its peak) */
+static void old_kits(void)
+{
+    static const struct { uint64_t h; int32_t pk; } GOLD[12][2] = {
+        {{0x83b68a1d9cf10c0full, 23096}, {0xfdc2b03867980931ull, 23398}}, {{0x5baac7adfc8ec75bull, 24973}, {0x5baac7adfc8ec75bull, 24973}},
+        {{0x9d03ac729a2e67b9ull, 20696}, {0x9d03ac729a2e67b9ull, 20696}}, {{0xe71b33c3ef9984bbull, 21293}, {0xe71b33c3ef9984bbull, 21293}},
+        {{0x5d7aef9e5cf0229full, 22946}, {0x5d7aef9e5cf0229full, 22946}}, {{0x9d03ac729a2e67b9ull, 20696}, {0x9d03ac729a2e67b9ull, 20696}},
+        {{0x5baac7adfc8ec75bull, 24973}, {0x5baac7adfc8ec75bull, 24973}}, {{0x775525c142c366d5ull, 22739}, {0x775525c142c366d5ull, 22739}},
+        {{0xe71b33c3ef9984bbull, 21293}, {0xe71b33c3ef9984bbull, 21293}}, {{0x25aa4b6e16a0d067ull, 22799}, {0x25aa4b6e16a0d067ull, 22799}},
+        {{0x6df2eae7d57d6f2full, 23617}, {0x6df2eae7d57d6f2full, 23617}}, {{0x1a6daee09b1c3595ull, 21027}, {0x1a6daee09b1c3595ull, 21027}}};
+    static const uint8_t RUN[8][8] = {              /* the run each lane of the model kits plays, as before (80 10 66 55 77 DEEP TIGHT PERC) */
+        {DVT_PUNCH, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_TOM, DVT_RIM, DVT_BELL},
+        {DVT_PUNCH, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_TOM, DVT_RIM, DVT_CYM},
+        {DVT_PUNCH, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_CONGA, DVT_RIM, DVT_RIM},
+        {DVT_PUNCH, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_TOM, DVT_RIM, DVT_CYM},
+        {DVT_PUNCH, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_TOM, DVT_CLAVE, DVT_CYM},
+        {DVT_PUNCH, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_TOM, DVT_RIM, DVT_CYM},
+        {DVT_PUNCH, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_TOM, DVT_RIM, DVT_BELL},
+        {DVT_PUNCH, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_CONGA, DVT_CLAVE, DVT_RIM}};
+    uint32_t r, l, bad = 0, same = 0;
+    int16_t kick;
+    for (r = 0; r < 12u; r++)
+        for (kick = 0; kick < 2; kick++) {
+            int32_t pk;
+            uint64_t h = seq_hash(BEAT, NELEM(BEAT), 64u * (FS / 8u) + FS / 2u, kick, (int16_t)r, &pk);
+            same += h == GOLD[r][kick].h && pk == GOLD[r][kick].pk;
+            if (h != GOLD[r][kick].h || pk != GOLD[r][kick].pk)
+                printf("drum_test: OLD KIT FAIL KIT %u (KICK %d) renders %016llx (peak %d), was %016llx (peak %d)\n", r, kick,
+                       (unsigned long long)h, pk, (unsigned long long)GOLD[r][kick].h, GOLD[r][kick].pk);
+        }
+    bad += same != 24u;
+    for (r = 0; r < 8u; r++)                        /* the kit types of the model kits: the same run per lane, the same kit's number */
+        for (l = 0; l < DV_NLANE; l++) {
+            uint32_t ty = DV_KTYPE(r + 1u, l);
+            bad += dv_run_type(ty) != RUN[r][l] || DV_KITOF(ty) != r + 1u || (ty & 7u) != l || ty < 16u;
+        }
+    for (r = DK_80; r <= DK_PERC; r++) {            /* a stored KIT of 4..11 plays its own kit, 1..3 the kit they played from 1.0.4 */
+        int16_t p[P_COUNT];
+        int32_t st;
+        host_tracks_init();
+        host_preset(&trk[0], ENGI_DRUM, 0);
+        memcpy(p, trk[0].p, sizeof p);
+        p[P_E0] = (int16_t)r;
+        for (l = 0; l < DV_NLANE; l++)
+            bad += drum_gm(p, DRUM_LANE_NOTE[l], &st) != DV_KTYPE(r - DK_80 + 1u, l);
+        bad += param_fit(&ENG_DRUM.edit[0], (int32_t)r) != (int32_t)r;
+    }
+    printf("drum_test: KIT 0..11 as before the fifteen kits: a beat through the engine renders the same samples (both KICKs), the lanes play the "
+           "same runs, the stored values land on the same kits: %s\n", bad ? "FAIL" : "ok");
+    fails += bad != 0;
+}
+
+/* round 13: every new kit's lane names follow the runs it plays (DK_SWAP: TOM -> CONGA, RIM -> CLAVE, BELL -> CYM), and a lane a
+ * kit gives another run than its name's says so; no run is a stand-in the faces mislabel */
+static void kit_names(void)
+{
+    uint32_t k, bad = 0;
+    for (k = 0; k < DV_NKIT; k++) {
+        trk[0].p[P_E0] = (int16_t)(DK_80 + k);
+        bad += (DV_KIT[k][DV_TOM].run == DVT_CONGA) != !strcmp(drum_lane_name(&trk[0], DV_TOM), "CONGA");
+        bad += (DV_KIT[k][DV_RIM].run == DVT_CLAVE) != !strcmp(drum_lane_name(&trk[0], DV_RIM), "CLAVE");
+        if (k >= 8u)                                /* (kit 55 has called its cymbal BELL since 1.5; the fifteen name theirs) */
+            bad += (DV_KIT[k][DV_BELL].run == DVT_CYM) != !strcmp(drum_lane_name(&trk[0], DV_BELL), "CYM");
+        else
+            bad += !strcmp(drum_lane_name(&trk[0], DV_BELL), "CYM") && DV_KIT[k][DV_BELL].run != DVT_CYM;
+        bad += DV_KIT[k][DV_KICK].run != DVT_PUNCH && DV_KIT[k][DV_KICK].run != DVT_ROUND;
+        bad += DV_KIT[k][DV_HATC].run != DVT_HATC || DV_KIT[k][DV_HATO].run != DVT_HATO;
+        bad += DV_KIT[k][DV_SNARE].run != DVT_SNARE || DV_KIT[k][DV_CLAP].run != DVT_CLAP;
+        if (k >= 8u)                                /* the fifteen: a ring on lane 8 (a cymbal or a bell) */
+            bad += DV_KIT[k][DV_BELL].run != DVT_CYM && DV_KIT[k][DV_BELL].run != DVT_BELL;
+    }
+    printf("drum_test: round 13: the lanes' names (TOM / CONGA, RIM / CLAVE, BELL / CYM) are the runs the 23 kits play: %s\n", bad ? "FAIL" : "ok");
+    fails += bad != 0;
+}
+
 static void retired(void)
 {
     static const uint8_t MAP[4] = {DK_STD, DK_66, DK_10, DK_77};
-    static const uint8_t ORDER[9] = {DK_STD, DK_80, DK_10, DK_66, DK_55, DK_77, DK_DEEP, DK_TIGHT, DK_PERC};
+    static const uint8_t ORDER[24] = {DK_STD, DK_80, DK_10, DK_66, DK_55, DK_77, DK_DEEP, DK_TIGHT, DK_PERC,
+                                       DK_WAREHOUSE, DK_BOOMBAP, DK_DISCO, DK_TRASH, DK_ARCADE, DK_DENTED, DK_TINROOF, DK_BUCKET,
+                                       DK_STATIC, DK_PARKING, DK_STUDIO, DK_BASEMENT, DK_PORCH, DK_CANTINA, DK_TINSHED};
     const param_desc_t *d = &ENG_DRUM.edit[0];
     uint32_t r, n, k, bad = 0, same = 0;
     int16_t kick;
@@ -1304,16 +1440,16 @@ static void retired(void)
     }
     {
         int32_t v = DK_STD, i;
-        for (i = 0; i < 9; i++) {                       /* STD 80 10 66 55 77 DEEP TIGHT PERC, then held at the end */
+        for (i = 0; i < 24; i++) {                      /* STD 80 10 66 55 77 DEEP TIGHT PERC, the fifteen of round 13, then held at the end */
             bad += v != ORDER[i];
             v = param_turn(d, v, 1);
         }
-        bad += v != DK_PERC || param_turn(d, DK_80, -1) != DK_STD || param_turn(d, DK_STD, -1) != DK_STD;
+        bad += v != DK_TINSHED || param_turn(d, DK_80, -1) != DK_STD || param_turn(d, DK_STD, -1) != DK_STD;
     }
     for (r = 1; r < 4u; r++)
         bad += strcmp(d->names[r], d->names[MAP[r]]) != 0 || enum_orig(d, (int32_t)r) != MAP[r] ||
                param_fit(d, (int32_t)r) != MAP[r];
-    bad += param_fit(d, 99) != DK_PERC || param_fit(d, -5) != DK_STD || enum_orig(d, DK_55) != DK_55;
+    bad += param_fit(d, 99) != DK_TINSHED || param_fit(d, -5) != DK_STD || enum_orig(d, DK_55) != DK_55;
     bad += param_fit(&TP[P_LEVEL], 77) != 77;
     {   /* a motion event of KIT 2 (CYM): stored and played as 10 */
         host_tracks_init();
@@ -1371,6 +1507,7 @@ static void demos(const char *dir)
 
 int main(int argc, char **argv)
 {
+    old_kits();                                         /* (first: the renders hash the effects' state too, and the goldens were taken from a fresh start) */
     if (!getenv("NOCOST")) {
         cost();
         kit_costs();
@@ -1385,6 +1522,7 @@ int main(int argc, char **argv)
     kits();
     kit_keys();
     retired();
+    kit_names();
     lane_budget();
     lane_levels();
     engine();

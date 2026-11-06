@@ -11291,7 +11291,11 @@ static int test_tfm_retired(void)
     ui_power_on();
     return bad;
 }
+#ifdef UI_TEST_MAIN_NAME                                /* (round 13: tests/drum_kits_test.c borrows this file's machinery and has its own main) */
+int UI_TEST_MAIN_NAME(void)
+#else
 int main(void)
+#endif
 {
     setvbuf(stdout, NULL, _IONBF, 0);
     int bad = 0;
@@ -11456,6 +11460,8 @@ int main(void)
     bad += test_r12_env();
     bad += test_r12_seq_v2();
     bad += test_r13_start();
+    bad += test_r13_kits();
+    bad += test_r13_kit_undo();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

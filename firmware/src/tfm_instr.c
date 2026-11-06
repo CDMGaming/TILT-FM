@@ -76,19 +76,19 @@ static const tfm_instr_t TFM_INS[TI_N] = {
     /* THUMP LAB */
     {"THUMP LAB", "drum kit \xB7 bumpers pop on hits", IG_DRUMS, E_DRUM, 4, 0, 15, 1, {RGB(21, 10, 8), RGB(31, 14, 11), RGB(255, 122, 61), RGB(181, 148, 138), RGB(248, 236, 230)}, {{P_E0, 9}, {P_E6, 0}, {P_LN0, 110}, {P_LN1, 100}, {P_LN2, 92}, {P_LN3, 110}, {P_LN4, 110}, {P_LN5, 80}, {P_LN6, 80}, {P_LN7, 80}, {P_ITYPE, 1}, {P_IMIX, 20}, {P_REV, 10}, {P_E2, 26}, {X, 0}}, {
         {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (round 8: TFM_MORPH below) */
-        {"PUNCH", 0, {0}, 0, {{P_LN0, 96, 127, 0}, {P_E7, 0, 80, 0}, {P_E5, 40, 120, 0}, {P_LEVEL, 108, 102, 0}}},
+        {"BOOM", 0, {0}, 0, {{P_LN0, 70, 127, 0}, {P_E7, 0, 90, 0}, {P_E5, 40, 120, 0}, {P_LEVEL, 108, 100, 0}}},        /* (round 13: was PUNCH; the kick's level and drive, on every kit) */
         {"SMACK", 0, {0}, 0, {{P_E4, 10, 120, 0}, {P_LN1, 80, 115, 0}, {P_LN2, 80, 115, 0}, {P_LEVEL, 106, 100, 0}}},
         {"TIME", 0, {0}, 0, {{P_E3, 8, 120, TCV_EXP}, {P_LEVEL, 104, 94, 0}, NT, NT}},
         {"ROOM", 0, {0}, 0, {{P_REV, 0, 90, 0}, {P_DLY, 0, 25, TCV_GATE}, NT, NT}},
-        {"TUNE", 0, {0}, 0, {{P_E1, 16, 112, 0}, NT, NT, NT}},
+        {"TUNE", 0, {0}, 0, {{P_E1, 8, 120, 0}, NT, NT, NT}},
         {"DIRT", 0, {0}, 0, {{P_IA, 0, 110, 0}, {P_IMIX, 20, 100, 0}, {P_LEVEL, 106, 104, 0}, NT}},
-        {"HATS", 0, {0}, 0, {{P_LN3, 80, 127, 0}, {P_LN4, 80, 127, 0}, NT, NT}},
+        {"HATS", 0, {0}, 0, {{P_LN3, 10, 127, 0}, {P_LN4, 10, 127, 0}, {P_E2, 40, 90, 0}, NT}},
     }, {
-        {"WAREHOUSE", 1, {{P_DLY, 8}, {X, 0}}, 1, {0, 60, 80, 70, 50, 40, 35, 95}},
-        {"BOOM BAP", 1, {{P_DLY, 24}, {X, 0}}, 1, {0, 55, 75, 75, 35, 35, 25, 100}},
-        {"DISCO", 1, {{P_DLY, 36}, {X, 0}}, 1, {0, 60, 85, 39, 70, 65, 16, 78}},
-        {"TRASH CAN", 1, {{P_DLY, 31}, {X, 0}}, 1, {0, 75, 80, 40, 55, 50, 80, 70}},
-        {"ARCADE", 1, {{P_DLY, 16}, {X, 0}}, 1, {0, 60, 90, 30, 20, 85, 50, 80}},
+        {"WAREHOUSE", 1, {{P_E0, 12}, {P_E2, 64}, {P_DLY, 4}, {X, 0}}, 1, {0, 46, 82, 70, 35, 31, 22, 96}},
+        {"BOOM BAP", 1, {{P_E0, 13}, {P_E2, 52}, {P_DLY, 21}, {X, 0}}, 1, {0, 70, 59, 72, 32, 39, 45, 55}},
+        {"DISCO", 1, {{P_E0, 14}, {P_E2, 70}, {P_DLY, 10}, {X, 0}}, 1, {0, 43, 86, 82, 28, 52, 11, 100}},
+        {"TRASH CAN", 1, {{P_E0, 15}, {P_E2, 52}, {P_DLY, 1}, {X, 0}}, 1, {0, 98, 65, 66, 34, 69, 93, 63}},
+        {"ARCADE", 1, {{P_E0, 16}, {P_E2, 64}, {P_DLY, 0}, {X, 0}}, 1, {0, 40, 61, 73, 11, 64, 54, 70}},
         {"DEEP CLASSIC", 1, NOV},
         {"LONG BOOM", 1, {{P_E3, 100}, {P_E1, 40}, {P_E5, 110}, {X, 0}}},
         {"CLUB STD", 0, NOV},
@@ -384,33 +384,33 @@ static const tfm_instr_t TFM_INS[TI_N] = {
         {"RATTLE", 0, {0}, 0, {{P_E4, 10, 120, 0}, {P_LN1, 80, 120, 0}, {P_LN2, 70, 120, 0}, NT}},
         {"TIME", 0, {0}, 0, {{P_E3, 8, 120, TCV_EXP}, {P_LEVEL, 104, 96, 0}, NT, NT}},
         {"TUNE", 0, {0}, 0, {{P_E1, 16, 112, 0}, NT, NT, NT}},
-        {"DIRT", 0, {0}, 0, {{P_E7, 0, 127, 0}, {P_DIST, 0, 60, 0}, {P_LEVEL, 106, 98, 0}, NT}},
-        {"HATS", 0, {0}, 0, {{P_LN3, 50, 127, 0}, {P_LN4, 40, 127, 0}, NT, NT}},
+        {"BOX", 0, {0}, 0, {{P_E7, 0, 127, 0}, {P_DIST, 0, 90, 0}, {P_LEVEL, 108, 96, 0}, NT}},        /* (round 13: was DIRT) */
+        {"HATS", 0, {0}, 0, {{P_LN3, 10, 127, 0}, {P_LN4, 10, 127, 0}, {P_E2, 40, 90, 0}, NT}},
         {"SPACE", 0, {0}, 0, {{P_REV, 0, 80, 0}, {P_DLY, 0, 40, TCV_GATE}, NT, NT}},
     }, {
-        {"DENTED", 5, {{X, 0}}, 1, {0, 50, 50, 40, 50, 40, 60, 20}},
-        {"TIN ROOF", 5, {{X, 0}}, 1, {0, 98, 40, 39, 95, 23, 100, 35}},
-        {"BUCKET", 5, {{X, 0}}, 1, {0, 30, 30, 70, 25, 70, 40, 10}},
-        {"STATIC", 5, {{X, 0}}, 1, {0, 100, 85, 15, 60, 85, 70, 0}},
-        {"PARKING LOT", 5, {{X, 0}}, 1, {0, 40, 60, 90, 40, 30, 50, 85}},
+        {"DENTED", 5, {{P_E0, 17}, {P_E2, 56}, {P_IA, 84}, {X, 0}}, 1, {0, 34, 44, 70, 62, 60, 57, 8}},
+        {"TIN ROOF", 5, {{P_E0, 18}, {P_E2, 72}, {P_IA, 100}, {X, 0}}, 1, {0, 50, 57, 70, 71, 59, 81, 1}},
+        {"BUCKET", 5, {{P_E0, 19}, {P_E2, 44}, {P_IA, 84}, {X, 0}}, 1, {0, 39, 43, 70, 31, 60, 32, 24}},
+        {"STATIC", 5, {{P_E0, 20}, {P_E2, 68}, {P_IA, 84}, {X, 0}}, 1, {0, 35, 78, 70, 36, 57, 81, 7}},
+        {"PARKING LOT", 5, {{P_E0, 21}, {P_E2, 67}, {P_IA, 84}, {X, 0}}, 1, {0, 47, 34, 70, 50, 57, 55, 68}},
     }},
     /* GARAGE (round 8 HAND DRUMS; round 9 TILT's name, face and plates): kit 77, claves on RIM, the cymbal on BELL, the bent
      * tom as a skin: a hand & room kit */
     {"GARAGE", "hand & room kit \xB7 wood and skin", IG_DRUMS, E_DRUM, 19, 0, 5, 1, {RGB(26, 18, 10), RGB(122, 86, 48), RGB(230, 194, 122), RGB(168, 140, 110), RGB(246, 230, 206)}, {{P_E0, 8}, {P_E6, 1}, {P_LN0, 72}, {P_LN1, 86}, {P_LN2, 100}, {P_LN3, 127}, {P_LN4, 120}, {P_LN5, 114}, {P_LN6, 110}, {P_LN7, 92}, {P_ITYPE, 0}, {P_REV, 20}, {P_E2, 50}, {X, 0}}, {
         {"MORPH", TFM_MSW, {0}, 0, {NT, NT, NT, NT}},   /* (TFM_MORPH below) */
-        {"SKIN", 0, {0}, 0, {{P_E2, 20, 110, 0}, NT, NT, NT}},
-        {"SLAP", 0, {0}, 0, {{P_E4, 10, 120, 0}, {P_LN1, 80, 120, 0}, NT, NT}},
+        {"SKIN", 0, {0}, 0, {{P_E2, 5, 120, 0}, NT, NT, NT}},
+        {"HANDS", 0, {0}, 0, {{P_E4, 10, 120, 0}, {P_LN1, 80, 120, 0}, {P_LN2, 70, 120, 0}, {P_LEVEL, 104, 98, 0}}},        /* (round 13: was SLAP; the hands strike harder) */
         {"TIME", 0, {0}, 0, {{P_E3, 10, 110, TCV_EXP}, {P_LEVEL, 104, 96, 0}, NT, NT}},
         {"TUNE", 0, {0}, 0, {{P_E1, 16, 112, 0}, NT, NT, NT}},
         {"WOOD", 0, {0}, 0, {{P_LN6, 60, 127, 0}, {P_LN5, 127, 80, 0}, {P_LN1, 120, 70, 0}, NT}},
         {"ROOM", 0, {0}, 0, {{P_REV, 0, 100, 0}, {P_DLY, 0, 25, TCV_GATE}, NT, NT}},
-        {"SHAKE", 0, {0}, 0, {{P_LN3, 50, 127, 0}, {P_LN4, 40, 127, 0}, NT, NT}},
+        {"SHAKE", 0, {0}, 0, {{P_LN3, 10, 127, 0}, {P_LN4, 10, 127, 0}, {P_E2, 40, 90, 0}, NT}},
     }, {
-        {"STUDIO", 8, {{X, 0}}, 1, {0, 100, 0, 64, 48, 30, 68, 44}},
-        {"BASEMENT", 8, {{X, 0}}, 1, {0, 30, 30, 80, 35, 50, 70, 80}},
-        {"PORCH", 8, {{X, 0}}, 1, {0, 100, 0, 62, 78, 20, 66, 38}},
-        {"CANTINA", 8, {{X, 0}}, 1, {0, 45, 20, 60, 85, 100, 60, 10}},
-        {"TIN SHED", 8, {{X, 0}}, 1, {0, 20, 60, 70, 25, 60, 85, 60}},
+        {"STUDIO", 8, {{P_E0, 22}, {X, 0}}, 1, {0, 53, 43, 73, 46, 47, 50, 51}},
+        {"BASEMENT", 8, {{P_E0, 23}, {X, 0}}, 1, {0, 36, 87, 73, 45, 54, 59, 60}},
+        {"PORCH", 8, {{P_E0, 24}, {X, 0}}, 1, {0, 63, 38, 73, 62, 55, 41, 85}},
+        {"CANTINA", 8, {{P_E0, 25}, {X, 0}}, 1, {0, 53, 70, 73, 59, 57, 47, 56}},
+        {"TIN SHED", 8, {{P_E0, 26}, {X, 0}}, 1, {0, 42, 66, 73, 58, 30, 75, 44}},
     }},
 };
 #undef X
@@ -453,7 +453,7 @@ static uint32_t tfm_snd_of(const track_t *t) { return (t->preset - TFM_PRE0) % 1
  * [1] half dB less per octave above it (notes there no louder: bright FM, pulse, formant sounds). The tables and the
  * measurements: docs/TFM-INSTRUMENTS.md */
 static const int8_t TFM_TRIM[TI_N][6] = {
-    {0, 0, -3, -1, 5, 3},                /* THUMP LAB */
+    {0, -8, -15, -15, -10, -11},                /* THUMP LAB */
     {-1, 8, 0, -3, 10, 0},               /* SQUELCH */
     {8, 1, 0, 5, -2, -3},                /* WOBBLER */
     {-15, 5, 0, -4, 11, -2},             /* CHORDETTE */
@@ -465,8 +465,8 @@ static const int8_t TFM_TRIM[TI_N][6] = {
     {23, -6, 0, 2, -24, 6},              /* PLUCK */
     {-15, -11, 4, 13, 0, -10},           /* VOX */
     {-26, 0, 0, 7, -5, 5},               /* WHEELHOUSE */
-    {11, 5, 3, 0, -1, -7},               /* KITBOX */
-    {14, 0, -1, -1, 10, 2},              /* GARAGE */
+    {0, 7, 8, 7, 18, 9},                  /* KITBOX */
+    {14, -10, -14, -18, -19, -18},                 /* GARAGE */
 };
 static const uint8_t TFM_KT[TI_N][2] = {
     {0, 0}, {48, 5}, {48, 4}, {60, 3}, {72, 1}, {60, 2}, {72, 3}, {60, 0}, {72, 1}, {60, 4}, {60, 6}, {60, 3}, {0, 0}, {0, 0},
@@ -614,7 +614,7 @@ typedef struct { uint8_t id; int8_t v; uint8_t md; } tfm_mt_t;
 static const tfm_mt_t TFM_MORPH[TI_N][8] = {
     /* THUMP LAB: tight and dry -> big, crushed, a room */
     {{P_E3, 110, TMM_ABS}, {P_REV, 90, TMM_ABS}, {P_IA, 110, TMM_ABS}, {P_IMIX, 100, TMM_ABS}, {P_E7, 90, TMM_ABS},
-     {P_DLY, 25, TMM_ABS}, {P_LN3, 127, TMM_ABS}, {P_LEVEL, -9, TMM_REL}},
+     {P_DLY, 25, TMM_ABS}, {P_LN3, 127, TMM_ABS}, {P_LEVEL, -3, TMM_REL}},
     /* SQUELCH: round and mellow -> screaming acid */
     {{P_E4, 100, TMM_ABS}, {P_E5, 118, TMM_ABS}, {P_ED_FLT, 60, TMM_ABS}, {P_E6, 100, TMM_ABS}, {P_DEC, 55, TMM_ABS},
      {P_IMIX, 60, TMM_ABS}, {P_LEVEL, -3, TMM_REL}, MT_END},
@@ -650,10 +650,10 @@ static const tfm_mt_t TFM_MORPH[TI_N][8] = {
      {P_LEVEL, 0, TMM_REL}, MT_END, MT_END},
     /* KITBOX: a rattle -> a crushed, ringing junk pile */
     {{P_IMIX, 120, TMM_ABS}, {P_IB, 20, TMM_ABS}, {P_E7, 100, TMM_ABS}, {P_E3, 100, TMM_ABS}, {P_REV, 50, TMM_ABS},
-     {P_LEVEL, -16, TMM_REL}, MT_END, MT_END},
+     {P_LEVEL, -5, TMM_REL}, MT_END, MT_END},
     /* GARAGE: dry taps -> long, slapped skins in a hall */
     {{P_E3, 110, TMM_ABS}, {P_E2, 100, TMM_ABS}, {P_E4, 110, TMM_ABS}, {P_REV, 100, TMM_ABS}, {P_DLY, 20, TMM_ABS},
-     {P_LEVEL, -16, TMM_REL}, MT_END, MT_END},
+     {P_LEVEL, -12, TMM_REL}, MT_END, MT_END},
 };
 static int16_t tfm_mbase[NTRK][8];                      /* MORPH's base, per track (tfm_mb: taken) */
 static int32_t tfm_morph_val(const track_t *t, uint32_t ins, uint32_t k, int32_t base, int32_t pos)

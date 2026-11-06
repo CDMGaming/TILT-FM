@@ -35,6 +35,8 @@ static void r6_fresh(void)
     lim_env = 0; dc_l = dc_r = dce_l = dce_r = 0;     /* (the master limiter and its DC blockers: a loud render before held it down) */
     song.g[G_DRLVL] = song.g[G_DRREV] = 0; dj_mb = 0; pf.dw = 0; pf.lc = PF_TOP; pf.hc = 0; pf.la = pf.ha = 0;   /* (round 9: the DJ, the master's) */
 }
+static void (*r6_post)(track_t *t, uint32_t ins, uint32_t pre);   /* (round 13: a test's changes to the loaded preset, tests/drum_kits_test.c) */
+static int32_t r6_kit = -1;                             /* (round 13: the DRUM kit a render plays instead of the preset's, -1 none: tests/drum_kits_test.c) */
 static int32_t r6_mac = -1, r6_macv;                   /* (round 8 item 3: the macro a render moves, -1 none; its place) */
 static void r6_render(uint32_t ins, uint32_t pre)     /* (round 6 item 10: without the mix trims: item 4 audits the sound itself) */
 {
@@ -56,6 +58,10 @@ static void r6_render(uint32_t ins, uint32_t pre)     /* (round 6 item 10: witho
     tfm_load(t, ins, pre);
     if (r6_mac >= 0)                                    /* (round 8: one macro moved, the rest as the preset sets them) */
         tfm_macro_put(t, (uint32_t)r6_mac, r6_macv, 0);
+    if (r6_kit >= 0)
+        t->p[P_E0] = (int16_t)r6_kit;
+    if (r6_post)
+        r6_post(t, ins, pre);
     t->p[P_ROOT] = 0; t->p[P_SCALE] = 1; t->p[P_QUANT] = QN_WHITE;
     lvl_trim_fn = 0;
     panic_req = (1u << NTRK) - 1u; mix_block(o, CTL);
@@ -341,6 +347,8 @@ static void r6l_setup(uint32_t ins, uint32_t pre)
     r6_fresh();
     song.sel = 0;
     tfm_load(t, ins, pre);
+    if (r6_post)
+        r6_post(t, ins, pre);
     t->p[P_ROOT] = 0; t->p[P_SCALE] = 1; t->p[P_QUANT] = QN_WHITE;
 }
 /* BS.1770 K-weighting at fs (the two biquads re-derived from the standard's analogue prototypes) */
@@ -532,7 +540,9 @@ static int test_r6_loud(void)
         r6l_only = 42; h = r6_loud(TI_THUMP, 0, 0, 0);
         r6l_only = 0;
         fprintf(stderr, "KIT WAREHOUSE kick %.1f snare %.1f hats %.1f, the kick under 100 Hz %.0f %%%c", k, sn, h, low * 100.0, 10);
-        kit_ok = fabs(k - sn) <= 3.0 && fabs(k - h) <= 3.0 && low >= R6_KICK_LOW;
+        /* (round 13: WAREHOUSE is a 909-like kit now, its closed hat a 20 ms tick: alone in the beat it sits ~16 LU under the kick, where
+         * DEEP's long hats sat within 3. The kick against the snare keeps its 3 LU, the hats must not vanish: within 20 LU) */
+        kit_ok = fabs(k - sn) <= 3.0 && fabs(k - h) <= 20.0 && low >= R6_KICK_LOW;
     }
     bad += check("round 6 item 10: levels: every named preset within 1.5 LU of its instrument (PLUCK NYLON / MUTED 3), the instruments matched (drums and bass -19..-15.5 LUFS, the rest -19.5..-16.5)", ok);
     bad += check("round 6 item 10: no instrument alone peaks over 0 dBFS before the master (no loudness bought from the limiter)", pk_ok);
@@ -776,8 +786,13 @@ static int test_r8_kits(void)
             hc |= str_eq(n, "HATCL"); ho |= str_eq(n, "HATOP");
         }
         R8(cym && kick && snr && hc && ho);
-        for (k = 1; k < 5u; k++)                        /* (every named preset plays its instrument's kit) */
-        { tfm_load(t, KITS[i], k); R8(t->p[P_E0] == TFM_INS[KITS[i]].vo[0].v); }
+        for (k = 0; k < 5u; k++) {                      /* (round 13: every named preset plays its own kit, five different ones) */
+            uint32_t j;
+            tfm_load(t, KITS[i], k);
+            R8(t->p[P_E0] == TFM_INS[KITS[i]].snd[k].ov[0].v && TFM_INS[KITS[i]].snd[k].ov[0].id == P_E0);
+            for (j = 0; j < k; j++)
+                R8(TFM_INS[KITS[i]].snd[j].ov[0].v != TFM_INS[KITS[i]].snd[k].ov[0].v);
+        }
     }
     R8(trk[0].p[P_E0] != 0);
     {   /* three different kits */
@@ -805,7 +820,7 @@ static int test_r8_kits(void)
     tfm_dwhite = 0;                                     /* (CLASSIC: the GM map over every key, as before) */
     keys &= kb_map(&trk[0], 1) != KB_SILENT && kb_map(&trk[0], 7) == (uint32_t)clamp(29 + 12 * song.octave + 7, 0, 127);
     dw_acc = 0;
-    bad += check("round 8 item 4: THUMP LAB (DEEP), KITBOX (10), GARAGE (77): three kits, each with a cymbal, kick, snare or rim, both hats; every preset on its kit", ok);
+    bad += check("round 8 item 4: THUMP LAB, KITBOX, GARAGE: three instruments on the DRUM engine's kits (round 13: five kits each, one per preset), each with a cymbal, kick, snare or rim, both hats", ok);
     bad += check("round 8 item 4: drums on the white keys (F3..F4 the eight lanes; round 9: G4..G5 the pitched lane), the black keys silent; CLASSIC keeps the GM map", keys);
     return bad;
 }

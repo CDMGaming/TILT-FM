@@ -263,7 +263,7 @@ static const char *const TF_KEYN[8] = {"F3", "G3", "A3", "B3", "C4", "D4", "E4",
 static const char *tf_lane(const track_t *t, uint32_t l, int32_t w)   /* the lane's name, TILT's words, its short one under w px */
 {
     const char *n = drum_lane_name(t, l);
-    n = str_eq(n, "HATCL") ? "HAT" : str_eq(n, "HATOP") ? "OPEN" : str_eq(n, "BELL") ? "CYM" : n;
+    n = str_eq(n, "HATCL") ? "HAT" : str_eq(n, "HATOP") ? "OPEN" : n;   /* (round 13: a BELL lane says BELL, a cymbal says CYM: drum_lane_name) */
     return text_w(&AF_TS, n) <= w ? n : drum_lane_abbr(t, l);
 }
 static const char *tf_keys_hint(void)                  /* (round 9: G4 .. G5 the pitched lane up the scale, seq.c dw_key_note) */

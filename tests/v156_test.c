@@ -220,7 +220,8 @@ static int kits(void)
     track_t *t;
     int32_t s;
     static int32_t kbuf[2 * CTL];
-    ok = DK_DEEP == 9 && DK_TIGHT == 10 && DK_PERC == 11 && DK_COUNT == 12 && DV_NKIT == 8 && d->max == DK_PERC &&
+    ok = DK_DEEP == 9 && DK_TIGHT == 10 && DK_PERC == 11 && DK_COUNT == 27 && DV_NKIT == 23 && d->max == DK_TINSHED &&   /* (round 13: fifteen kits appended after PERC) */
+        
          str_eq(d->names[DK_DEEP], "DEEP") && str_eq(d->names[DK_TIGHT], "TIGHT") && str_eq(d->names[DK_PERC], "PERC");
     for (k = 0; k < 3u; k++)
         for (l = 0; l < DV_NLANE; l++) {

@@ -13,6 +13,11 @@
 #                   (tests/target_budget.txt, +10 %; exact, static).
 #   voices          the budget of 8, steal fades, MONO / LEGATO / UNISON keep their note, the VOICE cap,
 #                   no hanging notes on any MIDI / key routing.
+# DRUM KITS (tests/drum_kits_test.c, TILT-FM round 13): the fifteen drum kits (one per THUMP LAB, KITBOX and GARAGE preset)
+#                   through the UI test's machinery: per lane the peak, the decay to -40 dB and the centroid; the round 6 feature
+#                   distance of each kit to the others of its instrument and to the old kit; no lane 6 dB over the loudest other;
+#                   no KITBOX lane but the cymbal over 150 ms; adjacent keys of the pitched lane within round 9's rule; every macro
+#                   audible on every kit; writes tfm-spec/built/drums/<instrument>-<preset>.wav (tfm-spec/DRUM-KITS.md)
 # FELUCCA-ENGINES (engines/tests, MIT): ANALOG LOFI TRIO WHEEL NOISE on their own host against their golden renders,
 #                   once with their own tables and once with build/gen's (the two generators agree).
 # ENGINE MEMORY (tests/union_test.c, 1.5): engine switches on a part (every pair and A -> B -> A of the engines that
@@ -318,6 +323,11 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "settings: PER1..PER4 migration, palette ids and preference preservation" "$OUT/settings_test"
     $CC -w $SMP -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test" tests/ui_test.c -lm
     run "UI: sounds keep steps, undo, recording, MIDI overflow, pending saves, panel recovery, drum grid, song chain, GREY gray, MONO neutral" "$OUT/ui_test"
+    # TILT-FM round 13 item 2: the fifteen drum kits through the UI test's machinery (the presets load by tfm_load): lanes, the
+    # round 6 feature distances to the other kits and to the old kit, levels, KITBOX's decays, the pitched lane's keys; writes
+    # tfm-spec/built/drums/*.wav
+    $CC -w $SMP -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/drum_kits_test" tests/drum_kits_test.c -lm
+    run "DRUM KITS (round 13): fifteen kits, one per drum preset: lanes (peak, decay, centroid), distances to the other kits and the old kit, no lane 6 dB over, KITBOX's decays, adjacent keys, macros on every kit, WAV files" "$OUT/drum_kits_test"
     $CC -w -DFELUCCA_CPU2=0 $SMP -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test_c1" tests/ui_test.c -lm
     run "UI, a FELUCCA_CPU2=0 build: MENU > SYSTEM without 2ND CORE, the rest as the default build" "$OUT/ui_test_c1"
     $CC -w -DTFM_SHIPPING -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test_tfm" tests/ui_test.c -lm
