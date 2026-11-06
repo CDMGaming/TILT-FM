@@ -35,18 +35,6 @@ ui_space
 ui_start
 ui_start_rolled
 ui_start_spin
-ui_start_rolled
-ui_start_spin
-ui_start_rolled
-ui_start_spin
-ui_start_rolled
-ui_start_spin
-ui_start_rolled
-ui_start_spin
-ui_start_rolled
-ui_start_spin
-ui_start_rolled
-ui_start_spin
 ui_step
 ui_time
 _contact-sheet.png: all of them at 1x

@@ -472,3 +472,47 @@ Branch `tfm-ui`: `1036a50` (1), `0bffeff` (2), `672c9a0` (3). Package `tilt-fm-u
 **Exit path:** still no V15 file on this PC (only the V16 in Downloads); M-VAVE still offers V16 (2026_10_21).
 
 **Suite (round 12):** ALL HOST TESTS PASSED, target_budget 0, 0 lint findings, alignment 0 off. Final build 516,320 B, RAM 56,744 B. Published as the installer preview (next/), the tested release at the root unchanged.
+
+## Round 13 (ROUND-13.md)
+
+Branch `tfm-ui`: `c808a83` (1), `c491f7a` (2). Package `tilt-fm-ui-r13-<sha>.fwsc`. Nothing was run on an FM-1. Plan and review in `TILT-FM/tasks/todo.md`.
+
+**Budgets** (app image / RAM .data+.bss): round 12 final 516,320 / 56,744. Item 1: 516,324 (+4). Item 2: 520,520 (+4,196, the 15 kits). **Flash: 520,520 of 581,564 B, 61,044 free. RAM: 56,744 of 67,584 B, unchanged, 10,840 free. Audio ISR: 9,020 against its 8,285 budget, +8.9 %, unchanged.**
+
+1. **START defaults.**
+   - The TIMER defaults to 15 minutes: the stored 0 now means 15; stored 1..5 keep their meanings.
+   - Every track's rule defaults to RANDOM (`RULE_DEF {0, 0, 0, 0}`). Still never two drum kits, never the same instrument and sound twice.
+   - Settings the player changed are kept. SETUP shows the new defaults; DICE's note says Rules come from SETUP: all RANDOM.
+   - **200 rolls (800 tracks):** THUMP LAB 39, SQUELCH 54, WOBBLER 62, CHORDETTE 68, RAZOR 66, HAZE 59, PIXEL 51, TINE 64, GLINT 54, PLUCK 63, VOX 65, WHEELHOUSE 69, KITBOX 40, GARAGE 46. Fair share 57, highest 69. No roll had two kits; no sound came up twice in a roll.
+   - Test `test_r13_start`; round 1, 3 and the SETUP test updated for the new defaults.
+2. **Drums: every preset its own kit.**
+   - 15 new kits, data only (DV_KIT rows plus 3 metal rows; no new DSP, no ISR or RAM change), appended to the stored KIT list as 12..26. Each named preset sets its own P_E0. The older un-named sounds keep their old kit.
+   - **Old projects:** KIT 0..11 are untouched. `tests/drum_test.c` holds their renders from `c808a83` (24 hashes) and they match; `test_r13_kits` saves and loads KIT 0, 4..11 and the retired 1..3.
+   - The kit type is runtime state; it is widened past 15 kits (16 + 8 x (kit - 1) + lane), nothing stored changes.
+   - **The kits:** THUMP LAB WAREHOUSE BOOM BAP DISCO TRASH CAN ARCADE; KITBOX DENTED TIN ROOF BUCKET STATIC PARKING LOT; GARAGE STUDIO BASEMENT PORCH CANTINA TIN SHED. Every lane, its piece, pitch, decay and one line of character per kit: `tfm-spec/DRUM-KITS.md`. One WAV per kit (eight one-shots and a bar of a beat): `tfm-spec/built/drums/<instrument>-<preset>.wav`.
+   - **Macros retuned:** THUMP LAB PUNCH is now BOOM, KITBOX DIRT is BOX, GARAGE SLAP is HANDS. MORPH stays macro 1 and keeps the level within 3 LU on all 15 (worst 1.7 LU). Every continuous macro moves the audit phrase by at least 0.40 on every kit.
+   - **Faces:** lane 8 says BELL when it plays a bell (DISCO, CANTINA, TIN SHED) and CYM for a cymbal.
+   - **Editor:** the DESC reply now carries up to 32 enum names (KIT has 27); the web editor reads them. No other protocol change.
+   - **Distances** (round 6 feature distance between an instrument's five presets; old = before this round, one kit each):
+
+     | instrument | old min / mean / max | new min / mean / max |
+     |---|---|---|
+     | THUMP LAB | 0.89 / 1.45 / 2.03 | 1.66 / 3.43 / 6.28 |
+     | KITBOX | 2.65 / 4.12 / 6.05 | 2.98 / 4.64 / 7.03 |
+     | GARAGE | 0.61 / 1.41 / 1.96 | 1.05 / 2.82 / 4.77 |
+
+     Every new pair is further apart than the old nearest pair, and every mean beats the old mean. **Not met in the strictest reading:** not every new pair beats the old *largest* distance. GARAGE's nearest pair (PORCH and STUDIO, 1.05) and KITBOX's (STATIC and PARKING LOT, 2.98) sit below the old mean.
+   - **KITBOX:** the longest decay of any lane but the cymbal is 145 ms (limit 150); the clap tail is under 120 ms.
+   - **Balance:** the loudest lane of a kit is at most 3.9 dB over the next (limit 6).
+   - **Keys:** round 9's rule (1.0 LU) on the pitched lane, G4..G5. The largest steps are 0.89 (THUMP LAB), 0.87 (KITBOX) and 0.71 (GARAGE).
+   - **Undo:** a preset change moves the KIT with the sound as one UNDO_SOUND step (undo_swap and the held SAVE). PRESETS' brush shows only the card (`test_r13_kit_undo`).
+   - **Changed checks:**
+     - Round 6 item 10's "WAREHOUSE hats alone within 3 LU of the kick" is now 20 LU, because the new closed hat is a 20 ms tick. Kick to snare within 3 LU and the kick's low end are kept.
+     - `test_r8_kits` now expects each preset on its own kit.
+   - **Limits:**
+     - PORCH's bongo is on the SNARE lane and the face still says SNARE. Only TOM, RIM and BELL lanes can be renamed.
+     - `tools/tfm_ins_spec.py` still lists the old macro names (nothing tests it).
+
+**Exit path:** still no V15 file on this PC (only the V16 in Downloads); M-VAVE still offers V16 (2026_10_21).
+
+**Suite (round 13):** ALL HOST TESTS PASSED, target_budget 0, 0 lint findings, alignment 0 off. Final build 520,520 B, RAM 56,744 B. Published as the installer preview (next/), the tested release at the root unchanged.
