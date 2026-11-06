@@ -2228,7 +2228,7 @@ static uint32_t proj_slot_l48(uint32_t slot)            /* round 10 (the scene s
 }
 #endif
 
-#ifndef PROJ_HOST
+#if !defined(PROJ_HOST) && defined(SH_HOLD_MS)            /* (round 10: with the TFM UI only; persistence_test has none) */
 /* ---- round 10: JAM's SCENE SHEET's actions (tfm_live.c: the sheet, its keys), here with the scenes' storage ---- */
 /* track k's steps st and length *lp, its automation in m: x2 (dbl) or /2 */
 static void sh_len(step_t *st, int16_t *lp, motion_store_t *m, uint32_t k, int dbl)
