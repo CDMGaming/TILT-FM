@@ -10892,7 +10892,7 @@ static int test_tfm_ui_dice(void)
         turn(EN_K1, -1); ok &= CFG(CF_RULE + 0) == r1;
         turn(EN_SELECT, 1); turn(EN_SELECT, 1); turn(EN_SELECT, 1); turn(EN_SELECT, 1); ok &= tu_su_top == 4u;
         turn(EN_K1, 1); ok &= CFG(CF_KEY) == 11u;       /* the window moved: K1 is the KEY row now */
-        turn(EN_K4, 1); ok &= CFG(CF_TIMER) == 3u && tilt_timer_min == 15u;   /* K4: TIMER (round 3: the default is 10, so up is 15) */
+        turn(EN_K4, 1); ok &= CFG(CF_TIMER) == 4u && tilt_timer_min == 20u;   /* K4: TIMER (round 13: the default is 15, so up is 20) */
     }
     press(B_ENV); ok &= !tu_setup_on && tilt_ns_open == TILT_START && sv.mode == SV_ROLLED;
     bad += check("TFM-UI SETUP: ENV from START; K1-K4 change the four lit rows, SELECT scrolls the window; ENV back to START", ok);
@@ -11176,6 +11176,7 @@ static int tfm_only(void)
 #include "ui_test_r6.h"
 #include "ui_test_r11.h"
 #include "ui_test_r12.h"
+#include "ui_test_r13.h"
 static int test_tfm_ui_acceptance(void)
 {
     int bad = 0, ok;
@@ -11454,6 +11455,7 @@ int main(void)
     bad += test_r12_char();
     bad += test_r12_env();
     bad += test_r12_seq_v2();
+    bad += test_r13_start();
     bad += test_tfm_ui_acceptance();
     bad += test_no_flash();
 #if FELUCCA_FM4

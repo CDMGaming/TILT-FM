@@ -23,9 +23,9 @@ static uint32_t prf_mut_now(void) { return CFG(CF_MUT) % 3u; }   /* (round 12: M
 static void sa_put(uint32_t glo, uint32_t c) { CFG(glo ? CF_GSEL : CF_SEL) = (uint8_t)(c % SA_N + 1u); }
 static int tfm_newsong_keep(void) { return CFG(CF_NEW) == 1u; }   /* round 3: 0 FRESH (default), 1 KEEP SCENES */
 static const uint8_t TM_LIST[5] = {0, 5, 10, 15, 20};
-/* round 3: the TIMER default is 10 minutes: the stored byte 0 (every older setting) means 10, 1..4 are 5 15 .. as before
+/* round 3: the TIMER default was 10 minutes, round 13 makes it 15: the stored byte 0 (every older setting) means 15, 1..4 are 5 10 15 20 as before
  * (1: 5, 2: 10, 3: 15, 4: 20) and 5 is OFF */
-static uint32_t cfg_timer_idx(void) { uint32_t v = CFG(CF_TIMER); return v == 0u ? 2u : v == 5u ? 0u : v % 5u; }
+static uint32_t cfg_timer_idx(void) { uint32_t v = CFG(CF_TIMER); return v == 0u ? 3u : v == 5u ? 0u : v % 5u; }   /* (round 13: the stored 0 is 15 min) */
 static uint8_t cfg_timer_val(uint32_t idx) { return (uint8_t)(idx == 0u ? 5u : idx); }
 #define RO_N (1u + 6u + TI_N)
 static const char *const TY_NAME[6] = {"DRUMS", "BASS", "CHORDS", "LEAD", "PAD", "FX"};
@@ -44,7 +44,7 @@ static const uint8_t TY_INS[TI_N] = {      /* the types an instrument is (bits: 
     4 | 16,  /* WHEELHOUSE */
     1,        /* KITBOX (round 8) */
     1};       /* GARAGE (round 8) */
-static const uint8_t RULE_DEF[NTRK] = {1, 2, 3, 4};   /* a band: DRUMS, BASS, CHORDS, LEAD */
+static const uint8_t RULE_DEF[NTRK] = {0, 0, 0, 0};   /* (round 13: every track RANDOM; was a band DRUMS BASS CHORDS LEAD) */
 static uint32_t cfg_opt(uint32_t i) { return CFG(CF_RULE + i) ? (uint32_t)CFG(CF_RULE + i) - 1u : RULE_DEF[i % NTRK]; }
 static void cfg_rule_text(uint32_t opt, char *b)
 {
@@ -607,7 +607,7 @@ static void tu_dice_note(void)
     tu_rect(0, 176, TU_W, 39, TC_BG);
     static const char *const K[3] = {"PLAY", "ENV", "K4"}, *const A[3] = {"START", "SETUP", "TIMER"};
     char tb[16] = "TIMER ";
-    tu_text(9, 184, &AF_TS, cfg_default() ? "Rules come from SETUP: a band." : "Rules come from SETUP: yours.", TC_QUIET, TC_BG);
+    tu_text(9, 184, &AF_TS, cfg_default() ? "Rules come from SETUP: all RANDOM." : "Rules come from SETUP: yours.", TC_QUIET, TC_BG);
     if (tilt_timer_min) {
         fmt_int(tb + 6, tilt_timer_min);
         str_cpy(tb + str_len(tb), " MIN", 5);
@@ -621,7 +621,7 @@ static void tu_head_dice(void)
 {
     static const char *l = "DICE";
     char t[8];
-    const char *name = cfg_default() ? "BAND" : "MY BAND";
+    const char *name = cfg_default() ? "RANDOM" : "MY BAND";
     tu_rect(0, 0, TU_W, TU_HY, TC_BG);
     tu_rect(0, TU_HY - 1, TU_W, 1, TC_SURF);
     tu_text(9, 10, &AF_PS, l, TC_AMBER, TC_BG);

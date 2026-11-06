@@ -348,7 +348,8 @@ static int test_r1_rules(void)
                 if (!(TY_INS[ns.s.ins[i] % TI_N] & (1u << (opt - 1u)))) { R1(0); break; }
             }
         }
-    memset(&favorites.factory[13][16], 0, 16);          /* the default band: T4 LEAD never HAZE (a pad) */
+    memset(&favorites.factory[13][16], 0, 16);          /* a band (round 13: no longer the default): T4 LEAD never HAZE (a pad) */
+    CFG(CF_RULE + 0) = 2; CFG(CF_RULE + 1) = 3; CFG(CF_RULE + 2) = 4; CFG(CF_RULE + 3) = 5;   /* DRUMS BASS CHORDS LEAD */
     for (n = 0; n < 300u; n++) {
         tu_dice_nudge();
         if (ns.s.ins[3] == TI_HAZE || !(TY_INS[ns.s.ins[3] % TI_N] & 8u)) { R1(0); break; }

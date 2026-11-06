@@ -205,11 +205,11 @@ static int test_r3_newsong(void)
     r3_two_scenes();
     tilt_ns_open = 0; tm.on = 0; tilt_timer_min = 0;
     tilt_ns_show();
-    R3(tilt_timer_min == 10u);                          /* the TIMER is on by default: 10:00 */
+    R3(tilt_timer_min == 15u);                          /* the TIMER is on by default: 15:00 (round 13; was 10) */
     cfg_t = CFG(CF_TIMER);
     turn(EN_K4, 1);                                     /* K4 on DICE: this song's timer, not the default */
-    R3(tilt_timer_min == 15u && CFG(CF_TIMER) == cfg_t);
-    turn(EN_K4, -3);
+    R3(tilt_timer_min == 20u && CFG(CF_TIMER) == cfg_t);
+    turn(EN_K4, -4);
     R3(tilt_timer_min == 0u && CFG(CF_TIMER) == cfg_t);
     turn(EN_K4, 2);
     R3(tilt_timer_min == 10u);
@@ -251,12 +251,12 @@ static int test_r3_newsong(void)
     CFG(CF_NEW) = 0;
     /* SETUP: TIMER default 10, OFF selectable; the stored byte 0 (older settings) is 10 */
     CFG(CF_TIMER) = 0;
-    R3(cfg_timer_idx() == 2u && TM_LIST[cfg_timer_idx()] == 10u);
+    R3(cfg_timer_idx() == 3u && TM_LIST[cfg_timer_idx()] == 15u);   /* (round 13: 15 by default) */
     CFG(CF_TIMER) = cfg_timer_val(0);
     R3(TM_LIST[cfg_timer_idx()] == 0u);
     CFG(CF_TIMER) = 0;
     bad += check("TFM-UI round 3: PLAY on DICE makes a fresh NEW SONG in an empty slot (the old one stays saved, A the rolled sounds, B-H and the chain empty); "
-                 "all three used: SONGS asks, OCT-/HOME cancel; KEEP SCENES keeps them; the TIMER is 10 min by default, K4 on DICE is this song's", ok);
+                 "all three used: SONGS asks, OCT-/HOME cancel; KEEP SCENES keeps them; the TIMER is 15 min by default (round 13), K4 on DICE is this song's", ok);
     return bad;
 }
 /* 5: every melodic instrument stays in key: the root and the fifth of the key for one beat at 120 BPM; the fundamental after the
