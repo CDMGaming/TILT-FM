@@ -13,8 +13,17 @@
 #define NTRK NPART               /* tracks (the formats and the protocol count these): every track is a part */
 #define NSTEP 64
 #define HALF_FRAMES 128          /* I2S half buffer: 2.9 ms at 44.1 kHz (a key waits 0..1 half, then plays 1 half later) */
+#ifndef FELUCCA_SAMPLE
+#define FELUCCA_SAMPLE 0         /* the SAMPLE and GRAIN engines (eng_sample.c, eng_grain.c; engines 4 and 8): kept in the
+                                  * tree, not built (TILT-FM round 11: no sample data since the scenes took the user
+                                  * sample slots' flash). FELUCCA_SAMPLE=1 builds them (the suite's Felucca tests do) */
+#endif
 #ifndef FELUCCA_SLICE
-#define FELUCCA_SLICE 1          /* the SLICE engine (eng_slice.c), engine 13; FELUCCA_SLICE=0 builds without it */
+#define FELUCCA_SLICE 0          /* the SLICE engine (eng_slice.c), engine 13: kept in the tree, not built (as SAMPLE);
+                                  * FELUCCA_SLICE=1 builds it (needs FELUCCA_SAMPLE=1) */
+#endif
+#if FELUCCA_SLICE && !FELUCCA_SAMPLE
+#error "FELUCCA_SLICE=1 needs FELUCCA_SAMPLE=1 (SLICE plays the sample slots through eng_sample.c)"
 #endif
 #ifndef FELUCCA_FM4
 #define FELUCCA_FM4 0            /* the DIGITAL engine (eng_digital.c, four-operator FM): kept in the tree, not built
@@ -28,10 +37,16 @@
                                             * second core (mod.c, voice.c SPREAD, eng_formant.c): one each with two cores,
                                             * one for all with one, as up to 1.6 */
 #define C1_PI(t) ((uint32_t)((t) - trk) % C1_NP)   /* a part's copy */
-#define NENGINES (13 + FELUCCA_SLICE)   /* SLICE (13) comes last: the other engines keep their numbers */
+#define NENGINES 14              /* engine numbers 0..13, fixed: a retired engine keeps its number (engines.c ENG_GONE) */
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
-#define NENG_SHOWN (NENGINES - !FELUCCA_FM4)   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
-                                                * in the display order of engines.c ENGINE_ORDER */
+#define ENGI_GRAIN 8u
+#define ENGI_SLICE 13u
+/* a retired engine's number (not built: DIGITAL 1, SAMPLE 4, GRAIN 8, SLICE 13): never offered (engines.c eng_ok); a
+ * stored sound of it is silent (engines.c ENG_GONE), DIGITAL's converts to FM6 */
+#define ENG_RETIRED(e) ((!FELUCCA_FM4 && (e) == ENGI_DIGITAL) || (!FELUCCA_SAMPLE && ((e) == 4u || (e) == ENGI_GRAIN)) || \
+                        (!FELUCCA_SLICE && (e) == ENGI_SLICE))
+#define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - 2 * !FELUCCA_SAMPLE - !FELUCCA_SLICE)   /* the engines one can pick: PRESETS,
+                                                * the EDIT layer, the editor, in the display order of engines.c ENGINE_ORDER */
 #define UP_SLOTS 32u             /* user presets (upreset.c) */
 
 /* ------------------------------------------------------- parameters --- */

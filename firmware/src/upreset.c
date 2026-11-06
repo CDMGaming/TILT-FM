@@ -537,8 +537,13 @@ static void up_pat_load(track_t *t, uint32_t k)
     t->p[P_SLEN] = (int16_t)clamp(v[P_SLEN], 1, 16);   /* (the pattern has 16 steps) */
 }
 
-/* the engine a used slot's sound plays on (a DIGITAL record: FM6, without FELUCCA_FM4) */
-static uint32_t up_engine(uint32_t k) { return eng_ok(up_rec(k)->engine) ? up_rec(k)->engine : ENGI_FM6; }
+/* the engine a used slot's sound plays on (a DIGITAL record: FM6, without FELUCCA_FM4; SAMPLE, GRAIN or SLICE, retired:
+ * its own number, so no engine's list shows it and a load by its slot is silent, engines.c ENG_GONE) */
+static uint32_t up_engine(uint32_t k)
+{
+    uint32_t e = up_rec(k)->engine;
+    return eng_ok(e) || (e < NENGINES && e != ENGI_DIGITAL) ? e : ENGI_FM6;
+}
 
 static uint32_t up_count(void)                 /* used slots */
 {

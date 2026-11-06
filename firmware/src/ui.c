@@ -122,25 +122,22 @@ static uint32_t sel_mode(void) { return ((ui_prefs2 >> 4) & 1u) | ((ui_prefs2 >>
  * Saved with the settings; read only while LEDS is INV (menu_items.c leds_row) */
 #define ui_leds_inv (favorites.factory[15][25])
 static uint32_t leds_inv(void) { return settings_leds == LEDS_INV && ui_leds_inv - 1u < 2u ? ui_leds_inv : 0u; }
-enum { HV_SCOPE, HV_TRACKS, HV_LEVELS, HV_JAM, HV_COUNT };   /* (TFM: JAM, tfm_jam.c) */
+enum { HV_SCOPE, HV_TRACKS, HV_LEVELS, HV_COUNT };   /* (round 11: TFM's JAM view, 3, gone: a stored 3 draws SCOPE) */
 static int home_tracks(void) { return ui_home_view == HV_TRACKS || ui_home_view == HV_LEVELS; }
-static int home_levels(void) { return ui_home_view == HV_LEVELS || ui_home_view == HV_JAM; }   /* (JAM: per track) */
-static int home_jam(void);                              /* TFM (tfm_jam.c): HOME > JAM shown */
+static int home_levels(void) { return ui_home_view == HV_LEVELS; }
 static void jam_cards(void);
 static void jam_turn(uint32_t k, int32_t s);
-static void graph_jam(void);
 /* TFM-UI (tfm_ui.c): TFM's screens; CLASSIC (tu_off): Felucca's own UI, as the Felucca tests drive it */
 #ifndef TU_OFF_DEFAULT
 #define TU_OFF_DEFAULT 0
 #endif
-enum { TU_JAM, TU_MIX, TU_SOUND, TU_BARS, TU_NOTES, TU_DRUMS, TU_SCENES, TU_SONG, TU_SONGS, TU_FX, TU_SPACE, TU_ARP,
+enum { TU_JAM, TU_MIX, TU_SOUND, TU_BARS, TU_NOTES, TU_DRUMS, TU_SONG, TU_SONGS, TU_FX, TU_SPACE, TU_ARP,
        TU_CLOCK, TU_CLOCK2, TU_MOTION, TU_DEEP, TU_N };
 static void tu_goto(uint32_t scr);
 static int tu_on(void);
 static int tu_classic(void);
 static void tu_picker_key(uint32_t p);
 static void tu_picker_draw(void);
-static void tu_scenes_draw(void);
 static int tu_oct_ok(void);
 static int tu_song_on(void);
 static int proj_slot_info(uint32_t slot, uint32_t *len16, uint32_t *parts);
@@ -1459,21 +1456,32 @@ static int param_kept(uint32_t i)
  * (SAMPLE 4, once PERC, is past SMP_NPRESETS: apply_preset_to loads it as DRUM) */
 static uint32_t preset_orig(const engine_t *e, uint32_t k)
 {
+#if FELUCCA_SAMPLE
     return e->presets == SMP_PRESET_TABLE && k < SMP_NSETS ? SMP_SET_ORIG[k] : k;
+#else
+    (void)e;
+    return k;
+#endif
 }
 
 /* the presets of engine e that browsing shows before preset k (k = npresets: all of them) */
 static uint32_t preset_rank(const engine_t *e, uint32_t k)
 {
     uint32_t i, n = 0;
+#if FELUCCA_SAMPLE
     if (e->presets != SMP_PRESET_TABLE)
+#endif
         return k;
     for (i = 0; i < k; i++)
         n += preset_orig(e, i) == i;
     return n;
 }
 
+#if FELUCCA_SAMPLE
 #define preset_shown(e) (ENGINES[e]->npresets - (ENGINES[e]->presets == SMP_PRESET_TABLE ? SMP_NALIAS : 0u))
+#else
+#define preset_shown(e) (ENGINES[e]->npresets)
+#endif
 
 #if !FELUCCA_FM4
 /* DIGITAL (engine 1, retired): t's sound = p, values as DIGITAL has them, converted to FM6 with a patch of its own

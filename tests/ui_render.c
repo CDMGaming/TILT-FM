@@ -780,10 +780,10 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_TIME, S_TIME_UNSAVED, S_TIME_KEEP,
        S_START, S_START_BLANK, S_START_NONE, S_START_CRASH,
        S_TILT_SCENES, S_SCENE_DROP, S_TILT_CUED, S_SCENE_PEND, S_SCENE_OVR, S_SCENE_CLR,
-       S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS, S_TFM_JAM, S_TFM_JAM_LARGE,
+       S_TFM_MACROS, S_TFM_MACROS2, S_TFM_PRESETS,
        S_UI_JAM, S_UI_JAM_CHAIN, S_UI_JAM_WRITE, S_UI_PERFORM, S_UI_MIX, S_UI_START, S_UI_DICE, S_UI_START_SPIN, S_UI_SETUP, S_UI_TIME,
        S_UI_SND0, S_UI_SND1, S_UI_SND2, S_UI_SND3, S_UI_SND4, S_UI_SND5, S_UI_SND6, S_UI_SND7, S_UI_SND8, S_UI_SND9, S_UI_SND10,
-       S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_UI_SCENES, S_UI_SONG, S_UI_SONGS,
+       S_UI_SND11, S_UI_SND_P2, S_UI_PICKER, S_UI_STEP, S_UI_NOTES, S_UI_DRUMS, S_UI_SHEET, S_UI_SONG, S_UI_SONGS,
        S_UI_FX, S_UI_SPACE, S_UI_ARP, S_UI_CLOCK, S_UI_CLOCK2, S_UI_MOTION, S_SONG_OVR, S_SONG_COPY, S_SONG_CLR, S_SONGS_COPY,
        S_UI_SND_NONE, S_UI_JAM_NONE, S_UI_SND12, S_UI_SND13, S_UI_JAM_SHEET, S_UI_CARD, S_UI_JAM_FIRST, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
@@ -822,10 +822,10 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "time", "time_unsaved", "time_keep",
     "start", "start_blank", "start_none", "start_crash",
     "tilt_scenes", "scene_drop", "tilt_cued", "scene_pending", "scene_overwrite", "scene_clear",
-    "tfm_macros", "tfm_macros2", "tfm_presets", "tfm_jam", "tfm_jam_large",
+    "tfm_macros", "tfm_macros2", "tfm_presets",
     "ui_jam", "ui_jam_chain", "ui_jam_write", "ui_perform", "ui_mix", "ui_start", "ui_start_rolled", "ui_start_spin", "ui_setup", "ui_time",
     "ui_snd_thump", "ui_snd_squelch", "ui_snd_wobbler", "ui_snd_chordette", "ui_snd_razor", "ui_snd_haze", "ui_snd_pixel",
-    "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_bars", "ui_notes", "ui_drums", "ui_sheet", "ui_scenes", "ui_song", "ui_songs",
+    "ui_snd_tine", "ui_snd_glint", "ui_snd_pluck", "ui_snd_vox", "ui_snd_wheel", "ui_snd_p2", "ui_picker", "ui_bars", "ui_notes", "ui_drums", "ui_sheet", "ui_song", "ui_songs",
     "ui_fx", "ui_space", "ui_arp", "ui_clock", "ui_clock2", "ui_motion", "ui_song_overwrite", "ui_song_copy", "ui_song_clear", "ui_songs_copy", "ui_snd_none", "ui_jam_none", "ui_snd_kitbox", "ui_snd_garage", "ui_jam_sheet", "ui_sound_card", "ui_jam_first"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
@@ -1010,7 +1010,11 @@ static void setup(int s)
     case S_MESSAGE: ui_say("LOADED ", "07 A VERY LONG PATTERN NAME"); break;
     case S_MESSAGE_KEY: ui_message("[SAVE] HOLD TO UNDO"); break;            /* a message with a keycap */
     case S_MESSAGE_NOFILE:                          /* a missing sample (ui_input.c sample_notice): USR2 */
+#if FELUCCA_SAMPLE
         eng(ENGI_SAMPLE); TSEL->p[P_E0] = (int16_t)(SMP_NSETS + 1); memset(snd_said, 0, sizeof snd_said); sample_notice(); break;
+#else
+        ui_message(MSG_NO_SAMPLE); break;           /* (no SAMPLE engine in this build: the message alone, its layout) */
+#endif
     case S_PRESETS: favorite_set(0, 4, 1); favorite_set(0, 5, 1); go_page(GR_BROWSE); break;
     case S_PRESETS_NOFAV: favorites.filter = 1; go_page(GR_BROWSE); break;
     case S_USER: song.playing = 0; up_store(3, "MY LONG BASS NAME"); up_store(4, "PAD"); ui.uslot = 3; go_page(GR_USER); break;
@@ -1243,7 +1247,11 @@ static void setup(int s)
     case S_EDIT_SAMPLE: {
         uint32_t i;
         eng(4); go_title("EDIT 1"); last_note = 60;
+#if FELUCCA_SAMPLE
         for (i = 0; i < 4000u && !sample_wave.ready; i++) sample_wave_tick(TSEL);
+#else
+        (void)i;                                    /* (retired: engine 4's page, ENG_GONE's, within bounds) */
+#endif
         break;
     }
     case S_EDIT_GRAIN: eng(8); go_title("EDIT 2"); break;
@@ -1493,7 +1501,7 @@ static void setup(int s)
         ui.force = 1;
         break;
     }
-    case S_UI_SCENES: case S_UI_SONG: case S_UI_SONGS: case S_SONG_OVR: case S_SONG_COPY: case S_SONG_CLR: case S_SONGS_COPY: {   /* TFM-UI: the song's screens over stored scenes (round 2: three songs, eight scenes) */
+    case S_UI_SONG: case S_UI_SONGS: case S_SONG_OVR: case S_SONG_COPY: case S_SONG_CLR: case S_SONGS_COPY: {   /* TFM-UI: the song's screens over stored scenes (round 2: three songs, eight scenes) */
         uint32_t i;
         tu_off = 0; song.playing = 0; go_home();
         tfm_load(&trk[0], TI_THUMP, 0); tfm_load(&trk[1], TI_SQUELCH, 0); tfm_load(&trk[2], TI_CHORDETTE, 0); tfm_load(&trk[3], TI_HAZE, 0);
@@ -1516,8 +1524,7 @@ static void setup(int s)
         chain_config.row[3] = chain_row_of(1, 1); chain_config.row[4] = chain_row_of(0, 1); chain_config.row[5] = chain_row_of(2, 2);
         chain_config.row[4].slot[1] = CHAIN_SILENT; chain_config.row[4].slot[3] = 3;
         ui.msg_t = 0; ui.frame++; song.playing = 1;
-        if (s == S_UI_SCENES) { tu_goto(TU_SCENES); }
-        else if (s == S_SONG_OVR) { song.playing = 0; ui.confirm = CF_SONG_OVR; ui.confirm_trk = 1; }      /* (SONGS' dialogs) */
+        if (s == S_SONG_OVR) { song.playing = 0; ui.confirm = CF_SONG_OVR; ui.confirm_trk = 1; }      /* (SONGS' dialogs) */
         else if (s == S_SONG_COPY) { song.playing = 0; ui.confirm = CF_SONG_COPY; ui.confirm_trk = 0u << 2 | 1u; }
         else if (s == S_SONG_CLR) { song.playing = 0; ui.confirm = CF_SONG_CLR; ui.confirm_trk = 1; }
         else if (s == S_SONGS_COPY) { song.playing = 0; tu_goto(TU_SONGS); tsg_sel = 2; tsg_copy = 0; }
@@ -1563,14 +1570,6 @@ static void setup(int s)
             (void)i;
         }
         ui.force = 1;
-        break;
-    case S_TFM_JAM: case S_TFM_JAM_LARGE:               /* TFM: HOME > JAM: T3 muted, T4 no instrument, T2 sounding */
-        song.playing = 0; go_home(); ui_home_view = HV_JAM;
-        tfm_load(&trk[0], TI_THUMP, 0); tfm_load(&trk[1], TI_SQUELCH, 2); tfm_load(&trk[2], TI_HAZE, 1);
-        tfm_macro_set(&trk[1], 0, 90); tfm_macro_set(&trk[2], 0, 40);
-        trk[2].p[P_MUTE] = 1; trk[1].peak = 9000; trk[0].peak = 2500;
-        ui.hot_col = 1; ui.hot_t = 30;
-        if (s == S_TFM_JAM_LARGE) ui_prefs = PREF_LARGE;
         break;
     case S_SCENE_OVR: song.playing = 0; go_home(); ui.confirm = CF_SCENE_OVR; ui.confirm_trk = 0u << 3 | 2u; break;
 

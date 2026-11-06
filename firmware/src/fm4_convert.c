@@ -5,7 +5,7 @@
  * "The DIGITAL engine has been replaced by FM6 (Dexed-based)" (1.0). Its DSP stays in the tree (eng_digital.c)
  * and builds with FELUCCA_FM4=1 (core.h; off by default, as FELUCCA_SLICE), so it can come back. Engine index 1
  * stays reserved: the stores name engines by index and the table is append-only. Without FELUCCA_FM4 engine 1 is
- * ENG_FM4_GONE below: no presets, never offered (PRESETS, the EDIT layer, the editor's lists skip it: engines.c
+ * ENG_GONE below: no presets, never offered (PRESETS, the EDIT layer, the editor's lists skip it: engines.c
  * eng_ok), and a DIGITAL sound that arrives anyway -- a project (FUN1..FUN8), a user preset, the editor's PRESET /
  * SET G_ENGSEL / UP_PUT, a full backup, a stored DIGITAL preset number (TRK_DEF of old projects, favourites) --
  * becomes an FM6 sound with a patch of its own, made by fm4_convert from its DIGITAL values:
@@ -85,14 +85,15 @@ static const uint8_t FM4_TO_FM6[FM4_NPRESETS] = {0, 1, 2, 3, 6, 4, 5, 7};
         {l4, F_PCT, 0, 127, 60, 0, 0}, {l5, f1, 0, 127, 60, 0, 0}, {l6, F_PCT, 0, 127, 0, 0, 0},               \
         {"-", F_INT, 0, 0, 0, 0, 0}}
 
-#if !FELUCCA_FM4
-/* engine 1 without the DSP: never selectable, no presets, silent (a track never keeps it: fm4_convert) */
+#if !FELUCCA_FM4 || !FELUCCA_SAMPLE || !FELUCCA_SLICE
+/* a retired engine's number (core.h ENG_RETIRED): never selectable, no presets, silent. DIGITAL's tracks never keep it
+ * (fm4_convert); an old SAMPLE / GRAIN / SLICE sound keeps its number and plays nothing (TILT-FM round 11) */
 static void fm4_gone_note_on(struct track *t, voice_t *v) { (void)t; (void)v; }
 static void fm4_gone_render(struct track *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     (void)t; (void)v; (void)out; (void)n; (void)m;
 }
-static const engine_t ENG_FM4_GONE = {
+static const engine_t ENG_GONE = {
     .name = "-",
     .page_title = {"-", "-"},
     .edit = FM4_EDIT("-", "-", "-", "-", "-", "-", "-", F_INT, F_INT, 0, 0),

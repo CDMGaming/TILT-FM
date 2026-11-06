@@ -731,6 +731,7 @@ static int chk_mode_release(char *msg, uint32_t n)
     return !bad;
 }
 
+#if FELUCCA_SAMPLE                                  /* (SAMPLE: built with FELUCCA_SAMPLE=1 only) */
 static int chk_sample_end(char *msg, uint32_t n)
 {
     static const int32_t SAMPLE[4] = {12000, -12000, 32767, -32768};
@@ -770,6 +771,7 @@ static int chk_sample_end(char *msg, uint32_t n)
              cases);
     return !bad;
 }
+#endif
 
 /* a stolen voice fades: plain sines (filter open, no sends) on 3 parts; part 1 holds 7 notes, part 2 one,
  * then parts 2 and 3 take voices in turn. The largest sample step in the 2 blocks of each take must stay
@@ -1089,7 +1091,9 @@ int main(int argc, char **argv)
     add(J_CHECK, "voices: budget after a live mode change")->check = chk_mode_budget;
     add(J_CHECK, "voices: budget after voice mode changes")->check = chk_cap_mode_budget;
     add(J_CHECK, "voices: note-offs after live voice mode changes")->check = chk_mode_release;
+#if FELUCCA_SAMPLE
     add(J_CHECK, "samples: high-rate one-shot ends")->check = chk_sample_end;
+#endif
     add(J_CHECK, "voices: a stolen voice fades")->check = chk_steal_fade;
     add(J_CHECK, "voices: MONO keeps its note")->check = chk_keep_mono;
     add(J_CHECK, "voices: LEGATO keeps its note")->check = chk_keep_legato;

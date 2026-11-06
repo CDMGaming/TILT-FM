@@ -24,11 +24,15 @@ static uint8_t eng_mem_owner[NPART];       /* engine index + 1 whose state is in
 #include "../engines/src/eng_analog.c"   /* Felucca-Engines (MIT): ANALOG LOFI TRIO WHEEL NOISE */
 #include "eng_phase.c"
 #include "../engines/src/eng_lofi.c"
+#if FELUCCA_SAMPLE
 #include "eng_sample.c"
+#endif
 #include "eng_formant.c"
 #include "../engines/src/eng_trio.c"
 #include "../engines/src/eng_wheel.c"
+#if FELUCCA_SAMPLE
 #include "eng_grain.c"
+#endif
 #include "eng_phys.c"           /* PHYS: DaisySP physical models (phys_dsp.c, MIT) */
 #include "eng_drum.c"           /* DRUM: the 8-lane kit (drum_voice.c) */
 #include "../engines/src/eng_noise.c"
@@ -47,21 +51,31 @@ static const engine_t *const ENGINES[NENGINES] = {
 #if FELUCCA_FM4
     &ENG_DIGITAL,                /* 1 (ENGI_DIGITAL) */
 #else
-    &ENG_FM4_GONE,               /* 1: reserved (DIGITAL, retired: its sounds convert to FM6, fm4_convert.c) */
+    &ENG_GONE,                   /* 1: reserved (DIGITAL, retired: its sounds convert to FM6, fm4_convert.c) */
 #endif
     &ENG_PHASE,                  /* 2 */
     &ENG_LOFI,                   /* 3 */
+#if FELUCCA_SAMPLE
     &ENG_SAMPLE,                 /* 4 */
+#else
+    &ENG_GONE,                   /* 4: reserved (SAMPLE, retired: a stored sound of it is silent) */
+#endif
     &ENG_FORMANT,                /* 5 VOICE (eng_formant.c: "voice" is a sounding note in voice.c) */
     &ENG_TRIO,                   /* 6 */
     &ENG_WHEEL,                  /* 7 */
+#if FELUCCA_SAMPLE
     &ENG_GRAIN,                  /* 8 */
+#else
+    &ENG_GONE,                   /* 8: reserved (GRAIN, retired: silent) */
+#endif
     &ENG_PHYS,                   /* 9 (ENGI_PHYS) */
     &ENG_DRUM,                   /* 10 (ENGI_DRUM) */
     &ENG_NOISE,                  /* 11 */
     &ENG_FM6,                    /* 12 (ENGI_FM6) */
 #if FELUCCA_SLICE
-    &ENG_SLICE,                  /* 13 (FELUCCA_SLICE=0 builds without it) */
+    &ENG_SLICE,                  /* 13 */
+#else
+    &ENG_GONE,                   /* 13: reserved (SLICE, retired: silent) */
 #endif
 };
 
@@ -93,6 +107,10 @@ static void eng_mem_claim(const track_t *t)
 static uint8_t snd_said[NTRK];   /* per track: the code last said, 0 = none (a project load clears them: said again) */
 static const char *snd_missing(const track_t *t, uint32_t *code)
 {
+#if !FELUCCA_SAMPLE
+    (void)t; (void)code;
+    return 0;                    /* (no sample engines in this build: their sounds are silent, ENG_GONE) */
+#else
     const engine_t *e = ENGINES[eng_idx(t->eng_req)];
     uint32_t si = (uint32_t)t->p[P_E0] % SMP_NALL;
 #if FELUCCA_SLICE
@@ -106,6 +124,7 @@ static const char *snd_missing(const track_t *t, uint32_t *code)
         return 0;
     *code = (e == &ENG_GRAIN ? 32u : 1u) + si % 32u;
     return smp_set_missing(si) ? SMP_ALL_NAMES[si] : 0;
+#endif
 }
 
 /* the order the engines are shown in (PRESETS browsing and its ENG knob, the EDIT layer's keys, the editor's list):
@@ -117,7 +136,11 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
 #if FELUCCA_FM4
     1,                           /* DIGITAL */
 #endif
+#if FELUCCA_SAMPLE
     2, 3, 4, 5, 6, 7, 8, 9,      /* PHASE LOFI SAMPLE VOICE TRIO WHEEL GRAIN PHYS */
+#else
+    2, 3, 5, 6, 7, 9,            /* PHASE LOFI VOICE TRIO WHEEL PHYS */
+#endif
     11,                          /* NOISE */
 #if FELUCCA_SLICE
     13,                          /* SLICE */
@@ -127,13 +150,13 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
 
 /* the engines one can pick (engine 1 only with FELUCCA_FM4), in ENGINE_ORDER: eng_ok(e), the n-th of them
  * eng_vis(n), e's place among them eng_rank(e), the next / previous one eng_step(e, dir) (wraps) */
-static int eng_ok(uint32_t e) { return e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL); }
+static int eng_ok(uint32_t e) { return e < NENGINES && !ENG_RETIRED(e); }
 static uint32_t eng_vis(uint32_t n) { return ENGINE_ORDER[n % NENG_SHOWN]; }
 static uint32_t eng_rank(uint32_t e)
 {
     uint32_t n;
     if (!eng_ok(e))
-        e = ENGI_FM6;                            /* (DIGITAL without FELUCCA_FM4: its sounds play as FM6) */
+        e = ENGI_FM6;                            /* (a retired engine: DIGITAL's sounds play as FM6) */
     for (n = 0; n < NENG_SHOWN && ENGINE_ORDER[n] != e; n++)
         ;
     return n < NENG_SHOWN ? n : 0u;

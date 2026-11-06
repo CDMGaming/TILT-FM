@@ -12,7 +12,6 @@ ui_mix
 ui_motion
 ui_notes
 ui_picker
-ui_scenes
 ui_setup
 ui_sheet
 ui_snd_chordette

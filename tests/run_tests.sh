@@ -207,7 +207,10 @@ run() { echo "== $1"; shift; "$@" || fail=1; }
 # the data is out. The shipping header (build/gen) is checked by ui_test's TFM_SHIPPING run below.
 mkdir -p build/gen_smp
 TFM_BUILTIN_SAMPLES=1 python3 tools/gen_samples.py build/gen_smp/felucca_samples.h > /dev/null
-SMP="-Ibuild/gen_smp"
+# TILT-FM round 11: SAMPLE, GRAIN and SLICE are retired in the firmware (core.h FELUCCA_SAMPLE / FELUCCA_SLICE 0, their numbers
+# kept: engines.c ENG_GONE). The tests of their own code build them ($ENG, with the data); the rest test the firmware as built.
+ENG="-DFELUCCA_SAMPLE=1 -DFELUCCA_SLICE=1"
+SMP="-Ibuild/gen_smp $ENG"
 
 $CC -o "$OUT/storage_test" tests/storage_test.c
 run "flash storage (A/B, torn writes)" "$OUT/storage_test"
@@ -352,7 +355,7 @@ if [ -f build/gen/felucca_tables.h ]; then
         env MENU_JSON="$OUT/menu.json" "$OUT/editor_test"
     $CC -w -DFELUCCA_CPU2=0 -Ibuild/gen -Ifirmware/src -o "$OUT/editor_test_c1" tests/editor_test.c -lm
     run "editor, a FELUCCA_CPU2=0 build: MENU settings without 2ND CORE (ids 0..31)" "$OUT/editor_test_c1"
-    $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/robust_test" tests/robust_test.c -lm
+    $CC -w $ENG -Ibuild/gen -Ifirmware/src -o "$OUT/robust_test" tests/robust_test.c -lm
     run "robustness: crafted sample slots, engine numbers, retained old projects, preset patterns, malformed requests" \
         "$OUT/robust_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/mod_test" tests/mod_test.c -lm
@@ -455,7 +458,7 @@ if [ -f build/gen/felucca_tables.h ]; then
     if grep -q '^    {"PIANO", 0, 5},' build/gen/felucca_samples.h; then
         mkdir -p build/sample_demo build/piano_hd
         python3 tools/gen_samples.py --user-slot PIANO "PIANO HD" build/piano_hd/PIANO_HD >/dev/null
-        $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/sample_test" tests/sample_test.c -lm
+        $CC -O2 -w $ENG -Ibuild/gen -Ifirmware/src -o "$OUT/sample_test" tests/sample_test.c -lm
         run "SAMPLE: PIANO (5 zones as 1.1.5: splits, pitch, length, GRAIN), SLICE's PIANO, a PIANO HD slot" "$OUT/sample_test" \
             build/piano_hd/PIANO_HD build/sample_demo
     else
@@ -488,14 +491,15 @@ else
     $SCC -DOWN_PKG=1 -o "$A/ota_test" tests/ota_test.c
     run "ASan/UBSan: M-UPGRADE entry (own loader)" "$A/ota_test" build/felucca.fwsc
     for t in editor_test project_test backup_test robust_test fun10_test fm6bank_test; do
-        $SCC -o "$A/$t" tests/$t.c -lm
+        x=""; [ $t = robust_test ] && x="$ENG"         # (its crafted sample slots: SAMPLE code)
+        $SCC $x -o "$A/$t" tests/$t.c -lm
         run "ASan/UBSan: $t" "$A/$t"
     done
     $SCC -o "$A/fuzz_ed" tests/fuzz_ed.c -lm
     run "ASan/UBSan fuzz: editor SysEx and raw USB-MIDI packets (20000, seed 7)" "$A/fuzz_ed" 20000 7
     $SCC -o "$A/fuzz_proj" tests/fuzz_proj.c -lm
     run "ASan/UBSan fuzz: project stores -> import -> restore -> render (5000, seed 13)" "$A/fuzz_proj" 5000 13
-    $SCC -o "$A/fuzz_smp" tests/fuzz_smp.c -lm
+    $SCC $ENG -o "$A/fuzz_smp" tests/fuzz_smp.c -lm
     run "ASan/UBSan fuzz: user sample slot headers -> scan -> SAMPLE / GRAIN / SLICE (1000, seed 17)" "$A/fuzz_smp" 1000 17
 fi
 

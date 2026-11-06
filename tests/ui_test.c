@@ -505,6 +505,7 @@ static int test_sound_loads(void)
     project_load(1);
     bad += check("a project load drops the copy and takes none", undo.trk == 0 && undo_depth == 0);
     ui_power_on();
+#if FELUCCA_SAMPLE
     bad += check("SAMPLE factory browsing has four melodic presets and no PERC",
                  ENGINES[4]->npresets == 4u && str_eq(ENGINES[4]->presets[0].name, "PIANO") &&
                  str_eq(ENGINES[4]->presets[3].name, "SAX"));
@@ -533,6 +534,7 @@ static int test_sound_loads(void)
                      str_eq(sd->names[7], "USR3") && sd->max == 7 &&
                      enum_orig(&ENGINES[8]->edit[0], SMP_SET_PERC) == 0 && SMP_SETS[SMP_SET_PERC].z0 == SMP_SETS[0].z0);
     }
+#endif
     host_legacy_sample_perc(t);                /* SAMPLE PERC (SET 4, retired after 1.0.2): every load gives DRUM */
     t->preset = 4;                             /* a project written before the factory removal */
     my_steps(t);
@@ -3061,6 +3063,7 @@ static int test_product_ux(void)
         ok &= changed;
     }
     bad += check("all palettes: active column is subtle, stable-size, no zoom over graph", ok);
+#if FELUCCA_SAMPLE
     ui_power_on(); set_engine_of(TSEL, 4); open_family(FAM_EDIT);
     memset(&sample_wave, 0, sizeof sample_wave); last_note = 60;
     voice_t voices[NVOICE]; memcpy(voices, TSEL->v, sizeof voices);
@@ -3079,6 +3082,7 @@ static int test_product_ux(void)
     }
     ok &= !memcmp(lo, sample_wave.lo, sizeof lo) && !memcmp(hi, sample_wave.hi, sizeof hi);
     bad += check("sample waveform is bounded, matches audio IMA decode and leaves voices intact", ok);
+#endif
     ui_power_on(); return bad;
 }
 
@@ -3687,6 +3691,9 @@ static int test_edit_cycle(void)
  * LOADED); the icon and the words fit the header */
 static int test_sample_alert(void)
 {
+#if !FELUCCA_SAMPLE
+    return 0;                                         /* (no SAMPLE engine in this build: test_tfm_retired) */
+#else
     const char *nf = MSG_NO_SAMPLE;
     int bad = 0, ok, seen;
     uint32_t i;
@@ -3753,6 +3760,7 @@ static int test_sample_alert(void)
                  nf[0] == MSG_NOFILE[0] && !text_fit(b, sizeof b, nf + 1, &AF_S, 236 - 106 - 16 - KH_GAP));
     ui_power_on();
     return bad;
+#endif
 }
 
 #if FELUCCA_SLICE
@@ -4107,6 +4115,7 @@ static int test_quick_layers(void)
     ok = TSEL->eng_req == eng_step(0, 1);
     btn_up(B_EDIT); frame();
     bad += check("  KNOB 1: the next engine", ok);
+#if FELUCCA_SAMPLE
     {                                                   /* #124: SAMPLE's alias (1 = PIANO) is not a stop on KNOB 2 */
         uint32_t tot, n, c0, c1, c2, seen = 0, alias = 0;
         set_engine_of(TSEL, ENGI_SAMPLE); go_home(); frame();
@@ -4137,6 +4146,7 @@ static int test_quick_layers(void)
         btn_up(B_EDIT); frame();
         bad += check("  #124 SAMPLE: KNOB 2 right PIANO, FLUTE, SAX (No. 1 2 3), both ways round the list, never the alias", ok);
     }
+#endif
     song.playing = 0;
     lay_combo(B_EDIT, white(LY_INIT));
     ok = ui.confirm == CF_INIT_SOUND;
@@ -9450,10 +9460,9 @@ static int test_home_tracks(void)
     int16_t v0;
     ui_power_on();
     memcpy(before, favorites.factory[15], 32);
-    ok = ui_home_view == 0u && !home_tracks() && menu_get(MI_HOME) == 0u && menu_n(MI_HOME) == 4u &&
+    ok = ui_home_view == 0u && !home_tracks() && menu_get(MI_HOME) == 0u && menu_n(MI_HOME) == 3u &&
          str_eq(MI_NAME[MI_HOME], "HOME") && str_eq(menu_vname(MI_HOME, 0), "SCOPE") &&
          str_eq(menu_vname(MI_HOME, 1), "TRACKS") && str_eq(menu_vname(MI_HOME, 2), "LEVELS") &&   /* (1.5: LEVELS) */
-         str_eq(menu_vname(MI_HOME, 3), "JAM") &&                                                   /* (TFM: JAM) */
          MI_TAB[MI_HOME] == MTAB_DISPLAY && MI_HOME < MI_VALUES;
     menu_put(MI_HOME, 1);
     ok &= ui_home_view == 1u && home_tracks() && menu_get(MI_HOME) == 1u;
@@ -9476,9 +9485,7 @@ static int test_home_tracks(void)
     ok = ui.menu == 1 && ui.menu_sel == MI_HOME;
     turn(EN_K1, 1); ok &= home_tracks() && !home_levels();
     turn(EN_K3, 1); ok &= home_levels() && ui_home_view == HV_LEVELS;   /* (1.5: LEVELS) */
-    turn(EN_K3, 1); ok &= ui_home_view == HV_JAM && !home_tracks();     /* (TFM: JAM, the last) */
-    turn(EN_K3, 1); ok &= ui_home_view == HV_JAM;      /* (stops there) */
-    press(B_OCTDN); ok &= ui_home_view == HV_LEVELS;
+    turn(EN_K3, 1); ok &= ui_home_view == HV_LEVELS;  /* (round 11: LEVELS the last, TFM's JAM view gone; stops there) */
     press(B_OCTDN); ok &= home_tracks() && !home_levels();
     press(B_OCTDN); ok &= !home_tracks();
     press(B_OCTUP); ok &= home_tracks();
@@ -10696,20 +10703,19 @@ static int test_tfm_jam_menu(void)
     uint32_t i;
     ui_power_on();
     go_home();
-    ui_home_view = HV_JAM;
+    ui_home_view = 3;                                   /* (round 11: once HOME > JAM, gone: it draws SCOPE, the knobs HOME's) */
     tfm_load(&trk[0], TI_SQUELCH, 0); tfm_load(&trk[2], TI_HAZE, 0);
     trk[1].preset = 0; trk[3].preset = 0;               /* (T2, T4: no instrument) */
     ok &= tfm_ins_of(&trk[1]) == TI_NONE && tfm_ins_of(&trk[0]) == TI_SQUELCH;
     p0 = tfm_macro_get(&trk[0], tfm_jam_m(&trk[0])); l0 = trk[1].p[P_LEVEL];
-    turn(EN_K1, 10); frame();
-    ok &= tfm_macro_get(&trk[0], tfm_jam_m(&trk[0])) > p0;   /* KNOB 1: T1's jam macro (SQUELCH CUTOFF) */
-    p0 = tfm_macro_get(&trk[2], tfm_jam_m(&trk[2]));
-    turn(EN_K3, -10); frame();
-    ok &= tfm_macro_get(&trk[2], tfm_jam_m(&trk[2])) < p0 || p0 == 0;   /* KNOB 3: T3's (HAZE BLOOM) */
-    turn(EN_K2, -5); frame();
-    ok &= trk[1].p[P_LEVEL] < l0;                       /* KNOB 2: T2's LEVEL (no instrument) */
-    ok &= home_jam() && str_eq(help_page(), H_JAM);
-    bad += check("TFM JAM: KNOB k is track k's macro 1 (no instrument: its LEVEL), the HOME view JAM", ok);
+    frame();
+    for (i = 0; i < NTRK; i++)                          /* KNOB k: track k's jam control, as TFM's JAM screen turns it */
+        jam_turn(i, i == 2u ? -10 : i == 1u ? -5 : 10);
+    frame();
+    ok &= tfm_macro_get(&trk[0], tfm_jam_m(&trk[0])) > p0;   /* T1's jam macro (SQUELCH CUTOFF) */
+    ok &= trk[1].p[P_LEVEL] < l0;                       /* T2's LEVEL (no instrument) */
+    ok &= !home_levels() && !home_tracks() && str_eq(help_page(), H_HOME);   /* (the old JAM view's 3: SCOPE, HOME's help) */
+    bad += check("TFM JAM: jam_turn k is track k's macro 1 (no instrument: its LEVEL); a stored HOME JAM (3) shows SCOPE", ok);
 
     ok = 1;
     ui_power_on();
@@ -11221,20 +11227,63 @@ static int test_tfm_ui_acceptance(void)
     bad += check("TFM-UI acceptance: from power-on to NEXT BALL (the jam saved as a song, START mid-roll), no Felucca page at any step", ok);
     return bad;
 }
-static int test_tfm_nosample(void)
+/* TILT-FM round 11: SAMPLE (4), GRAIN (8) and SLICE (13) are retired in the firmware (core.h ENG_RETIRED): never offered,
+ * and a project or user preset saved with one loads with its values and plays, silent on that track (engines.c ENG_GONE) */
+static int test_tfm_retired(void)
 {
-    int bad = 0, ok;
-    uint32_t code = 0;
-    ui_power_on();
-    ok = !SMP_BUILTIN && preset_shown(ENGI_SAMPLE) == 0u && ENGINES[13]->npresets == 0u;
-    bad += check("TFM: SAMPLE and SLICE have no factory sounds (the built-in data is out)", ok);
-    set_engine_of(&trk[0], ENGI_SAMPLE);
-    trk[0].p[P_E0] = 2;                               /* (SET FLUTE, as an old project holds it) */
-    project_save(0);
-    trk[0].p[P_E0] = 0;
-    project_load(0);
-    ok = trk[0].eng_req == ENGI_SAMPLE && trk[0].p[P_E0] == 2 && snd_missing(&trk[0], &code);
-    bad += check("TFM: an old SAMPLE FLUTE sound loads with its values and is missing (NO SAMPLE)", ok);
+    static const uint32_t GONE[3] = {4u, ENGI_GRAIN, ENGI_SLICE};
+    int bad = 0, ok = 1;
+    uint32_t g, n, e, code = 0;
+    for (n = 0; n < NENG_SHOWN; n++)
+        ok &= !ENG_RETIRED(eng_vis(n)) && eng_ok(eng_vis(n));
+    for (e = 0; e < NENGINES; e++)
+        ok &= ENG_RETIRED(e) ? !eng_ok(e) && ENGINES[e]->npresets == 0u : 1;
+    for (e = 0, n = 0; e < NENGINES; e++)
+        n += eng_ok(e);
+    ok &= n == NENG_SHOWN && NENG_SHOWN == 10u && NENGINES == 14u;
+    for (n = 0, e = 0; n < 2u * NENG_SHOWN; n++) {        /* DEEP's / CLASSIC's engine step: round the list, never one */
+        e = eng_step(e, 1);
+        ok &= !ENG_RETIRED(e);
+    }
+    bad += check("TFM: SAMPLE, GRAIN and SLICE are retired: never in the engine list or its step, their numbers kept", ok);
+    for (g = 0; g < 3u; g++) {
+        int32_t peak = 0;
+        uint32_t f, i;
+        ui_power_on();
+        trk[0].engine = trk[0].eng_req = (uint8_t)GONE[g];   /* (as an old project holds it) */
+        trk[0].p[P_E0] = 2;
+        trk[0].p[P_LEVEL] = 100;
+        project_save(0);
+        trk[0].engine = trk[0].eng_req = 0;               /* (something else in the track, then the load) */
+        trk[0].p[P_E0] = 0;
+        project_load(0);
+        ok = trk[0].eng_req == GONE[g] && trk[0].p[P_E0] == 2 && !snd_missing(&trk[0], &code);
+        song.playing = 1;
+        for (f = 0; f < 60u; f++) {                       /* plays: the transport runs, notes on it, the screens draw */
+            if (f == 5u) trk_note_on(&trk[0], 60, 100);
+            if (f == 40u) trk_note_off(&trk[0], 60);
+            frame();
+        }
+        for (i = 0; i < 8u; i++) {
+            int32_t buf[HALF_FRAMES];
+            memset(buf, 0, sizeof buf);
+            trk_note_on(&trk[0], 64, 110);
+            track_render(&trk[0], buf, HALF_FRAMES);
+            for (f = 0; f < HALF_FRAMES; f++)
+                peak = buf[f] > peak ? buf[f] : -buf[f] > peak ? -buf[f] : peak;
+        }
+        ok &= peak == 0 && song.playing && trk[0].eng_req == GONE[g];
+        tu_goto(TU_SOUND); frame(); tu_goto(TU_JAM); frame();
+        song.playing = 0;
+        trk[0].p[P_E0] = 2;                               /* a user preset of it: kept, in no engine's list, loads silent */
+        n = (uint32_t)up_store(5, "OLD");                /* (0 stored, 3 stored with the flash write pending) */
+        ok &= (n == 0u || n == 3u) && up_engine(5) == GONE[g];
+        trk[0].engine = trk[0].eng_req = 0;
+        frame();
+        ok &= up_load(5) == 0 && TSEL->eng_req == GONE[g] && TSEL->p[P_E0] == 2;        bad += check(g == 0 ? "TFM: an old SAMPLE sound (project, user preset) loads with its values, plays silent, no NO SAMPLE notice" :
+                     g == 1 ? "TFM: an old GRAIN sound (project, user preset) loads with its values, plays silent" :
+                              "TFM: an old SLICE sound (project, user preset) loads with its values, plays silent", ok);
+    }
     ui_power_on();
     return bad;
 }
@@ -11243,7 +11292,7 @@ int main(void)
     setvbuf(stdout, NULL, _IONBF, 0);
     int bad = 0;
 #ifdef TFM_SHIPPING
-    bad += test_tfm_nosample();
+    bad += test_tfm_retired();
     printf(bad ? "ui: %d FAILED\n" : "ui: TFM shipping checks passed\n", bad);
     return bad != 0;
 #endif

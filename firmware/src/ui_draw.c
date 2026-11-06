@@ -995,10 +995,6 @@ static void draw_columns(void)
         sheet_cards();
         return;
     }
-    if (home_jam()) {                                 /* TFM: HOME > JAM (tfm_jam.c) */
-        jam_cards();
-        return;
-    }
     if (ui.home) {
         for (c = 0; c < 4u; c++) {
             int16_t *vp;

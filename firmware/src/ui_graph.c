@@ -555,7 +555,8 @@ static uint32_t str_hash(uint32_t h, const char *s)
 
 /* One shared, reduced sample display. Decode only in the UI/main loop with a
  * private IMA state, 512 samples per frame; no audio voice state is touched.
- * Cache follows the sample zone, selected note and user-slot generation. */
+ * Cache follows the sample zone, selected note and user-slot generation. (FELUCCA_SAMPLE builds only) */
+#if FELUCCA_SAMPLE
 #define SAMPLE_WAVE_COLS 96u
 static struct {
     int16_t lo[SAMPLE_WAVE_COLS], hi[SAMPLE_WAVE_COLS];
@@ -628,6 +629,12 @@ static void graph_sample(uint16_t c)
         cv_line(left, 4, left, 90, T_MID); cv_line(right, 4, right, 90, T_MID);
     }
 }
+#define ENG_IS_SAMPLE(t) (ENGINES[(t)->eng_req % NENGINES] == &ENG_SAMPLE)
+#else
+#define ENG_IS_SAMPLE(t) 0
+#define sample_wave_tick(t) ((void)0)
+#define graph_sample(c) ((void)0)
+#endif
 
 #if FELUCCA_SLICE
 /* SLICES (ui_slice.c): the waveform from the marker before the selected one to the one after it (the selected
@@ -1242,7 +1249,9 @@ static uint32_t graph_signature(void)
     if ((pg->scope == SC_ENGINE || fop_page(pg->graph)) && t->eng_req % NENGINES == ENGI_FM6)   /* the patch (PAT's algorithm,
                                                      * levels, FB; the operator pages: the operator, the stage) */
         h ^= (fm6_pgen[(t - trk) % NTRK] + 1u) * 2246822519u + (fop_op + 1u) * 40503u + (fop_stg + 1u) * 7919u;
-    if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE) h ^= sample_wave.pos * 13u + sample_wave.key;
+#if FELUCCA_SAMPLE
+    if (pg->scope == SC_ENGINE && ENG_IS_SAMPLE(t)) h ^= sample_wave.pos * 13u + sample_wave.key;
+#endif
     if (pg->graph == GR_ROLL) {
         uint32_t ph = song.playing ? t->seq_idx : 0xFFFFu;
         if (ph / 16u != ui.bank)
@@ -2255,7 +2264,7 @@ static void draw_graph(void)
         draw_home_tracks();
         return;
     }
-    if (!ui.home && pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE) sample_wave_tick(t);
+    if (!ui.home && pg->scope == SC_ENGINE && ENG_IS_SAMPLE(t)) sample_wave_tick(t);
     sig = graph_signature();
     if (!ui.force && sig == ui.graph_sig)
         return;
@@ -2268,18 +2277,14 @@ static void draw_graph(void)
         uint32_t k = strip_kind();
         cv_oy = k == SK_ADSR || k == SK_LFO ? 3 : 0;
         graph_ht = LG_H_GRAPH - 6;
-        if (k == SK_SCOPE && home_jam()) graph_jam();   /* (TFM: HOME > JAM) */
-        else if (k == SK_SCOPE) graph_scope(c);
+        if (k == SK_SCOPE) graph_scope(c);
         else if (k == SK_ADSR) graph_adsr(t, c);
         else if (k == SK_LFO) graph_lfo(t, c);
         else graph_title();
         graph_ht = 100;
     } else if (ui.home) {
         cv_oy = 0;
-        if (home_jam())                              /* TFM: HOME > JAM (tfm_jam.c) */
-            graph_jam();
-        else
-            graph_scope(c);
+        graph_scope(c);
     } else {
         switch (pg->graph) {
         case GR_ADSR:
@@ -2364,7 +2369,9 @@ static void draw_graph(void)
             break;
         default:
             if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_WHEEL) graph_wheel(t, c);
-            else if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE && sample_wave.ready) graph_sample(c);
+#if FELUCCA_SAMPLE
+            else if (pg->scope == SC_ENGINE && ENG_IS_SAMPLE(t) && sample_wave.ready) graph_sample(c);
+#endif
             else if (pg->scope == SC_ENGINE && t->eng_req % NENGINES == ENGI_FM6) graph_fm6(t, c, 6u);   /* EDIT 1 and 2 */
 #if FELUCCA_FM4
             else if ((pg->scope == SC_ENGINE || pg->id[0] == P_FM1_LEVEL) && t->eng_req % NENGINES == ENGI_DIGITAL)

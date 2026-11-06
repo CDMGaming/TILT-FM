@@ -51,6 +51,9 @@ static void panel_setup(void) {}
 static uint32_t flash_ok = 1;
 static void audio_silence(void) {}
 static void fl_inval(uint32_t off, uint32_t n) { (void)off; (void)n; }
+#ifndef SMP_USER_BASE
+#define SMP_USER_BASE 0xA0000u       /* (eng_sample.c's, not built without FELUCCA_SAMPLE: the region the scenes took) */
+#endif
 static uint8_t *host_flash_ptr(uint32_t off) { return &host_samples[0][0] + off - SMP_USER_BASE; }
 static int fl_erase4k(uint32_t off, uint32_t *took)
 {
@@ -79,7 +82,10 @@ static void reset(void)
     memset(&ed_w, 0, sizeof ed_w); memset(&ui, 0, sizeof ui);
     memset(&favorites, 0, sizeof favorites); memset(&settings, 0, sizeof settings); settings_init();
     memset(proj_slot, 0, sizeof proj_slot); memset(up_bank, 0, sizeof up_bank);
-    memset(&um, 0, sizeof um); memset(usr_nz, 0, sizeof usr_nz);
+    memset(&um, 0, sizeof um);
+#if FELUCCA_SAMPLE
+    memset(usr_nz, 0, sizeof usr_nz);
+#endif
     host_progress = 1; host_erases = host_writes = host_wire_n = 0;
     transport_req = panic_req = 0; sx_ready = sx_collect = sx_busy = 0;
     so_r = so_w = mi_r = mi_w = 0; midi_in_overflow = 0; usb.config = 1;
@@ -879,7 +885,7 @@ static int menu_protocol(void)
         {"SCREEN OFF", "NEVER,5 MIN,15 MIN,30 MIN,60 MIN"},
         {"SCOPE", "OUT,MIX"}, {"STEP PREVIEW", "OFF,ON"}, {"CHORD ENTRY", "HOLD,ADD"},                  /* (1.2) */
         {"MIDI IN", "CH1-4,SEL,CH5-8,CH9-12,CH13-16,TRACK"}, {"TUNE", 0},   /* (1.2: the project's ROUT and TUNE; TUNE a number) */
-        {"HOME", "SCOPE,TRACKS,LEVELS,JAM"},                                                       /* (1.3; 1.5: LEVELS) */
+        {"HOME", "SCOPE,TRACKS,LEVELS"},                                                           /* (1.3; 1.5: LEVELS; round 11: JAM gone) */
         {"HELP", "OFF,ON"},                                                                          /* (1.5) */
         {"SELECT", "BPM,PAGE,MODW,VEL"},                                                             /* (1.5.5; 1.5.6 MODW VEL) */
         {"T1 CHANNEL", TCH_NAMES}, {"T2 CHANNEL", TCH_NAMES}, {"T3 CHANNEL", TCH_NAMES}, {"T4 CHANNEL", TCH_NAMES},   /* (1.5.5) */

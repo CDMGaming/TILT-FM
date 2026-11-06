@@ -82,7 +82,7 @@ static uint32_t r4_ink(uint32_t x0, uint32_t x1, uint16_t bg)       /* pixels no
 static uint16_t r4_c(uint16_t c) { uint16_t v = tu_c(c); return (uint16_t)(v >> 8 | v << 8); }   /* (the screen buffer holds the panel's byte order) */
 static int test_r4_recdots(void)
 {
-    static const uint8_t SCR[] = {TU_JAM, TU_MIX, TU_SOUND, TU_NOTES, TU_DRUMS, TU_SCENES, TU_SONG, TU_SONGS, TU_FX, TU_SPACE, TU_ARP, TU_CLOCK, TU_CLOCK2, TU_MOTION};
+    static const uint8_t SCR[] = {TU_JAM, TU_MIX, TU_SOUND, TU_NOTES, TU_DRUMS, TU_SONG, TU_SONGS, TU_FX, TU_SPACE, TU_ARP, TU_CLOCK, TU_CLOCK2, TU_MOTION};
     int bad = 0, ok = 1;
     uint32_t i, k;
     ui_power_on();
