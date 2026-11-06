@@ -43,7 +43,15 @@ ui_start_rolled
 ui_start_spin
 ui_start_rolled
 ui_start_spin
+ui_start_rolled
+ui_start_spin
 ui_step
 ui_time
 _contact-sheet.png: all of them at 1x
 Compare with tfm-spec/screens/*.dc.html.
+ui_hold_fx
+ui_hold_fx_latch
+ui_hold_glo
+ui_hold_scl
+ui_hold_seq
+ui_hold_euclid

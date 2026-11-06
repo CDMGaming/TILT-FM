@@ -390,3 +390,50 @@ Branch `tfm-ui`: `fbe50da` (1), `008004d` (2), `d7f75dd` (3), `cba3b09` (4), `f3
 - M-VAVE's page still offers V16 (2026_10_21), unchanged since round 9.
 
 **Suite (round 10):** tests=0 (ALL HOST TESTS PASSED), no FAIL lines, target_budget 0. The first run caught persistence_test, which builds project.c without the TFM UI: the sheet's storage half is now built with the UI only (`efe5876`). 0 lint findings, alignment 0 off. Final build 516,816 B, RAM 63,464 B, pool 365,756 B. Published as the installer preview (next/), the tested release at the root unchanged.
+
+## Round 11 (ROUND-11.md)
+
+Branch `tfm-ui`: `0299c2e` (1), `3d17d94` (2), `4e83caa` (3), `5121c9b` (4), `e333255` (5). Package `tilt-fm-ui-r11-<sha>.fwsc`. Nothing was run on an FM-1. Plan and review in `TILT-FM/tasks/todo.md`.
+
+**Budgets** (app image / RAM .data+.bss; pool 365,756 B, unchanged): round 10 final 516,816 / 63,464.
+- Item 1: 504,752 / 56,680. By part: SAMPLE + GRAIN + SLICE **-10,884 B flash, -6,768 B RAM** (the user-slot zone tables and SLICE's state); the SCENES screen +160 B (nothing called it, so the compiler had already left it out: removing the source only moved the inlining); HOME > JAM **-1,308 B, -16 B RAM**; the setup code kept (below).
+- Item 2: 506,756 / 56,712 (+2,004, +32). Item 3: 506,772 (+16). Item 4: 507,176 (+404). Item 5: 513,072 (+5,896).
+- **Flash: 513,072 of the 581,564 B slot, 68,492 free (64,748 after round 10). RAM: 56,712 of 67,584 B, 10,872 free (4,120 after round 10). Audio ISR: 9,016 against its 8,285 budget, +8.8 % (limit +10 %; 9,021 after round 10).** No new RAM buffer, no new per-sample DSP.
+
+1. **Dead code out.**
+   - **SAMPLE, GRAIN, SLICE** are retired the way DIGITAL was: kept in the tree, built only with `FELUCCA_SAMPLE=1` / `FELUCCA_SLICE=1` (core.h, both 0 now). The engine numbers stay: `NENGINES` is fixed at 14 and 4, 8, 13 point at `ENG_GONE` (fm4_convert.c's silent stand-in, now shared). `ENG_RETIRED()` keeps them out of PRESETS, DEEP's and CLASSIC's engine pickers (`eng_ok`, `ENGINE_ORDER`; 10 engines shown). An old project or user preset that names one loads with its values and plays silent; a user preset of one is in no engine's list and loads silent from its slot. Test `test_tfm_retired`: a project and a user preset saved with each of the three load, play (transport, notes, screens) and render zero.
+   - Felucca's own sample tests build the engines (`$ENG` in run_tests.sh, with the data header); GRAIN's four factory goldens are gone from tests/golden.txt; their render loops are optional in target_budget.py, as DIGITAL's.
+   - The EDIT layer's engine grid has 12 cells now, which switched it to a taller layout never drawn before (its icons off by 1 px); it keeps its compact rows.
+   - **SCENES screen** (`tu_scenes_draw`, its helpers, `TU_SCENES`) removed; `ui_scenes` render gone.
+   - **HOME > JAM** (`graph_jam`, `jam_cards`, MENU > DISPLAY > HOME JAM) removed; `jam_turn` stays for JAM's knobs, and the knob ring table stays because SOUND's faces draw it. A HOME value of 3 saved before shows SCOPE (as any unknown value did).
+   - **The setup code stays.** Nothing in the console, the editor protocol or the web tools calls `tfm_encode` / `tfm_decode`, but CLASSIC's own NEW SONG screen (tilt.c) still has its CODE row (SELECT reaches it; K1-K3 type a code), which calls both.
+2. **Assignable SELECT.**
+   - SETUP has two new rows, SELECT and GLO + SELECT: OFF FILTER ECHO SPACE MORPH LEVEL MOD SCENE SWING TEMPO. Defaults FILTER and SCENE. SETUP shows ten rows at a time and scrolls with its lit four.
+   - Saved in the setup's free bytes 11 and 12 (favorites.factory[13], 0 = the default): **no settings size change**.
+   - SELECT acts on JAM, MIX, SOUND and DRUMS. On DRUMS it used to move the step cursor too; K1 still does. SONG, SONGS and SETUP keep it for moving, NOTES its pitch scroll.
+   - **FX's K1 FILTER and the DJ's FILTER are different values:** the FX layer's is `perf_k[0]`, a momentary macro back to 0 when FX is let go; the DJ's is the song's `G_DRLVL` value through `dj_set`. SELECT = FILTER moves the DJ's, so JAM's DJ marker shows it.
+   - MORPH is macro 1 on every instrument; MOD the mod wheel plus CC1 out; SCENE cues the next or previous stored scene as a tap on its key would; SWING the song's; TEMPO the tempo.
+   - With REC on while playing FILTER, ECHO, SPACE, MORPH, LEVEL and MOD record as motion. MOD needed a motion id of its own, `MO_MW`, after the DJ's (no format change: the motion block already holds ids up to 127); its moves play back into the mod wheel. **Gap:** playing them back does not send CC1 out again, only the turn does.
+   - The header's right side shows the name and value for about a second; on hold GLO it is in the DMD (item 5).
+   - MENU > CONTROL > SELECT is hidden in TFM (it was CONTROL's last row) and stays in CLASSIC.
+   - Test `test_r11_select`: every choice on the four screens, OFF, the lists, GLO + SELECT, the defaults, recorded or not, MOD's playback, a settings export and import.
+3. **BARS' repeat mark** is option B LOOP ARROWS: the 15 x 11 map, centred, in the ring's colour, the notes under its box cleared first. `tfm-spec/built/_bars_repeat_vs_drawing.png` shows the drawing beside the render.
+4. **A drum's level from SOUND** on THUMP LAB, KITBOX and GARAGE.
+   - **Keys:** the round file says F3..C4; the keys that play lanes 1-8 are the white keys F3..F4 (round 9's map), so holding the key that plays a drum is what works.
+   - **While held:** K1 sets that lane's level (P_LN0 + lane, LANES' range and law), the pad or column lights and the bar moves; K2-K4 do nothing; the footer says K1 LEVEL / LET GO DONE. The drum faces' footer has HOLD A DRUM KEY: K1 ITS LEVEL.
+   - **Undo:** one copy per hold, so hold SAVE puts the level back.
+   - **Sound:** the key sounds as it goes down (no delay added to playing), so a tap plays; turning adds nothing more.
+   - Test `test_r11_drum_level`.
+5. **The hold screens** FX, GLO, SCL and SEQ in TFM's look (tfm_hold.c); the keys and knobs are untouched and the layers' tests pass unchanged. Renders `ui_hold_fx`, `ui_hold_fx_latch`, `ui_hold_glo`, `ui_hold_scl`, `ui_hold_seq`, `ui_hold_euclid`; lint 0.
+   - **Differences from the drawings:**
+     - The DMD lines are 11 px text, not the drawing's tiny dot font.
+     - GLO's columns name the solo key ("F3") without the word SOLO (the footer says WHITE SOLO) and leave out the instrument names, which do not fit at 11 px.
+     - SEQ's eight track tools are two columns of four.
+   - EUCLID, while open, gets the same frame: its cycle as cells with the hits lit, HITS / STEPS / ROT in the DMD.
+
+**Exit path** (tasks/lessons.md):
+- The backup export is covered by the suite's web backup test.
+- **Still no V15 file on this PC.** The only FM-1.fwsc here is V16 (Downloads, 718,196 B, SHA-256 d017fb65e70aca97ee29d944470c3515a74581df5c0576bf70de917c7b2b61d5). So "Return to official V15" could not be run against a real file, and nothing is pinned yet.
+- M-VAVE's downloads list still offers V16 (2026_10_21).
+
+**Suite (round 11):** ALL HOST TESTS PASSED, target_budget 0, 0 lint findings, alignment 0 off. Final build 513,072 B, RAM 56,712 B. Published as the installer preview (next/); the tested release at the root is unchanged.
