@@ -45,6 +45,8 @@ ui_start_rolled
 ui_start_spin
 ui_start_rolled
 ui_start_spin
+ui_start_rolled
+ui_start_spin
 ui_step
 ui_time
 _contact-sheet.png: all of them at 1x
@@ -55,3 +57,9 @@ ui_hold_glo
 ui_hold_scl
 ui_hold_seq
 ui_hold_euclid
+ui_char
+ui_char_crush
+ui_char_off
+ui_hold_env
+ui_hold_seq_melodic
+ui_hold_seq_x2

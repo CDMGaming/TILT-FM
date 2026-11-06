@@ -437,3 +437,38 @@ Branch `tfm-ui`: `0299c2e` (1), `3d17d94` (2), `4e83caa` (3), `5121c9b` (4), `e3
 - M-VAVE's downloads list still offers V16 (2026_10_21).
 
 **Suite (round 11):** ALL HOST TESTS PASSED, target_budget 0, 0 lint findings, alignment 0 off. Final build 513,072 B, RAM 56,712 B. Published as the installer preview (next/); the tested release at the root is unchanged.
+
+## Round 12 (ROUND-12.md)
+
+Branch `tfm-ui`: `1036a50` (1), `0bffeff` (2), `672c9a0` (3). Package `tilt-fm-ui-r12-<sha>.fwsc`. Nothing was run on an FM-1. Plan and review in `TILT-FM/tasks/todo.md`.
+
+**Budgets** (app image / RAM .data+.bss): round 11 final 513,072 / 56,712. Item 1: 513,600 (+528). Item 2: 515,016 (+1,416). Item 3: 516,320 / 56,744 (+1,304, +32 B RAM). **Flash: 516,320 of 581,564 B, 65,244 free. RAM: 56,744 of 67,584 B, 10,840 free. Audio ISR: 9,020 against its 8,285 budget, +8.9 % (limit +10 %).**
+
+1. **FX: the CHARACTER page** (FxCharacter.dc.html).
+   - FX now cycles TRACK FX, CHARACTER, SPACE, then back to TRACK FX. The header's right side reads TRACK . CHAR . SPACE with the current page lit.
+   - CHARACTER shows the character's name big in its colour, with its wave, and the line K1-K3: THIS CHARACTER'S OWN . K4: HOW MUCH.
+   - K1-K3 are P_IA..P_IC, labelled and formatted as the type means them (ins_desc): DRIVE TONE LEVEL, BITS RATE LPF, RATE DEPTH FEEDBACK. ins_desc's FDBK is shown as FEEDBACK. K4 is AMOUNT (P_IMIX). All four record as motion.
+   - With the character OFF the page says PICK A CHARACTER ON TRACK FX (K3) and the knobs do nothing.
+   - Switching character keeps the shared values, as before; no per-character defaults.
+   - Test `test_r12_char`. Renders `ui_char`, `ui_char_crush`, `ui_char_off`.
+2. **Hold ENV: a small sheet** (HoldEnv.dc.html).
+   - **The sheet:** F3 MUTATE CHANGE IT A LITTLE with the mode chips PATTERN SOUND BOTH (K2 changes the mode); G3 STUCK COOK IT, OR START ONE; the line NEW SONG: TAP ENV . TIMER, MUTATE MODE: ON SETUP. The header names the track and the screen behind. The footer help is F3 MUTATE . G3 STUCK . K2 MODE.
+   - **Removed from the hold:** NEW SONG and TIMER. A3, B3 and K1 do nothing in TFM.
+   - **The mode was not saved before** (prf_mut lived in RAM only). It is now the setup's free byte 13 (`CF_MUT`), and SETUP has a MUTATE row. SETUP's row and the hold read the same byte.
+   - **On START / DICE no layer opens:** these are modal screens (`layer_allowed`). ENV there does what its press always did, opening SETUP and coming back. Unchanged.
+   - CLASSIC keeps Felucca's map.
+   - **Difference from the drawing:** the screen behind is not redrawn dimmed; its place is an empty dark frame.
+   - Test `test_r12_env`: F3 and G3, one undo each; K2; the SETUP row; the removed keys; CLASSIC. Round 5's MUTATE test now uses F3. Render `ui_hold_env`.
+3. **Hold SEQ v2** (HoldSeqV2.dc.html). The keys and knobs are unchanged (tools_key, LY_SEQ).
+   - **Top:** four cards with big values, K1 LEN (steps, with the bars under it), K2 DIV, K3 SWING %, K4 GATE %. Each has its knob's colour on the top edge and lights while it is turned.
+   - **Under them:** the amber line about D5 x2 and E5 /2.
+   - **The 16 white keys** are two rows of 8 tiles in keyboard order: THE TRACK in amber; THE LANE in green, dimmed on a melodic track; LENGTH in cyan; F5 and G5 empty.
+     - A tile lights while its key is down, and flashes for about 300 ms after its tool acts. The flash is recorded in `tools_key`; that costs the round's only RAM, 32 B.
+   - The lane strip is as round 11 drew it. The footer is WHITE TOOL . BLACK LANE . OCT- AS OPENED.
+   - **Key LEDs:** the layer already lights (breathing) every tool key that can act, so the LEDs are left as they are.
+   - EUCLID keeps round 11's frame.
+   - Test `test_r12_seq_v2`; the tools' own tests pass unchanged. Renders `ui_hold_seq` (drums), `ui_hold_seq_melodic`, `ui_hold_seq_x2` (D5 just pressed). Lint 0.
+
+**Exit path:** still no V15 file on this PC (only the V16 in Downloads); M-VAVE still offers V16 (2026_10_21).
+
+**Suite (round 12):** ALL HOST TESTS PASSED, target_budget 0, 0 lint findings, alignment 0 off. Final build 516,320 B, RAM 56,744 B. Published as the installer preview (next/), the tested release at the root unchanged.
